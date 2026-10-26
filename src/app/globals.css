@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/* Scanner explicite : robuste même si le chemin du projet contient des
+   espaces et à la migration Turbopack/Vers. */
+@source "../../src/**/*.{js,mjs,ts,tsx,jsx}";
+@source "../../src/**/*.mdx";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: #101015;
+  --color-elevated: #17171d;
+  --color-line: #23232c;
+  --color-ink: #f5f5f7;
+  --color-muted: #9a9aa6;
+  --color-accent: #7c5cff;
+  --color-accent-2: #22d3ee;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  --background: #0a0a0d;
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--color-ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(124, 92, 255, 0.35);
+  color: #fff;
+}
+
+/* Scrollbar discrète */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a35 transparent;
+}
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a2a35;
+  border-radius: 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Décor & micro-interactions (désactivées si motion réduit)           */
+/* ------------------------------------------------------------------ */
+
+.text-gradient {
+  background: linear-gradient(100deg, #f5f5f7 10%, #7c5cff 55%, #22d3ee 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-glow {
+  background:
+    radial-gradient(42rem 24rem at 50% -12%, rgba(124, 92, 255, 0.16), transparent 65%),
+    radial-gradient(30rem 18rem at 82% 18%, rgba(34, 211, 238, 0.07), transparent 70%),
+    radial-gradient(28rem 16rem at 12% 30%, rgba(124, 92, 255, 0.06), transparent 70%);
+}
+
+.grid-lines {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(70% 60% at 50% 35%, black 30%, transparent 100%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-float {
+    animation: mg-float 7s ease-in-out infinite;
+  }
+
+  .animate-float-slow {
+    animation: mg-float 11s ease-in-out infinite;
+  }
+
+  .mg-reveal {
+    animation: mg-reveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes mg-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes mg-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
