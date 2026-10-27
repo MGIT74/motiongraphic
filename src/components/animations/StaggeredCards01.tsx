@@ -1,5 +1,6 @@
 "use client";
 
+import gsap from "gsap";
 import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
 
