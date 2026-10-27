@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function StudioPage() {
   return (
-    <div className="relative flex min-h-[70vh] items-center justify-center overflow-hidden px-5 py-20 sm:px-8">
+    <div className="relative flex min-h-svh items-center justify-center overflow-hidden px-5 py-24 pt-32 sm:px-8">
       <div className="hero-glow absolute inset-0" aria-hidden="true" />
       <div className="relative mx-auto flex w-full max-w-2xl flex-col items-center text-center">
         <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-accent">

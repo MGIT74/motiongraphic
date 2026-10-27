@@ -33,10 +33,10 @@ export default async function HomePage() {
 
   return (
     <div className="animate-hero">
-      {/* Hero */}
-      <section className="relative overflow-hidden">
+      {/* Hero plein écran, header superposé */}
+      <section className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden">
         <div className="hero-glow absolute inset-0" aria-hidden="true" />
-        <div className="relative mx-auto flex w-full max-w-7xl flex-col items-center px-5 pb-16 pt-20 text-center sm:px-8 sm:pb-20 sm:pt-28">
+        <div className="relative mx-auto flex w-full max-w-7xl flex-col items-center px-5 pb-20 pt-28 text-center sm:px-8">
           <p className="mg-reveal mb-6 inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-4 py-1.5 text-xs font-medium text-muted">
             <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
             Galerie de motion design · Prompts IA inclus

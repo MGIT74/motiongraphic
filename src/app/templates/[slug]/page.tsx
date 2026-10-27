@@ -33,7 +33,7 @@ export default async function TemplateDetailPage({
   const similar = await getSimilarTemplates(template, 3);
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8">
+    <div className="mx-auto w-full max-w-7xl px-5 pb-10 pt-32 sm:px-8">
       <Link
         href="/explore"
         className="mb-6 inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-ink"

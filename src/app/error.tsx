@@ -15,7 +15,7 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col items-center px-5 py-24 text-center sm:px-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col items-center px-5 pb-24 pt-40 text-center sm:px-8">
       <CircleAlert className="h-8 w-8 text-accent" aria-hidden="true" />
       <h2 className="mt-4 text-2xl font-bold tracking-tight">Something went wrong</h2>
       <p className="mt-3 max-w-md text-sm text-muted">

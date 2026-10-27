@@ -41,7 +41,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-[70vh] items-center justify-center px-5 py-16 sm:px-8">
+    <div className="relative flex min-h-svh items-center justify-center px-5 py-16 pt-32 sm:px-8">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface/70">

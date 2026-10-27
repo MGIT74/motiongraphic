@@ -113,7 +113,7 @@ export default function GalleryGrid({
       ) : null}
 
       {showFilters ? (
-        <div className="mb-6 flex flex-wrap gap-2" aria-label="Filtres par catégorie" id="categories">
+        <div className="mb-6 flex flex-wrap gap-2 scroll-mt-28" aria-label="Filtres par catégorie" id="categories">
           <button
             type="button"
             onClick={() => setCategorySlug(null)}

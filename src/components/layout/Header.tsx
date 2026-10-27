@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowRight, Menu, Search, X } from "lucide-react";
@@ -36,20 +36,12 @@ function Logo() {
 
 export default function Header() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [open, setOpen] =useState(false);
   const [pill, setPill] = useState<{ x: number; w: number; shown: boolean }>({
     x: 0,
     w: 0,
     shown: false,
   });
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   const movePill = (el: HTMLAnchorElement) => {
     setPill({ x: el.offsetLeft, w: el.offsetWidth, shown: true });
@@ -57,11 +49,7 @@ export default function Header() {
   const hidePill = () => setPill((p) => ({ ...p, shown: false }));
 
   return (
-    <header
-      className={`sticky top-0 z-50 border-b transition-colors duration-300 ${
-        scrolled ? "border-line bg-background" : "border-transparent bg-transparent"
-      }`}
-    >
+    <header className="fixed inset-x-0 top-0 z-50 bg-transparent">
       <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-5 sm:px-8">
         <Logo />
 

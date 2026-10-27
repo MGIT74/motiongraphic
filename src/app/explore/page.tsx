@@ -14,7 +14,7 @@ export default async function ExplorePage() {
   const demo = isDemoMode();
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8">
+    <div className="mx-auto w-full max-w-7xl px-5 pb-12 pt-32 sm:px-8">
       <header className="mb-8">
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
           Explorez la <span className="text-gradient">galerie</span>

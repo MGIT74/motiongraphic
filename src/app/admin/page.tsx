@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 export default async function AdminPage() {
   if (!isSupabaseConfigured()) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-5 py-16 sm:px-8">
+      <div className="mx-auto w-full max-w-3xl px-5 pb-16 pt-36 sm:px-8">
         <div className="rounded-3xl border border-dashed border-accent/30 bg-accent/5 p-8">
           <h1 className="text-2xl font-bold tracking-tight">Administration indisponible</h1>
           <p className="mt-3 text-sm leading-relaxed text-muted">
@@ -61,7 +61,7 @@ export default async function AdminPage() {
   if (error || profile?.role !== "admin") return <AccessDenied signedIn />;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-12 sm:px-8">
+      <div className="mx-auto w-full max-w-5xl px-5 pb-12 pt-32 sm:px-8">
       <header className="mb-8">
         <h1 className="text-3xl font-extrabold tracking-tight">Administration</h1>
         <p className="mt-2 text-sm text-muted">
@@ -76,7 +76,7 @@ export default async function AdminPage() {
 
 function AccessDenied({ signedIn }: { signedIn: boolean }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-5 py-24 text-center sm:px-8">
+    <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-5 pb-24 pt-40 text-center sm:px-8">
       <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-surface/70">
         <Lock className="h-6 w-6 text-accent" aria-hidden="true" />
       </span>
