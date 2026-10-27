@@ -49,7 +49,7 @@ export default function Header() {
   const hidePill = () => setPill((p) => ({ ...p, shown: false }));
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line bg-background/75 backdrop-blur-lg">
+    <header className="sticky top-0 z-50 border-b border-line bg-background">
       <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-5 sm:px-8">
         <Logo />
 
