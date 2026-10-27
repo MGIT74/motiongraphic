@@ -41,7 +41,7 @@ function webPrompt(
     "- N'animer que transform / opacity pour garantir 60 fps.",
     "- État initial du DOM = état final de l'animation (utiliser gsap.from()).",
     "- Respecter prefers-reduced-motion : afficher l'état final sans animation.",
-    "- Palette : fond #0A0A0D, texte #F5F5F7, accent #7C5CFF (modifiable en haut du CSS via variables).",
+    "- Palette : fond #000000, texte #F5F5F7, accent #0A84FF (modifiable en haut du CSS via variables).",
     "",
     "PARAMÈTRE FACILE À PERSONNALISER",
     "- Rendez le texte et les couleurs configurables en haut du script (const CONFIG = {...}).",
@@ -92,7 +92,7 @@ const PROMPTS = {
   "kinetic-type-01": {
     web: webPrompt("kinetic-type-01", {
       visuel:
-        "- Fond #0A0A0D. Le mot « MOTION » centré, lettres majuscules très grasses.\n- Chaque lettre apparaît en glissant depuis le bas, masquée par un wrapper overflow:hidden, décalage de 70 ms entre les lettres.\n- Un point d'accent violet (#7C5CFF) apparaît après la dernière lettre avec un pop (back.out(3)).",
+        "- Fond #000000. Le mot « MOTION » centré, lettres majuscules très grasses.\n- Chaque lettre apparaît en glissant depuis le bas, masquée par un wrapper overflow:hidden, décalage de 70 ms entre les lettres.\n- Un point d'accent violet (#0A84FF) apparaît après la dernière lettre avec un pop (back.out(3)).",
       easing:
         "power3.out pour l'entrée des lettres (0.55 s chacune, stagger 0.07), légère montée en yPercent 118 -> 0.",
       boucle:
@@ -100,7 +100,7 @@ const PROMPTS = {
     }),
     after_effects: jsxPrompt("kinetic-type-01", {
       compo:
-        "- Compo « MGSI_KineticType », 1920×1080, 30 fps, durée 6 s, fond #0A0A0D.\n- Un calque texte « MOTION » en gras, centré, taille 220 px, blédi #F5F5F7.",
+        "- Compo « MGSI_KineticType », 1920×1080, 30 fps, durée 6 s, fond #000000.\n- Un calque texte « MOTION » en gras, centré, taille 220 px, blédi #F5F5F7.",
       comportement:
         "Le mot est divisé en sous-calques du texte (une lettre par index) ; chaque lettre entre de bas en haut avec un masque (alpha inverted) décalé de 2 frames, puis un point violet apparaît en pop, puis sortie inversée vers le haut pour boucler.",
     }),
@@ -108,7 +108,7 @@ const PROMPTS = {
   "text-reveal-01": {
     web: webPrompt("text-reveal-01", {
       visuel:
-        "- Fond #0A0A0D, deux lignes centrées « CRÉER » / « EN CODE ».\n- Révélation par masque vertical (overflow hidden par ligne), chaque ligne monte de bas en haut.\n- Balayage lumineux violet/cyan (mix-blend-mode: screen, blur) traversant le texte pendant la révélation.",
+        "- Fond #000000, deux lignes centrées « CRÉER » / « EN CODE ».\n- Révélation par masque vertical (overflow hidden par ligne), chaque ligne monte de bas en haut.\n- Balayage lumineux violet/cyan (mix-blend-mode: screen, blur) traversant le texte pendant la révélation.",
       easing:
         "power4.out sur la révélation des lignes (stagger 0.12), balayage en power2.inOut.",
       boucle:
@@ -116,7 +116,7 @@ const PROMPTS = {
     }),
     after_effects: jsxPrompt("text-reveal-01", {
       compo:
-        "- Compo « MGSI_TextReveal », 1920×1080, 30 fps, 6 s, fond #0A0A0D.\n- Deux calques texte centrés, « CRÉER » / « EN CODE », gras, #F5F5F7.",
+        "- Compo « MGSI_TextReveal », 1920×1080, 30 fps, 6 s, fond #000000.\n- Deux calques texte centrés, « CRÉER » / « EN CODE », gras, #F5F5F7.",
       comportement:
         "Chaque ligne est révélée avec un masque de course (setMask / track matte) montant de bas en haut, décalées entre elles ; un calque dégradé lumineux passe en mode Tramage léger (additive) devant le texte, puis sortie vers le haut pour boucler.",
     }),
@@ -124,7 +124,7 @@ const PROMPTS = {
   "elastic-text-01": {
     web: webPrompt("elastic-text-01", {
       visuel:
-        "- Fond #0A0A0D, mot « BOUNCE » centré, lettres toutes les 4 en accent (#22D3EE).\n- Les lettres apparaissent depuis le bas en grossissant puis rebondissent (effet élastique, transform-origin bas).",
+        "- Fond #000000, mot « BOUNCE » centré, lettres toutes les 4 en accent (#64D2FF).\n- Les lettres apparaissent depuis le bas en grossissant puis rebondissent (effet élastique, transform-origin bas).",
       easing:
         "elastic.out(1, 0.42) par lettre, 0.9 s chacune, stagger 0.06.",
       boucle:
@@ -132,7 +132,7 @@ const PROMPTS = {
     }),
     after_effects: jsxPrompt("elastic-text-01", {
       compo:
-        "- Compo « MGSI_ElasticText », 1920×1080, 30 fps, 6 s, fond #0A0A0D.\n- Calque texte « BOUNCE » gras, centré, #F5F5F7 avec lettres altérnées en #22D3EE (colorations par index).",
+        "- Compo « MGSI_ElasticText », 1920×1080, 30 fps, 6 s, fond #000000.\n- Calque texte « BOUNCE » gras, centré, #F5F5F7 avec lettres altérnées en #64D2FF (colorations par index).",
       comportement:
         "Lettres (texte en sous-calques) animées en échelle et position avec une courbe élastique (ease « Out Elastic », interpolation avec overshoot), décalées de 2 frames, puis rétracté vers le haut pour boucler.",
     }),
@@ -140,7 +140,7 @@ const PROMPTS = {
   "shape-morph-01": {
     web: webPrompt("shape-morph-01", {
       visuel:
-        "- Fond #0A0A0D, au centre une forme lumineuse en dégradé (#22D3EE vers transparent) avec un halo flou derrière.\n- La forme se morphe en continu : carré -> octogone -> étoile 4 branches -> carré (interpolation de clip-path polygon à 8 sommets).",
+        "- Fond #000000, au centre une forme lumineuse en dégradé (#64D2FF vers transparent) avec un halo flou derrière.\n- La forme se morphe en continu : carré -> octogone -> étoile 4 branches -> carré (interpolation de clip-path polygon à 8 sommets).",
       easing:
         "sine.inOut sur chaque morph (durée = durée/3), rotation continue linéaire sur le cycle complet.",
       boucle:
@@ -148,7 +148,7 @@ const PROMPTS = {
     }),
     after_effects: jsxPrompt("shape-morph-01", {
       compo:
-        "- Compo « MGSI_ShapeMorph », 1080×1080, 30 fps, 8 s, fond #0A0A0D.\n- Un calque forme (polystar) lumineux + un calque halo Gaussien.",
+        "- Compo « MGSI_ShapeMorph », 1080×1080, 30 fps, 8 s, fond #000000.\n- Un calque forme (polystar) lumineux + un calque halo Gaussien.",
       comportement:
         "Le calque forme passe successivement de polygone régulier à étoile en animant le type de polystar / les keyframes de tracé via des calques de forme ; halo pulsant, rotation lente continue pour boucler.",
     }),
@@ -156,7 +156,7 @@ const PROMPTS = {
   "staggered-cards-01": {
     web: webPrompt("staggered-cards-01", {
       visuel:
-        "- Fond #0A0A0D, 3 cartes vitrées (rgba blanc translucide, bordure douce, ombre portée) avec pastille colorée et lignes de contenu.\n- La carte du centre est mise en avant (pastille et trait d'accent violet #7C5CFF).\n- Un label « UI MOTION » en majuscules espacées au-dessus.",
+        "- Fond #000000, 3 cartes vitrées (rgba blanc translucide, bordure douce, ombre portée) avec pastille colorée et lignes de contenu.\n- La carte du centre est mise en avant (pastille et trait d'accent violet #0A84FF).\n- Un label « UI MOTION » en majuscules espacées au-dessus.",
       easing:
         "back.out(1.7) sur l'entrée des cartes (montée 44 px, légère rotation -6° -> 0), stagger 0.16 ; barres internes en scaleX depuis la gauche.",
       boucle:
@@ -164,7 +164,7 @@ const PROMPTS = {
     }),
     after_effects: jsxPrompt("staggered-cards-01", {
       compo:
-        "- Compo « MGSI_StaggeredCards », 1920×1080, 30 fps, 7 s, fond #0A0A0D.\n- Trois calque rectangles (arrondis 24 px) semi-transparents avec pastille et barres internes, plus calque texte de label.",
+        "- Compo « MGSI_StaggeredCards », 1920×1080, 30 fps, 7 s, fond #000000.\n- Trois calque rectangles (arrondis 24 px) semi-transparents avec pastille et barres internes, plus calque texte de label.",
       comportement:
         "Les cartes entrent en cascade (montée + légère rotation, ease back) décalées de 5 frames, les barres internes s'étendent en X, puis sortie inversée vers le haut pour boucler.",
     }),
@@ -172,7 +172,7 @@ const PROMPTS = {
   "logo-reveal-01": {
     web: webPrompt("logo-reveal-01", {
       visuel:
-        "- Fond #0A0A0D, cercle SVG r=46 dont le trait cyan (#22D3EE) se dessine progressivement (stroke-dashoffset).\n- Un triangle/forme abstraite apparaît en pop au centre (back.out(2.4)), un cercle pulsé (halo) s'échappe du cœur, le mot-symbole « STUDIO » apparaît dessous.",
+        "- Fond #000000, cercle SVG r=46 dont le trait cyan (#64D2FF) se dessine progressivement (stroke-dashoffset).\n- Un triangle/forme abstraite apparaît en pop au centre (back.out(2.4)), un cercle pulsé (halo) s'échappe du cœur, le mot-symbole « STUDIO » apparaît dessous.",
       easing:
         "power2.inOut sur le tracé (0.8 s), back.out sur le cœur, power2.out sur le pulse (0.7 s), power3.out sur le mot-symbole.",
       boucle:
@@ -180,7 +180,7 @@ const PROMPTS = {
     }),
     after_effects: jsxPrompt("logo-reveal-01", {
       compo:
-        "- Compo « MGSI_LogoReveal », 1080×1080, 30 fps, 6 s, fond #0A0A0D.\n- Calque forme (ellipse tracé vide, sans fond) cyan, un triangle/étoile au centre, un calque texte « STUDIO ».",
+        "- Compo « MGSI_LogoReveal », 1080×1080, 30 fps, 6 s, fond #000000.\n- Calque forme (ellipse tracé vide, sans fond) cyan, un triangle/étoile au centre, un calque texte « STUDIO ».",
       comportement:
         "Le cercle se dessine via des keyframes de tracé (Trim Paths), le cœur apparaît en scale avec pop, un halo (calque solide animé en scale/opacité, flou gaussien) s'échappe, puis le mot-symbole apparaît ; tenue, léger recadrage, boucle.",
     }),

@@ -16,8 +16,8 @@ export interface ComponentMeta {
 const CONFIG = (overrides: Partial<AnimationConfig> = {}): AnimationConfig => ({
   text: "MOTION",
   primaryColor: "#F5F5F7",
-  accentColor: "#7C5CFF",
-  backgroundColor: "#0A0A0D",
+  accentColor: "#0A84FF",
+  backgroundColor: "#000000",
   duration: 3,
   speed: 1,
   ...overrides,
@@ -46,7 +46,7 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     description:
       "Le texte rebondit en place avec un easing élastique, lettre par lettre, pour un effet énergique et rythmé.",
     technologies: ["React", "GSAP"],
-    defaultConfig: CONFIG({ text: "BOUNCE", accentColor: "#22D3EE", duration: 3 }),
+    defaultConfig: CONFIG({ text: "BOUNCE", accentColor: "#64D2FF", duration: 3 }),
   },
   "shape-morph-01": {
     key: "shape-morph-01",
@@ -54,7 +54,7 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     description:
       "Une forme géométrique se transforme continûment (carré, octogone, étoile) grâce à l'interpolation de clip-path, avec rotation lente.",
     technologies: ["React", "GSAP", "CSS"],
-    defaultConfig: CONFIG({ text: "MORPH", accentColor: "#22D3EE", duration: 6 }),
+    defaultConfig: CONFIG({ text: "MORPH", accentColor: "#64D2FF", duration: 6 }),
   },
   "staggered-cards-01": {
     key: "staggered-cards-01",
@@ -70,7 +70,7 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     description:
       "Un logo abstrait se dessine par la lumière : tracé du trait, halo pulsé, mot-symbole qui s'éclaircit.",
     technologies: ["React", "GSAP", "SVG"],
-    defaultConfig: CONFIG({ text: "STUDIO", accentColor: "#22D3EE", duration: 4.4 }),
+    defaultConfig: CONFIG({ text: "STUDIO", accentColor: "#64D2FF", duration: 4.4 }),
   },
 };
 

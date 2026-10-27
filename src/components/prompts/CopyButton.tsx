@@ -33,7 +33,7 @@ export default function CopyButton({
     "inline-flex h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium transition-all duration-200 focus-visible:outline-2 focus-visible:outline-accent cursor-pointer disabled:opacity-60";
   const style =
     variant === "primary"
-      ? "bg-accent text-white hover:bg-accent/85 hover:shadow-[0_8px_30px_-10px_rgba(124,92,255,0.5)]"
+      ? "bg-accent text-white hover:bg-accent/85 hover:shadow-[0_8px_30px_-10px_rgba(10,132,255,0.5)]"
       : variant === "outline"
         ? "border border-line bg-surface/40 text-ink hover:border-accent/60 hover:bg-surface"
         : "text-muted hover:text-ink";

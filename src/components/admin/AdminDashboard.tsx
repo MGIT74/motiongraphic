@@ -18,8 +18,8 @@ const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DEFAULT_NEW_CONFIG: AnimationConfig = {
   text: "MOTION",
   primaryColor: "#F5F5F7",
-  accentColor: "#7C5CFF",
-  backgroundColor: "#0A0A0D",
+  accentColor: "#0A84FF",
+  backgroundColor: "#000000",
   duration: 4,
   speed: 1,
 };
@@ -78,8 +78,8 @@ function editorFromRow(row: AnimationRowMapped): EditorState {
     isFeatured: row.is_featured,
     configText: typeof cfg.text === "string" ? cfg.text : "",
     primaryColor: typeof cfg.primaryColor === "string" ? cfg.primaryColor : "#F5F5F7",
-    accentColor: typeof cfg.accentColor === "string" ? cfg.accentColor : "#7C5CFF",
-    backgroundColor: typeof cfg.backgroundColor === "string" ? cfg.backgroundColor : "#0A0A0D",
+    accentColor: typeof cfg.accentColor === "string" ? cfg.accentColor : "#0A84FF",
+    backgroundColor: typeof cfg.backgroundColor === "string" ? cfg.backgroundColor : "#000000",
     speed: String(cfg.speed ?? 1),
     promptWeb: row.prompts?.find((p) => p.type === "web")?.content ?? "",
     promptAe: row.prompts?.find((p) => p.type === "after_effects")?.content ?? "",
@@ -550,11 +550,11 @@ function TemplateEditor({
 
         <div className="flex items-center gap-6 sm:col-span-2">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={editor.isPublished} onChange={(e) => set("isPublished", e.target.checked)} className="h-4 w-4 accent-[#7C5CFF]" />
+            <input type="checkbox" checked={editor.isPublished} onChange={(e) => set("isPublished", e.target.checked)} className="h-4 w-4 accent-[#0A84FF]" />
             Publié
           </label>
           <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={editor.isFeatured} onChange={(e) => set("isFeatured", e.target.checked)} className="h-4 w-4 accent-[#7C5CFF]" />
+            <input type="checkbox" checked={editor.isFeatured} onChange={(e) => set("isFeatured", e.target.checked)} className="h-4 w-4 accent-[#0A84FF]" />
             À la une
           </label>
         </div>

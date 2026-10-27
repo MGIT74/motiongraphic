@@ -21,7 +21,7 @@ export default function AnimationCard({ template }: { template: TemplateSummary 
     <div ref={ref} className="group relative">
       <Link
         href={`/templates/${template.slug}`}
-        className="block overflow-hidden rounded-2xl border border-line bg-surface transition-all duration-300 hover:-translate-y-1 hover:border-accent/40 hover:shadow-[0_24px_60px_-28px_rgba(124,92,255,0.35)] focus-visible:outline-2 focus-visible:outline-accent"
+        className="block overflow-hidden rounded-2xl border border-line bg-surface transition-all duration-300 hover:-translate-y-1 hover:border-accent/40 hover:shadow-[0_24px_60px_-28px_rgba(10,132,255,0.35)] focus-visible:outline-2 focus-visible:outline-accent"
         aria-label={`${template.title} — catégorie ${template.category?.name ?? "n/a"}`}
       >
         <AnimationPlayer

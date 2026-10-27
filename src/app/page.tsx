@@ -61,7 +61,7 @@ export default async function HomePage() {
           >
             <Link
               href="/explore"
-              className="inline-flex h-12 items-center gap-2 rounded-full bg-accent px-7 text-sm font-semibold text-white transition-all hover:bg-accent/85 hover:shadow-[0_10px_40px_-12px_rgba(124,92,255,0.55)]"
+              className="inline-flex h-12 items-center gap-2 rounded-full bg-accent px-7 text-sm font-semibold text-white transition-all hover:bg-accent/85 hover:shadow-[0_10px_40px_-12px_rgba(10,132,255,0.55)]"
             >
               Explorer la galerie
               <ArrowRight className="h-4 w-4" aria-hidden="true" />

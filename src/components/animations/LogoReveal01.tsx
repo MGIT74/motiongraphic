@@ -77,7 +77,7 @@ export default function LogoReveal01({
           fill={accent}
           opacity="0.92"
         />
-        <polygon points="60,52 74,68 60,84 46,68" fill="#0A0A0D" opacity="0.55" />
+        <polygon points="60,52 74,68 60,84 46,68" fill="#000000" opacity="0.55" />
       </svg>
       {text ? (
         <span

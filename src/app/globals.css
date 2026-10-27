@@ -7,19 +7,19 @@
 
 @theme inline {
   --color-background: var(--background);
-  --color-surface: #101015;
-  --color-elevated: #17171d;
-  --color-line: #23232c;
+  --color-surface: #101014;
+  --color-elevated: #17171a;
+  --color-line: #232329;
   --color-ink: #f5f5f7;
   --color-muted: #9a9aa6;
-  --color-accent: #7c5cff;
-  --color-accent-2: #22d3ee;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-accent: #0a84ff;
+  --color-accent-2: #64d2ff;
+  --font-sans: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Geneva, monospace;
 }
 
 :root {
-  --background: #0a0a0d;
+  --background: #000000;
 }
 
 html {
@@ -30,12 +30,12 @@ html {
 body {
   background: var(--background);
   color: var(--color-ink);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: rgba(124, 92, 255, 0.35);
+  background: rgba(10, 132, 255, 0.35);
   color: #fff;
 }
 
@@ -58,7 +58,7 @@ body {
 /* ------------------------------------------------------------------ */
 
 .text-gradient {
-  background: linear-gradient(100deg, #f5f5f7 10%, #7c5cff 55%, #22d3ee 95%);
+  background: linear-gradient(100deg, #f5f5f7 10%, #0a84ff 55%, #64d2ff 95%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -66,9 +66,9 @@ body {
 
 .hero-glow {
   background:
-    radial-gradient(42rem 24rem at 50% -12%, rgba(124, 92, 255, 0.16), transparent 65%),
-    radial-gradient(30rem 18rem at 82% 18%, rgba(34, 211, 238, 0.07), transparent 70%),
-    radial-gradient(28rem 16rem at 12% 30%, rgba(124, 92, 255, 0.06), transparent 70%);
+    radial-gradient(42rem 24rem at 50% -12%, rgba(10, 132, 255, 0.18), transparent 65%),
+    radial-gradient(30rem 18rem at 82% 18%, rgba(100, 210, 255, 0.08), transparent 70%),
+    radial-gradient(28rem 16rem at 12% 30%, rgba(10, 132, 255, 0.07), transparent 70%);
 }
 
 .grid-lines {

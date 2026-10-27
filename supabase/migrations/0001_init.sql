@@ -282,32 +282,32 @@ values
   ('00000000-0000-4000-8000-000000000011', 'Kinetic Typography',
    'Typographie cinétique : chaque lettre glisse depuis un masque bas avec un décalage rythmé, puis un point d''accent vient sceller le mot. Ideal pour des accroches, titres de showreel ou intros de marque.',
    '00000000-0000-4000-8000-000000000001', 'kinetic-type-01',
-   '{"text":"MOTION","primaryColor":"#F5F5F7","accentColor":"#7C5CFF","backgroundColor":"#0A0A0D","duration":3.2,"speed":1}'::jsonb,
+   '{"text":"MOTION","primaryColor":"#F5F5F7","accentColor":"#0A84FF","backgroundColor":"#000000","duration":3.2,"speed":1}'::jsonb,
    3.2, true, true),
   ('00000000-0000-4000-8000-000000000012', 'Text Reveal — Masque',
    'Révélation de texte par masque vertical, ligne par ligne, traversée par un balayage lumineux. Un classique du motion design revisité en code, parfait pour des slogans en deux lignes.',
    '00000000-0000-4000-8000-000000000001', 'text-reveal-01',
-   '{"text":"CRÉER\nEN CODE","primaryColor":"#F5F5F7","accentColor":"#7C5CFF","backgroundColor":"#0A0A0D","duration":3.6,"speed":1}'::jsonb,
+   '{"text":"CRÉER\nEN CODE","primaryColor":"#F5F5F7","accentColor":"#0A84FF","backgroundColor":"#000000","duration":3.6,"speed":1}'::jsonb,
    3.6, true, true),
   ('00000000-0000-4000-8000-000000000013', 'Elastic Text',
    'Le texte rebondit en place avec un easing élastique, lettre par lettre : énergie maximale pour des mots-clés courts, des badges ou des annonces.',
    '00000000-0000-4000-8000-000000000001', 'elastic-text-01',
-   '{"text":"BOUNCE","primaryColor":"#F5F5F7","accentColor":"#22D3EE","backgroundColor":"#0A0A0D","duration":3,"speed":1}'::jsonb,
+   '{"text":"BOUNCE","primaryColor":"#F5F5F7","accentColor":"#64D2FF","backgroundColor":"#000000","duration":3,"speed":1}'::jsonb,
    3, true, true),
   ('00000000-0000-4000-8000-000000000014', 'Shape Morph',
    'Une forme lumineuse se transforme sans interruption : carré, octogone, étoile à quatre branches. Un morphing pur code, fluide à 60 fps, pour des transitions géométriques élégantes.',
    '00000000-0000-4000-8000-000000000002', 'shape-morph-01',
-   '{"text":"MORPH","primaryColor":"#F5F5F7","accentColor":"#22D3EE","backgroundColor":"#0A0A0D","duration":6,"speed":1}'::jsonb,
+   '{"text":"MORPH","primaryColor":"#F5F5F7","accentColor":"#64D2FF","backgroundColor":"#000000","duration":6,"speed":1}'::jsonb,
    6, true, true),
   ('00000000-0000-4000-8000-000000000015', 'Staggered Cards',
    'Trois cartes vitrées s''empilent en cascade avec un rebond maîtrisé. La mise en scène idéale pour présenter des étapes, des fonctionnalités ou des maquettes d''interface.',
    '00000000-0000-4000-8000-000000000003', 'staggered-cards-01',
-   '{"text":"UI MOTION","primaryColor":"#E7E7EF","accentColor":"#7C5CFF","backgroundColor":"#0A0A0D","duration":4.2,"speed":1}'::jsonb,
+   '{"text":"UI MOTION","primaryColor":"#E7E7EF","accentColor":"#0A84FF","backgroundColor":"#000000","duration":4.2,"speed":1}'::jsonb,
    4.2, true, true),
   ('00000000-0000-4000-8000-000000000016', 'Logo Reveal',
    'Un logo abstrait se dessine par la lumière : le trait se trace, le cœur pop, un halo s''échappe et le mot-symbole s''éclaircit. Pensez intros de marque et identités animées.',
    '00000000-0000-4000-8000-000000000004', 'logo-reveal-01',
-   '{"text":"STUDIO","primaryColor":"#F5F5F7","accentColor":"#22D3EE","backgroundColor":"#0A0A0D","duration":4.4,"speed":1}'::jsonb,
+   '{"text":"STUDIO","primaryColor":"#F5F5F7","accentColor":"#64D2FF","backgroundColor":"#000000","duration":4.4,"speed":1}'::jsonb,
    4.4, true, true)
 on conflict (id) do nothing;
 
@@ -326,9 +326,9 @@ OBJECTIF
 Produire une animation web autonome, dans un seul fichier HTML, reproduisant fidèlement le comportement décrit ci-dessous.
 
 SPECIFICATIONS VISUELLES
-- Fond #0A0A0D. Le mot « MOTION » centré, lettres majuscules très grasses.
+- Fond #000000. Le mot « MOTION » centré, lettres majuscules très grasses.
 - Chaque lettre apparaît en glissant depuis le bas, masquée par un wrapper overflow:hidden, décalage de 70 ms entre les lettres.
-- Un point d'accent violet (#7C5CFF) apparaît après la dernière lettre avec un pop (back.out(3)).
+- Un point d'accent violet (#0A84FF) apparaît après la dernière lettre avec un pop (back.out(3)).
 
 ANIMATION & EASING
 - power3.out pour l'entrée des lettres (0.55 s chacune, stagger 0.07), légère montée en yPercent 118 -> 0.
@@ -341,7 +341,7 @@ CONTRAINTES TECHNIQUES
 - N'animer que transform / opacity pour garantir 60 fps.
 - État initial du DOM = état final de l'animation (utiliser gsap.from()).
 - Respecter prefers-reduced-motion : afficher l'état final sans animation.
-- Palette : fond #0A0A0D, texte #F5F5F7, accent #7C5CFF (modifiable en haut du CSS via variables).
+- Palette : fond #000000, texte #F5F5F7, accent #0A84FF (modifiable en haut du CSS via variables).
 
 PARAMÈTRE FACILE À PERSONNALISER
 - Rendez le texte et les couleurs configurables en haut du script (const CONFIG = {...}).
@@ -361,7 +361,7 @@ MISSION
 Écris un script JSX complet et autonome qui construit la composition décrite ci-dessous, prête à être exécutée via File > Scripts > Run Script File.
 
 COMPOSITION
-- Compo « MGSI_KineticType », 1920×1080, 30 fps, durée 6 s, fond #0A0A0D.
+- Compo « MGSI_KineticType », 1920×1080, 30 fps, durée 6 s, fond #000000.
 - Un calque texte « MOTION » en gras, centré, taille 220 px, blédi #F5F5F7.
 
 COMPORTEMENT ANIMÉ
@@ -393,7 +393,7 @@ OBJECTIF
 Produire une animation web autonome, dans un seul fichier HTML, reproduisant fidèlement le comportement décrit ci-dessous.
 
 SPECIFICATIONS VISUELLES
-- Fond #0A0A0D, deux lignes centrées « CRÉER » / « EN CODE ».
+- Fond #000000, deux lignes centrées « CRÉER » / « EN CODE ».
 - Révélation par masque vertical (overflow hidden par ligne), chaque ligne monte de bas en haut.
 - Balayage lumineux violet/cyan (mix-blend-mode: screen, blur) traversant le texte pendant la révélation.
 
@@ -408,7 +408,7 @@ CONTRAINTES TECHNIQUES
 - N'animer que transform / opacity pour garantir 60 fps.
 - État initial du DOM = état final de l'animation (utiliser gsap.from()).
 - Respecter prefers-reduced-motion : afficher l'état final sans animation.
-- Palette : fond #0A0A0D, texte #F5F5F7, accent #7C5CFF (modifiable en haut du CSS via variables).
+- Palette : fond #000000, texte #F5F5F7, accent #0A84FF (modifiable en haut du CSS via variables).
 
 PARAMÈTRE FACILE À PERSONNALISER
 - Rendez le texte et les couleurs configurables en haut du script (const CONFIG = {...}).
@@ -428,7 +428,7 @@ MISSION
 Écris un script JSX complet et autonome qui construit la composition décrite ci-dessous, prête à être exécutée via File > Scripts > Run Script File.
 
 COMPOSITION
-- Compo « MGSI_TextReveal », 1920×1080, 30 fps, 6 s, fond #0A0A0D.
+- Compo « MGSI_TextReveal », 1920×1080, 30 fps, 6 s, fond #000000.
 - Deux calques texte centrés, « CRÉER » / « EN CODE », gras, #F5F5F7.
 
 COMPORTEMENT ANIMÉ
@@ -460,7 +460,7 @@ OBJECTIF
 Produire une animation web autonome, dans un seul fichier HTML, reproduisant fidèlement le comportement décrit ci-dessous.
 
 SPECIFICATIONS VISUELLES
-- Fond #0A0A0D, mot « BOUNCE » centré, lettres toutes les 4 en accent (#22D3EE).
+- Fond #000000, mot « BOUNCE » centré, lettres toutes les 4 en accent (#64D2FF).
 - Les lettres apparaissent depuis le bas en grossissant puis rebondissent (effet élastique, transform-origin bas).
 
 ANIMATION & EASING
@@ -474,7 +474,7 @@ CONTRAINTES TECHNIQUES
 - N'animer que transform / opacity pour garantir 60 fps.
 - État initial du DOM = état final de l'animation (utiliser gsap.from()).
 - Respecter prefers-reduced-motion : afficher l'état final sans animation.
-- Palette : fond #0A0A0D, texte #F5F5F7, accent #7C5CFF (modifiable en haut du CSS via variables).
+- Palette : fond #000000, texte #F5F5F7, accent #0A84FF (modifiable en haut du CSS via variables).
 
 PARAMÈTRE FACILE À PERSONNALISER
 - Rendez le texte et les couleurs configurables en haut du script (const CONFIG = {...}).
@@ -494,8 +494,8 @@ MISSION
 Écris un script JSX complet et autonome qui construit la composition décrite ci-dessous, prête à être exécutée via File > Scripts > Run Script File.
 
 COMPOSITION
-- Compo « MGSI_ElasticText », 1920×1080, 30 fps, 6 s, fond #0A0A0D.
-- Calque texte « BOUNCE » gras, centré, #F5F5F7 avec lettres altérnées en #22D3EE (colorations par index).
+- Compo « MGSI_ElasticText », 1920×1080, 30 fps, 6 s, fond #000000.
+- Calque texte « BOUNCE » gras, centré, #F5F5F7 avec lettres altérnées en #64D2FF (colorations par index).
 
 COMPORTEMENT ANIMÉ
 - Lettres (texte en sous-calques) animées en échelle et position avec une courbe élastique (ease « Out Elastic », interpolation avec overshoot), décalées de 2 frames, puis rétracté vers le haut pour boucler.
@@ -526,7 +526,7 @@ OBJECTIF
 Produire une animation web autonome, dans un seul fichier HTML, reproduisant fidèlement le comportement décrit ci-dessous.
 
 SPECIFICATIONS VISUELLES
-- Fond #0A0A0D, au centre une forme lumineuse en dégradé (#22D3EE vers transparent) avec un halo flou derrière.
+- Fond #000000, au centre une forme lumineuse en dégradé (#64D2FF vers transparent) avec un halo flou derrière.
 - La forme se morphe en continu : carré -> octogone -> étoile 4 branches -> carré (interpolation de clip-path polygon à 8 sommets).
 
 ANIMATION & EASING
@@ -539,7 +539,7 @@ CONTRAINTES TECHNIQUES
 - Techniques autorisées : React, GSAP, CSS.
 - N'animer que transform / opacity / clip-path pour garantir 60 fps.
 - Respecter prefers-reduced-motion : afficher l'état final sans animation.
-- Palette : fond #0A0A0D, accent #22D3EE (modifiable en haut du CSS via variables).
+- Palette : fond #000000, accent #64D2FF (modifiable en haut du CSS via variables).
 
 PARAMÈTRE FACILE À PERSONNALISER
 - Rendez le texte, les couleurs et la durée configurables en haut du script (const CONFIG = {...}).
@@ -559,7 +559,7 @@ MISSION
 Écris un script JSX complet et autonome qui construit la composition décrite ci-dessous, prête à être exécutée via File > Scripts > Run Script File.
 
 COMPOSITION
-- Compo « MGSI_ShapeMorph », 1080×1080, 30 fps, 8 s, fond #0A0A0D.
+- Compo « MGSI_ShapeMorph », 1080×1080, 30 fps, 8 s, fond #000000.
 - Un calque forme (polystar) lumineux + un calque halo Gaussien.
 
 COMPORTEMENT ANIMÉ
@@ -591,8 +591,8 @@ OBJECTIF
 Produire une animation web autonome, dans un seul fichier HTML, reproduisant fidèlement le comportement décrit ci-dessous.
 
 SPECIFICATIONS VISUELLES
-- Fond #0A0A0D, 3 cartes vitrées (rgba blanc translucide, bordure douce, ombre portée) avec pastille colorée et lignes de contenu.
-- La carte du centre est mise en avant (pastille et trait d'accent violet #7C5CFF).
+- Fond #000000, 3 cartes vitrées (rgba blanc translucide, bordure douce, ombre portée) avec pastille colorée et lignes de contenu.
+- La carte du centre est mise en avant (pastille et trait d'accent violet #0A84FF).
 - Un label « UI MOTION » en majuscules espacées au-dessus.
 
 ANIMATION & EASING
@@ -606,7 +606,7 @@ CONTRAINTES TECHNIQUES
 - N'animer que transform / opacity pour garantir 60 fps.
 - État initial du DOM = état final de l'animation (utiliser gsap.from()).
 - Respecter prefers-reduced-motion : afficher l'état final sans animation.
-- Palette : fond #0A0A0D, accent #7C5CFF (modifiable en haut du CSS via variables).
+- Palette : fond #000000, accent #0A84FF (modifiable en haut du CSS via variables).
 
 PARAMÈTRE FACILE À PERSONNALISER
 - Rendez le texte, les couleurs et la durée configurables en haut du script (const CONFIG = {...}).
@@ -626,7 +626,7 @@ MISSION
 Écris un script JSX complet et autonome qui construit la composition décrite ci-dessous, prête à être exécutée via File > Scripts > Run Script File.
 
 COMPOSITION
-- Compo « MGSI_StaggeredCards », 1920×1080, 30 fps, 7 s, fond #0A0A0D.
+- Compo « MGSI_StaggeredCards », 1920×1080, 30 fps, 7 s, fond #000000.
 - Trois calque rectangles (arrondis 24 px) semi-transparents avec pastille et barres internes, plus calque texte de label.
 
 COMPORTEMENT ANIMÉ
@@ -658,7 +658,7 @@ OBJECTIF
 Produire une animation web autonome, dans un seul fichier HTML, reproduisant fidèlement le comportement décrit ci-dessous.
 
 SPECIFICATIONS VISUELLES
-- Fond #0A0A0D, cercle SVG r=46 dont le trait cyan (#22D3EE) se dessine progressivement (stroke-dashoffset).
+- Fond #000000, cercle SVG r=46 dont le trait cyan (#64D2FF) se dessine progressivement (stroke-dashoffset).
 - Un triangle/forme abstraite apparaît en pop au centre (back.out(2.4)), un cercle pulsé (halo) s'échappe du cœur, le mot-symbole « STUDIO » apparaît dessous.
 
 ANIMATION & EASING
@@ -671,7 +671,7 @@ CONTRAINTES TECHNIQUES
 - Techniques autorisées : React, GSAP, SVG.
 - N'animer que transform / opacity (et stroke-dashoffset) pour garantir 60 fps.
 - Respecter prefers-reduced-motion : afficher l'état final sans animation.
-- Palette : fond #0A0A0D, accent #22D3EE (modifiable en haut du CSS via variables).
+- Palette : fond #000000, accent #64D2FF (modifiable en haut du CSS via variables).
 
 PARAMÈTRE FACILE À PERSONNALISER
 - Rendez le texte et les couleurs configurables en haut du script (const CONFIG = {...}).
@@ -691,7 +691,7 @@ MISSION
 Écris un script JSX complet et autonome qui construit la composition décrite ci-dessous, prête à être exécutée via File > Scripts > Run Script File.
 
 COMPOSITION
-- Compo « MGSI_LogoReveal », 1080×1080, 30 fps, 6 s, fond #0A0A0D.
+- Compo « MGSI_LogoReveal », 1080×1080, 30 fps, 6 s, fond #000000.
 - Calque forme (ellipse tracé vide, sans fond) cyan, un triangle/étoile au centre, un calque texte « STUDIO ».
 
 COMPORTEMENT ANIMÉ
