@@ -71,14 +71,6 @@ body {
     radial-gradient(28rem 16rem at 12% 30%, rgba(10, 132, 255, 0.07), transparent 70%);
 }
 
-.grid-lines {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(70% 60% at 50% 35%, black 30%, transparent 100%);
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .animate-float {
     animation: mg-float 7s ease-in-out infinite;
