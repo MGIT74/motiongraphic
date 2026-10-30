@@ -7,6 +7,8 @@ import AnimationPlayer from "@/components/animations/AnimationPlayer";
 import PromptPanel from "@/components/prompts/PromptPanel";
 import AnimationCard from "@/components/gallery/AnimationCard";
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({
   params,
 }: {
