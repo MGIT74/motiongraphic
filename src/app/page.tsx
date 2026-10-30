@@ -4,6 +4,8 @@ import GalleryGrid from "@/components/gallery/GalleryGrid";
 import DemoBanner from "@/components/gallery/DemoBanner";
 import { getPublishedTemplates, isDemoMode } from "@/lib/data";
 
+export const dynamic = "force-dynamic";
+
 const STEPS = [
   {
     icon: Eye,
