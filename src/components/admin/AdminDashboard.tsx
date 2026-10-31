@@ -107,13 +107,32 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
     }
     setLoading(true);
     const [animRes, catRes] = await Promise.all([
-      client.from("animations").select(`${ANIMATION_SELECT}, prompts)id, animation_id, type, content, version)`),
+      client.from("animations").select(ANIMATION_SELECT).order("created_at", { ascending: false }),
       client.from("categories").select("id, name, slug, description, created_at").order("name"),
     ]);
     if (animRes.error) {
       setMessage({ kind: "error", text: `Chargement des templates : ${animRes.error.message}` });
     } else {
-      setRows(((animRes.data ?? []) as unknown as AnimationRowMapped[]) ?? []);
+      const animations = (animRes.data ?? []) as unknown as AnimationRowMapped[];
+      if (animations.length > 0) {
+        const { data: promptData, error: promptError } = await client
+          .from("prompts")
+          .select("id, animation_id, type, content, version")
+          .in("animation_id", animations.map((animation) => animation.id));
+        if (promptError) {
+          setMessage({ kind: "error", text: `Chargement des prompts : ${promptError.message}` });
+        } else {
+          const prompts = (promptData ?? []) as unknown as (TemplatePrompt & { animation_id: string })[];
+          setRows(animations.map((animation) => ({
+            ...animation,
+            prompts: prompts.filter((prompt) => prompt.animation_id === animation.id),
+          })));
+          setMessage(null);
+        }
+      } else {
+        setRows([]);
+        setMessage(null);
+      }
     }
     if (catRes.error) {
       setMessage({ kind: "error", text: `Chargement des catégories : ${catRes.error.message}` });
