@@ -7,12 +7,13 @@ import CopyButton from "./CopyButton";
 
 interface PromptPanelProps {
   prompts: TemplatePrompt[];
+  animationId?: string;
 }
 
 /**
  * Aperçu + copie des prompts (onglets Web / After Effects).
  */
-export default function PromptPanel({ prompts }: PromptPanelProps) {
+export default function PromptPanel({ prompts, animationId }: PromptPanelProps) {
   const web = prompts.find((p) => p.type === "web");
   const ae = prompts.find((p) => p.type === "after_effects");
   const [tab, setTab] = useState<"web" | "after_effects">(web ? "web" : "after_effects");
@@ -58,6 +59,8 @@ export default function PromptPanel({ prompts }: PromptPanelProps) {
         {active && (
           <CopyButton
             text={active.content}
+            animationId={animationId}
+            promptType={active.type}
             label={active.type === "web" ? "Copy Prompt Web" : "Copy Prompt After Effects"}
             variant={active.type === "web" ? "primary" : "outline"}
           />
