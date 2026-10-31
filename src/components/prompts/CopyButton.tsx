@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { Check, Copy, TriangleAlert } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 interface CopyButtonProps {
   text: string;
   label?: string;
   variant?: "primary" | "outline" | "ghost";
   className?: string;
+  animationId?: string;
+  promptType?: "web" | "after_effects";
 }
 
 /**
@@ -20,12 +23,18 @@ export default function CopyButton({
   label = "Copier",
   variant = "primary",
   className = "",
+  animationId,
+  promptType,
 }: CopyButtonProps) {
   const [state, setState] = useState<"idle" | "done" | "error">("idle");
 
   const handleClick = async () => {
     const ok = await copyToClipboard(text);
     setState(ok ? "done" : "error");
+    if (ok && animationId && promptType) {
+      const client = createSupabaseBrowserClient();
+      if (client) void client.from("template_events").insert({ animation_id: animationId, event_type: "prompt_copy", prompt_type: promptType });
+    }
     setTimeout(() => setState("idle"), 2200);
   };
 
