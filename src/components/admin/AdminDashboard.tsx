@@ -322,7 +322,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="admin-shell">
-      <div className="mx-auto max-w-[1560px] px-4 py-6 sm:px-7 lg:px-10">
+      <div className="w-full max-w-none px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-surface px-5 py-4">
         <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-lg font-black text-white">M</div><div><p className="text-base font-bold text-ink">MotionGraphic<span className="text-accent">.si</span></p><p className="text-xs text-muted">Espace administrateur</p></div></div>
         <span className="text-xs text-muted">Administration · Gestion du catalogue</span>
