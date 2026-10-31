@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CircleAlert, Loader2, Pencil, Plus, Power, Trash2, Eye, LayoutDashboard, Layers3, FolderOpen, BarChart3, ExternalLink } from "lucide-react";
+import { CircleAlert, Loader2, Pencil, Plus, Power, Trash2, Eye, LayoutDashboard, Layers3, FolderOpen, BarChart3, ExternalLink, Sun, Moon, TrendingUp, Copy, Activity, ArrowUpRight, Film, Search } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { ANIMATION_SELECT, type AnimationRowLike } from "@/lib/template-mappers";
 import { COMPONENT_KEYS } from "@/lib/animations/registry";
@@ -91,11 +91,12 @@ function editorFromRow(row: AnimationRowMapped): EditorState {
  * (voir supabase/migrations/0001_init.sql). */
 export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [rows, setRows] = useState<AnimationRowMapped[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [tab, setTab] = useState<"overview" | "templates" | "categories" | "analytics">("overview");
-  const [copyStats, setCopyStats] = useState<{ animation_id: string; event_type: string }[]>([]);
+  const [copyStats, setCopyStats] = useState<{ animation_id: string; event_type: string; created_at: string }[]>([]);
   const [analyticsReady, setAnalyticsReady] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -141,7 +142,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
     } else {
       setCategories(((catRes.data ?? []) as unknown as Category[]) ?? []);
     }
-    const statsRes = await client.from("template_events").select("animation_id, event_type").eq("event_type", "prompt_copy").limit(10000);
+    const statsRes = await client.from("template_events").select("animation_id, event_type, created_at").eq("event_type", "prompt_copy").limit(10000);
     if (!statsRes.error) {
       setCopyStats((statsRes.data ?? []) as { animation_id: string; event_type: string }[]);
       setAnalyticsReady(true);
@@ -314,14 +315,19 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
 
   if (loading) {
     return (
-      <p className="flex items-center gap-2 text-sm text-muted">
+      <div className="admin-shell flex items-center justify-center p-12"><p className="flex items-center gap-2 text-sm text-muted">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Chargement de l’administration…
-      </p>
+      </p></div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="admin-shell" data-admin-theme={theme}>
+      <div className="mx-auto max-w-[1560px] px-4 py-6 sm:px-7 lg:px-10">
+      <div className="mb-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-surface px-5 py-4">
+        <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-lg font-black text-white">M</div><div><p className="text-base font-bold text-ink">MotionGraphic<span className="text-accent">.si</span></p><p className="text-xs text-muted">Espace administrateur</p></div></div>
+        <div className="flex items-center gap-3"><span className="hidden text-xs text-muted sm:inline">Administration · Gestion du catalogue</span><button type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} className="flex h-10 items-center gap-2 rounded-xl border border-line bg-elevated px-3 text-sm text-ink" aria-label={theme === "light" ? "Activer le mode sombre" : "Activer le mode clair"}>{theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}{theme === "light" ? "Sombre" : "Clair"}</button></div>
+      </div>
       {message ? (
         <p
           className={`flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
@@ -336,9 +342,9 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
         </p>
       ) : null}
 
-      <div className="grid gap-7 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="h-fit rounded-2xl border border-line bg-surface/60 p-3 lg:sticky lg:top-24">
-          <p className="px-3 py-3 text-xs font-semibold uppercase tracking-widest text-muted">Espace de gestion</p>
+      <div className="grid gap-6 lg:grid-cols-[235px_minmax(0,1fr)]">
+        <aside className="admin-panel h-fit p-3 lg:sticky lg:top-6">
+          <p className="px-3 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted">Workspace</p>
           {([
             ["overview", "Vue d’ensemble", LayoutDashboard],
             ["templates", "Templates", Layers3],
@@ -346,53 +352,65 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
             ["analytics", "Statistiques", BarChart3],
           ] as const).map(([key, label, Icon]) => (
             <button key={key} type="button" onClick={() => setTab(key)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${tab === key ? "bg-accent/15 text-accent" : "text-muted hover:bg-elevated hover:text-ink"}`}>
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${tab === key ? "admin-nav-active" : "text-muted hover:bg-elevated hover:text-ink"}`}>
               <Icon className="h-4 w-4" /> {label}
             </button>
           ))}
-          <a href="/explore" target="_blank" rel="noopener noreferrer" className="mt-4 flex items-center gap-3 border-t border-line px-3 pt-4 text-sm text-muted hover:text-ink">
+          <a href="/explore" target="_blank" rel="noopener noreferrer" className="mt-5 flex items-center gap-3 border-t border-line px-3 py-4 text-sm text-muted hover:text-ink">
             <ExternalLink className="h-4 w-4" /> Voir le site
           </a>
         </aside>
         <div className="min-w-0 space-y-6">
           {tab === "overview" || tab === "analytics" ? (
             <section className="space-y-5">
-              <div>
-                <h2 className="text-xl font-bold text-ink">{tab === "overview" ? "Vue d’ensemble" : "Statistiques"}</h2>
-                <p className="mt-1 text-sm text-muted">Suivi de votre bibliothèque MotionGraphic.si</p>
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div><p className="text-xs font-medium text-accent">DASHBOARD / INSIGHTS</p><h1 className="mt-1 text-2xl font-bold text-ink sm:text-3xl">{tab === "overview" ? "Bienvenue sur votre studio 👋" : "Statistiques de votre bibliothèque"}</h1><p className="mt-2 text-sm text-muted">Vue d’ensemble de vos animations et des interactions enregistrées.</p></div>
+                <button type="button" onClick={() => setTab("templates")} className="rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white">Gérer les templates</button>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {([
-                  ["Templates", rows.length],
-                  ["Publiés", rows.filter((r) => r.is_published).length],
-                  ["Catégories", categories.length],
-                  ["Copies de prompts", analyticsReady ? copyStats.length.toLocaleString("fr-FR") : "—"],
-                ] as const).map(([label, value]) => (
-                  <div key={label} className="rounded-2xl border border-line bg-surface/60 p-5">
-                    <p className="text-xs text-muted">{label}</p>
-                    <p className="mt-3 text-3xl font-bold text-ink">{value}</p>
+                  ["Templates", rows.length, Film],
+                  ["Animations publiées", rows.filter((r) => r.is_published).length, Activity],
+                  ["Catégories", categories.length, Layers3],
+                  ["Copies de prompts", analyticsReady ? copyStats.length.toLocaleString("fr-FR") : "—", Copy],
+                ] as const).map(([label, value, Icon]) => (
+                  <div key={label} className="admin-panel p-5">
+                    <div className="flex items-center justify-between"><p className="text-xs font-medium text-muted">{label}</p><span className="rounded-xl bg-accent/10 p-2 text-accent"><Icon className="h-4 w-4" /></span></div>
+                    <p className="mt-5 text-3xl font-bold tracking-tight text-ink">{value}</p>
+                    <p className="mt-2 text-xs text-muted">Données du catalogue</p>
                   </div>
                 ))}
               </div>
-              {!analyticsReady ? (
-                <p className="rounded-xl border border-line bg-surface/50 p-4 text-sm text-muted">
-                  Le suivi des copies sera disponible après l’installation de la migration SQL des événements.
-                  Aucun chiffre fictif n’est affiché.
-                </p>
-              ) : (
-                <div className="rounded-2xl border border-line bg-surface/60 p-5">
-                  <h3 className="mb-4 font-semibold text-ink">Copies par template</h3>
-                  <div className="space-y-3">
-                    {rows.map((row) => (
-                      <div key={row.id} className="flex items-center justify-between border-b border-line py-2 text-sm">
-                        <span>{row.title}</span>
-                        <span className="font-semibold tabular-nums">{copyStats.filter((event) => event.animation_id === row.id).length}</span>
-                      </div>
-                    ))}
-                  </div>
+              <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+                <div className="admin-panel p-6">
+                  <div className="mb-6 flex items-center justify-between"><div><h2 className="font-bold text-ink">Activité des copies</h2><p className="mt-1 text-xs text-muted">7 derniers jours · copies de prompts</p></div><TrendingUp className="h-5 w-5 text-accent" /></div>
+                  {analyticsReady ? (
+                    <div className="flex h-56 items-end justify-between gap-2 border-b border-line pb-1">
+                      {Array.from({length: 7}, (_, i) => {
+                        const day = new Date(); day.setDate(day.getDate() - 6 + i);
+                        const date = day.toLocaleDateString("en-CA");
+                        const count = copyStats.filter(e => e.created_at.slice(0, 10) === date).length;
+                        const max = Math.max(1, ...Array.from({length: 7}, (_, j) => {
+                          const d = new Date(); d.setDate(d.getDate() - 6 + j);
+                          return copyStats.filter(e => e.created_at.slice(0, 10) === d.toLocaleDateString("en-CA")).length;
+                        }));
+                        return <div key={i} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"><span className="text-xs text-muted">{count}</span><div title={count + " copies"} className="w-full max-w-14 rounded-t-lg bg-accent/80" style={{height: Math.max(3, count / max * 165)}} /><span className="text-[10px] text-muted">{day.toLocaleDateString("fr-FR", {weekday: "short"})}</span></div>;
+                      })}
+                    </div>
+                  ) : <p className="flex h-56 items-center justify-center text-center text-sm text-muted">Installez la migration SQL des événements pour afficher l’activité réelle.</p>}
                 </div>
-              )}
-              <button type="button" onClick={() => setTab("templates")} className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white">Gérer les templates</button>
+                <div className="admin-panel p-6">
+                  <h2 className="font-bold text-ink">État du catalogue</h2><p className="mt-1 text-xs text-muted">Répartition des publications</p>
+                  <div className="mt-8 flex items-center justify-center"><div className="flex h-40 w-40 items-center justify-center rounded-full" style={{background: `conic-gradient(var(--color-accent) ${rows.length ? rows.filter(r => r.is_published).length / rows.length * 100 : 0}%, var(--color-elevated) 0)`}}><div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-surface"><span className="text-3xl font-bold text-ink">{rows.length ? Math.round(rows.filter(r => r.is_published).length / rows.length * 100) : 0}%</span><span className="text-xs text-muted">publiés</span></div></div></div>
+                  <div className="mt-6 flex justify-between text-xs text-muted"><span>● {rows.filter(r => r.is_published).length} publiés</span><span>{rows.filter(r => !r.is_published).length} brouillons</span></div>
+                </div>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="admin-panel p-6"><div className="mb-4 flex items-center justify-between"><h2 className="font-bold text-ink">Templates les plus copiés</h2><button type="button" onClick={() => setTab("analytics")} className="text-xs text-accent">Statistiques <ArrowUpRight className="inline h-3 w-3" /></button></div>
+                  {analyticsReady ? <div className="space-y-3">{[...rows].sort((a,b) => copyStats.filter(e=>e.animation_id===b.id).length - copyStats.filter(e=>e.animation_id===a.id).length).slice(0,5).map((row,i) => <div key={row.id} className="flex items-center justify-between gap-3 rounded-xl bg-elevated px-4 py-3"><div className="flex min-w-0 items-center gap-3"><span className="text-xs text-muted">{String(i+1).padStart(2,"0")}</span><span className="truncate text-sm font-medium text-ink">{row.title}</span></div><span className="text-sm font-semibold text-ink">{copyStats.filter(e=>e.animation_id===row.id).length}</span></div>)}</div> : <p className="py-8 text-sm text-muted">Statistiques non disponibles tant que la migration SQL n’est pas installée.</p>}
+                </div>
+                <div className="admin-panel p-6"><h2 className="font-bold text-ink">Gestion rapide</h2><p className="mt-1 text-xs text-muted">Accès direct à votre bibliothèque</p><div className="mt-5 space-y-3"><button type="button" onClick={() => setTab("templates")} className="flex w-full items-center justify-between rounded-xl bg-elevated px-4 py-4 text-sm text-ink"><span>Gérer les animations</span><ArrowUpRight className="h-4 w-4 text-accent" /></button><button type="button" onClick={() => setTab("categories")} className="flex w-full items-center justify-between rounded-xl bg-elevated px-4 py-4 text-sm text-ink"><span>Organiser les catégories</span><ArrowUpRight className="h-4 w-4 text-accent" /></button><a href="/explore" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between rounded-xl bg-elevated px-4 py-4 text-sm text-ink"><span>Voir la galerie publique</span><ExternalLink className="h-4 w-4 text-accent" /></a></div></div>
+              </div>
             </section>
           ) : null}
       {tab === "templates" ? (
@@ -521,6 +539,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
           onSave={saveTemplate}
         />
       ) : null}
+      </div>
     </div>
   );
 }
