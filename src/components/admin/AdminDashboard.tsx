@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CircleAlert, Loader2, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { CircleAlert, Loader2, Pencil, Plus, Power, Trash2, Eye, LayoutDashboard, Layers3, FolderOpen, BarChart3, ExternalLink } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { ANIMATION_SELECT, type AnimationRowLike } from "@/lib/template-mappers";
 import { COMPONENT_KEYS } from "@/lib/animations/registry";
@@ -94,7 +94,9 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [rows, setRows] = useState<AnimationRowMapped[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [tab, setTab] = useState<"templates" | "categories">("templates");
+  const [tab, setTab] = useState<"overview" | "templates" | "categories" | "analytics">("overview");
+  const [copyStats, setCopyStats] = useState<{ animation_id: string; event_type: string }[]>([]);
+  const [analyticsReady, setAnalyticsReady] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -138,6 +140,13 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
       setMessage({ kind: "error", text: `Chargement des catégories : ${catRes.error.message}` });
     } else {
       setCategories(((catRes.data ?? []) as unknown as Category[]) ?? []);
+    }
+    const statsRes = await client.from("template_events").select("animation_id, event_type").eq("event_type", "prompt_copy").limit(10000);
+    if (!statsRes.error) {
+      setCopyStats((statsRes.data ?? []) as { animation_id: string; event_type: string }[]);
+      setAnalyticsReady(true);
+    } else {
+      setAnalyticsReady(false);
     }
     setLoading(false);
   }, []);
@@ -327,23 +336,65 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
         </p>
       ) : null}
 
-      <div className="inline-flex w-fit rounded-full border border-line bg-surface/60 p-1">
-        <button
-          type="button"
-          onClick={() => setTab("templates")}
-          className={`h-9 cursor-pointer rounded-full px-4 text-sm font-medium transition-colors ${tab === "templates" ? "bg-elevated text-ink" : "text-muted hover:text-ink"}`}
-        >
-          Templates ({rows.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("categories")}
-          className={`h-9 cursor-pointer rounded-full px-4 text-sm font-medium transition-colors ${tab === "categories" ? "bg-elevated text-ink" : "text-muted hover:text-ink"}`}
-        >
-          Catégories ({categories.length})
-        </button>
-      </div>
-
+      <div className="grid gap-7 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="h-fit rounded-2xl border border-line bg-surface/60 p-3 lg:sticky lg:top-24">
+          <p className="px-3 py-3 text-xs font-semibold uppercase tracking-widest text-muted">Espace de gestion</p>
+          {([
+            ["overview", "Vue d’ensemble", LayoutDashboard],
+            ["templates", "Templates", Layers3],
+            ["categories", "Catégories", FolderOpen],
+            ["analytics", "Statistiques", BarChart3],
+          ] as const).map(([key, label, Icon]) => (
+            <button key={key} type="button" onClick={() => setTab(key)}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${tab === key ? "bg-accent/15 text-accent" : "text-muted hover:bg-elevated hover:text-ink"}`}>
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          ))}
+          <a href="/explore" target="_blank" rel="noopener noreferrer" className="mt-4 flex items-center gap-3 border-t border-line px-3 pt-4 text-sm text-muted hover:text-ink">
+            <ExternalLink className="h-4 w-4" /> Voir le site
+          </a>
+        </aside>
+        <div className="min-w-0 space-y-6">
+          {tab === "overview" || tab === "analytics" ? (
+            <section className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold text-ink">{tab === "overview" ? "Vue d’ensemble" : "Statistiques"}</h2>
+                <p className="mt-1 text-sm text-muted">Suivi de votre bibliothèque MotionGraphic.si</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {([
+                  ["Templates", rows.length],
+                  ["Publiés", rows.filter((r) => r.is_published).length],
+                  ["Catégories", categories.length],
+                  ["Copies de prompts", analyticsReady ? copyStats.length.toLocaleString("fr-FR") : "—"],
+                ] as const).map(([label, value]) => (
+                  <div key={label} className="rounded-2xl border border-line bg-surface/60 p-5">
+                    <p className="text-xs text-muted">{label}</p>
+                    <p className="mt-3 text-3xl font-bold text-ink">{value}</p>
+                  </div>
+                ))}
+              </div>
+              {!analyticsReady ? (
+                <p className="rounded-xl border border-line bg-surface/50 p-4 text-sm text-muted">
+                  Le suivi des copies sera disponible après l’installation de la migration SQL des événements.
+                  Aucun chiffre fictif n’est affiché.
+                </p>
+              ) : (
+                <div className="rounded-2xl border border-line bg-surface/60 p-5">
+                  <h3 className="mb-4 font-semibold text-ink">Copies par template</h3>
+                  <div className="space-y-3">
+                    {rows.map((row) => (
+                      <div key={row.id} className="flex items-center justify-between border-b border-line py-2 text-sm">
+                        <span>{row.title}</span>
+                        <span className="font-semibold tabular-nums">{copyStats.filter((event) => event.animation_id === row.id).length}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button type="button" onClick={() => setTab("templates")} className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white">Gérer les templates</button>
+            </section>
+          ) : null}
       {tab === "templates" ? (
         <section>
           <div className="mb-4 flex items-center justify-between">
@@ -380,6 +431,11 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    <a href={`/templates/${row.slug}`} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex h-9 items-center gap-2 rounded-full border border-line px-3 text-xs font-medium text-ink hover:border-accent/50"
+                      title={row.is_published ? "Ouvrir l’aperçu" : "Brouillon : l’aperçu public peut être indisponible"}>
+                      <Eye className="h-3.5 w-3.5" /> Aperçu
+                    </a>
                     <button
                       type="button"
                       onClick={() => togglePublish(row)}
@@ -401,7 +457,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
             ))}
           </ul>
         </section>
-      ) : (
+      ) : tab === "categories" ? (
         <section>
           <h2 className="mb-4 text-lg font-semibold">Catégories</h2>
           <div className="mb-4 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface/60 p-4">
@@ -453,6 +509,8 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
         </section>
       )}
 
+        </div>
+      </div>
       {editor ? (
         <TemplateEditor
           editor={editor}
