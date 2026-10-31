@@ -51,7 +51,7 @@ export default async function TemplateDetailPage({
             config={template.config}
             className="aspect-video w-full rounded-3xl border border-line bg-surface"
           />
-          <PromptPanel prompts={template.prompts} />
+          <PromptPanel prompts={template.prompts} animationId={template.id} />
         </div>
 
         {/* Infos */}
@@ -119,7 +119,7 @@ export default async function TemplateDetailPage({
               Aucune inscription requise — le prompt est copié tel quel dans votre presse-papiers.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <DetailCopyButtons prompts={template.prompts} />
+              <DetailCopyButtons prompts={template.prompts} animationId={template.id} />
             </div>
           </div>
         </aside>
@@ -145,17 +145,17 @@ import CopyButton from "@/components/prompts/CopyButton";
 
 import type { TemplatePrompt } from "@/types/template";
 
-function DetailCopyButtons({ prompts }: { prompts: TemplatePrompt[] }) {
+function DetailCopyButtons({ prompts, animationId }: { prompts: TemplatePrompt[]; animationId: string }) {
   const web = prompts.find((p) => p.type === "web");
   const ae = prompts.find((p) => p.type === "after_effects");
   if (!web && !ae) return <p className="text-xs text-muted">Prompts en préparation.</p>;
   return (
     <>
       {web ? (
-        <CopyButton text={web.content} label="Copy Prompt Web" variant="primary" className="h-10 text-xs" />
+        <CopyButton text={web.content} animationId={animationId} promptType="web" label="Copy Prompt Web" variant="primary" className="h-10 text-xs" />
       ) : null}
       {ae ? (
-        <CopyButton text={ae.content} label="Copy Prompt After Effects" variant="outline" className="h-10 text-xs" />
+        <CopyButton text={ae.content} animationId={animationId} promptType="after_effects" label="Copy Prompt After Effects" variant="outline" className="h-10 text-xs" />
       ) : null}
     </>
   );
