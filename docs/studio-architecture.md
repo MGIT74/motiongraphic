@@ -42,6 +42,10 @@ construit la timeline avec `loop: false` et pilote `timeline.time(t)`.
 
 ## Limitations actuelles (honnêtes)
 
+- `minimal-saas-ui-01` (template parallèle, interactif) : présent dans la
+  galerie et le registre public, mais PAS piloté par la timeline Studio
+  (auto-animé). Intégration time-driven prévue en Phase 2 (builder dédié).
+  Migration `0004_allow_minimal_saas_ui.sql` prête (non exécutée).
 - Lecture pilotée par le temps : précise mais sans easing avancé hors GSAP
   (les timelines jouent exactement comme la galerie).
 - Pas d'import de médias (Phase 3) : pistes Rushs/Audio affichées en attente.
