@@ -185,6 +185,22 @@ const PROMPTS = {
         "Le cercle se dessine via des keyframes de tracé (Trim Paths), le cœur apparaît en scale avec pop, un halo (calque solide animé en scale/opacité, flou gaussien) s'échappe, puis le mot-symbole apparaît ; tenue, léger recadrage, boucle.",
     }),
   },
+  "minimal-saas-ui-01": {
+    web: webPrompt("minimal-saas-ui-01", {
+      visuel:
+        "- Interface SaaS claire et minimale sur fond #F7F8FA : 4 cartes blanches arrondies avec ombres douces (statistiques analytiques, lecteur audio, recherche, actions rapides).\n- Chaque carte apparaît en séquence avec une montée douce (translateY 16px, fondue, scale 0.97 -> 1).\n- Palette : texte #171923, accent #F45A83, graphique en polyline animé.",
+      easing:
+        "Entrée des cartes en 0.65 s en cascade (animation CSS mg-ui-rise, délais 0.05 s/0.15 s/0.25 s/0.35 s), transitions d'états 0.2 s.",
+      boucle:
+        "les micro-interactions (lecteur, tick de rapport) bouclent en continu via un intervalle de 1,8 s divisé par la vitesse.",
+    }),
+    after_effects: jsxPrompt("minimal-saas-ui-01", {
+      compo:
+        "- Compo « MGSI_MinimalSaaSUI », 1920×1080, 30 fps, 6 s, fond #F7F8FA.\n- Quatre calque rectangles arrondis (16 px radius) blancs avec ombre douce, titres et éléments d'interface (pastille accent #F45A83, mini graphique en trait).",
+      comportement:
+        "Les cartes entrent en cascade (montée + fondue + légère montée en échelle) décalées de 5 frames ; le graphique se dessine (Trim Paths), les valeurs de stats s'incrémentent par fondu ; tenue puis sortie inversée pour boucler.",
+    }),
+  },
 } as const satisfies Record<ComponentKey, { web: string; after_effects: string }>;
 
 export const DEMO_PROMPTS = PROMPTS;

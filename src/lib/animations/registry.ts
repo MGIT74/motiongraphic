@@ -64,6 +64,21 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     technologies: ["React", "GSAP", "CSS"],
     defaultConfig: CONFIG({ text: "UI MOTION", primaryColor: "#E7E7EF", duration: 4.2 }),
   },
+  "minimal-saas-ui-01": {
+    key: "minimal-saas-ui-01",
+    name: "Minimal SaaS UI",
+    description:
+      "Maquette d'interface SaaS interactive minimale (stats, lecteur, recherche, actions) — mise en scène d'app produit en motion design codé.",
+    technologies: ["React", "CSS"],
+    defaultConfig: {
+      text: "Minimal SaaS UI",
+      primaryColor: "#171923",
+      accentColor: "#F45A83",
+      backgroundColor: "#F7F8FA",
+      duration: 5,
+      speed: 1,
+    },
+  },
   "logo-reveal-01": {
     key: "logo-reveal-01",
     name: "Logo Reveal",
