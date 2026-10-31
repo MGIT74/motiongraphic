@@ -62,18 +62,8 @@ export default async function AdminPage() {
 
   if (error || profile?.role !== "admin") return <AccessDenied signedIn />;
 
-  return (
-      <div className="mx-auto w-full max-w-7xl px-5 pb-16 pt-32 sm:px-8">
-      <header className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight">Administration</h1>
-        <p className="mt-2 text-sm text-muted">
-          Gestion des templates, des prompts et des catégories. Les autorisations sont appliquées
-          par les politiques RLS Supabase.
-        </p>
-      </header>
-      <AdminDashboard isAdmin={true} />
-    </div>
-  );
+  return <AdminDashboard isAdmin={true} />;
+
 }
 
 function AccessDenied({ signedIn }: { signedIn: boolean }) {
