@@ -1,50 +1,18 @@
 "use client";
 
-import gsap from "gsap";
 import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
+import { buildStaggeredCards } from "@/lib/animations/builders";
 
 /**
  * Staggered Cards — apparition progressive de cartes en cascade,
  * avec rebond léger (back.out) et sortie inversée en boucle.
+ *
+ * `StaggeredCards01Frame` = DOM pur (réutilisé tel quel par le Studio).
  */
-export default function StaggeredCards01({
-  config: { text, primaryColor, accentColor, backgroundColor, duration, speed },
-}: AnimationComponentProps) {
-  const rootRef = useAnimationEngine({
-    deps: [text, primaryColor, accentColor, duration, speed],
-    speed,
-    build: (root) => {
-      const cards = root.querySelectorAll<HTMLElement>("[data-card]");
-      if (!cards.length) return;
-
-      const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.8 });
-      tl.from(cards, {
-        y: 44,
-        opacity: 0,
-        rotation: -6,
-        duration: Math.max(0.55, duration * 0.16),
-        ease: "back.out(1.7)",
-        stagger: 0.16,
-      });
-      tl.from(root.querySelectorAll<HTMLElement>("[data-card-bar]"), {
-        scaleX: 0,
-        transformOrigin: "left center",
-        duration: 0.4,
-        ease: "power2.out",
-        stagger: 0.08,
-      });
-      tl.to(cards, {
-        y: -36,
-        opacity: 0,
-        duration: 0.45,
-        ease: "power2.in",
-        stagger: { each: 0.09, from: "end" },
-        delay: Math.max(0.7, duration * 0.34),
-      });
-      return tl;
-    },
-  });
+export function StaggeredCards01Frame({ config }: AnimationComponentProps) {
+  const { text, accentColor, backgroundColor, primaryColor: _primary } = config;
+  void _primary;
 
   const cardStyle = {
     background: "rgba(255,255,255,0.045)",
@@ -54,9 +22,8 @@ export default function StaggeredCards01({
 
   return (
     <div
-      ref={rootRef}
-      className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden p-6"
-      style={{ backgroundColor }}
+      className="flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden p-6"
+      style={{ backgroundColor, minHeight: "100%" }}
     >
       {text ? (
         <span
@@ -94,6 +61,23 @@ export default function StaggeredCards01({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+export default function StaggeredCards01({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor, duration, speed } = config;
+
+  const rootRef = useAnimationEngine({
+    deps: [text, primaryColor, accentColor, duration, speed],
+    speed,
+    build: (root) =>
+      buildStaggeredCards(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
+  });
+
+  return (
+    <div ref={rootRef} className="absolute inset-0">
+      <StaggeredCards01Frame config={config} />
     </div>
   );
 }

@@ -176,6 +176,24 @@ const TEMPLATES: DemoTemplateInput[] = [
     },
     duration: 4.4,
   },
+  {
+    id: "00000000-0000-4000-8000-000000000017",
+    title: "Minimal SaaS UI",
+    slug: "minimal-saas-ui-01",
+    description:
+      "Maquette d'interface SaaS interactive minimale : statistiques animées, lecteur, recherche et actions rapides — la mise en scène produit idéale pour les demos d'app.",
+    categoryId: "interface",
+    componentKey: "minimal-saas-ui-01",
+    config: {
+      text: "Minimal SaaS UI",
+      primaryColor: "#171923",
+      accentColor: "#F45A83",
+      backgroundColor: "#F7F8FA",
+      duration: 5,
+      speed: 1,
+    },
+    duration: 5,
+  },
 ];
 
 function promptsWithTemplate(): Map<string, TemplatePrompt[]> {

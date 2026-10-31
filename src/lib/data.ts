@@ -9,6 +9,8 @@ import {
 } from "@/lib/template-mappers";
 import type { Category, TemplateDetail, TemplateSummary } from "@/types/template";
 import { demoStore } from "@/data/demo";
+import { listPublishedCustomTemplates } from "@/lib/templates/custom-store";
+import { toCustomSummary } from "@/lib/templates/custom-summary";
 
 /**
  * Couche d'accès données unique de l'application.
@@ -77,16 +79,24 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 export async function getPublishedTemplates(): Promise<TemplateSummary[]> {
-  if (!isSupabaseConfigured()) return demoStore.templates.map(demoSummary);
-  const client = await createSupabaseServerClient();
-  if (!client) return demoStore.templates.map(demoSummary);
-  const { data, error } = await client
-    .from("animations")
-    .select(ANIMATION_SELECT)
-    .eq("is_published", true)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(`Supabase (animations) : ${error.message}`);
-  return (((data ?? []) as unknown as AnimationRowLike[])).map(toSummary);
+  const standard =
+    !isSupabaseConfigured()
+      ? demoStore.templates.map(demoSummary)
+      : await (async () => {
+          const client = await createSupabaseServerClient();
+          if (!client) return demoStore.templates.map(demoSummary);
+          const { data, error } = await client
+            .from("animations")
+            .select(ANIMATION_SELECT)
+            .eq("is_published", true)
+            .order("created_at", { ascending: false });
+          if (error) throw new Error(`Supabase (animations) : ${error.message}`);
+          return ((data ?? []) as unknown as AnimationRowLike[]).map(toSummary);
+        })();
+
+  // Templates personnalisés publiés (administration) en fin de liste.
+  const customs = (await listPublishedCustomTemplates()).map(toCustomSummary);
+  return [...standard, ...customs];
 }
 
 /** Détail d'un template (anonyme : uniquement les publiés, via RLS). */
@@ -117,15 +127,15 @@ export async function getTemplateDetail(slug: string): Promise<TemplateDetail | 
 }
 
 export async function getSimilarTemplates(
-  detail: TemplateDetail,
+  reference: TemplateSummary,
   limit = 3
 ): Promise<TemplateSummary[]> {
   const all = await getPublishedTemplates();
   const sameCategory = all.filter(
-    (t) => t.slug !== detail.slug && t.category?.slug === detail.category?.slug
+    (t) => t.slug !== reference.slug && t.category?.slug === reference.category?.slug
   );
   const others = all.filter(
-    (t) => t.slug !== detail.slug && t.category?.slug !== detail.category?.slug
+    (t) => t.slug !== reference.slug && t.category?.slug !== reference.category?.slug
   );
   return [...sameCategory, ...others].slice(0, limit);
 }

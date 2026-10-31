@@ -26,6 +26,7 @@ export default async function AdminPreviewPage({ params }: { params: Promise<{ i
     .select("id, animation_id, type, content, version").eq("animation_id", id);
   if (promptsError) throw new Error(promptsError.message);
   const template = toDetail(row, (prompts ?? []) as TemplateDetail["prompts"], row.updated_at);
+  if (!template.componentKey) notFound();
 
   return (
     <div className="mx-auto max-w-6xl px-5 pb-16 pt-10 sm:px-8">

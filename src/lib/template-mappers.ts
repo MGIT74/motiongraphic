@@ -45,7 +45,7 @@ export function toSummary(row: AnimationRowLike): TemplateSummary {
 
 export function toDetail(row: AnimationRowLike, prompts: PromptRowLike[], updatedAt: string): TemplateDetail {
   const summary = toSummary(row);
-  const meta = getComponentMeta(summary.componentKey);
+  const meta = summary.componentKey ? getComponentMeta(summary.componentKey) : null;
   return {
     ...summary,
     isPublished: row.is_published,
@@ -57,8 +57,8 @@ export function toDetail(row: AnimationRowLike, prompts: PromptRowLike[], update
         return 0;
       }),
     updatedAt,
-    componentTitle: meta.name,
-    technologies: meta.technologies,
-    componentDescription: meta.description,
+    componentTitle: meta ? meta.name : (summary.componentKey ?? "Composant"),
+    technologies: meta ? meta.technologies : ["React", "HTML", "CSS"],
+    componentDescription: meta ? meta.description : "",
   };
 }

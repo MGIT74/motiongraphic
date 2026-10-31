@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import gsap from "gsap";
 import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
+import { buildKineticType } from "@/lib/animations/builders";
 
 interface AnimatedLetter {
   char: string;
@@ -13,10 +13,13 @@ interface AnimatedLetter {
 /**
  * Kinetic Typography — apparition séquentielle des lettres,
  * glissement depuis le bas derrière un masque, point d'accent final.
+ *
+ * `KineticTypography01Frame` = DOM pur (réutilisé tel quel par le Studio :
+ * le moteur de timeline Studio reconstruit la même animation avec
+ * `buildKineticType`).
  */
-export default function KineticTypography01({
-  config: { text, primaryColor, accentColor, backgroundColor, duration, speed },
-}: AnimationComponentProps) {
+export function KineticTypography01Frame({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor } = config;
   const rows = useMemo<AnimatedLetter[][]>(
     () => {
       let globalIndex = 0;
@@ -33,45 +36,10 @@ export default function KineticTypography01({
     [text]
   );
 
-  const rootRef = useAnimationEngine({
-    deps: [rows, accentColor, duration, speed],
-    speed,
-    build: (root) => {
-      const letters = root.querySelectorAll<HTMLElement>("[data-letter-inner]");
-      const dot = root.querySelector<HTMLElement>("[data-accent-dot]");
-      if (!letters.length && !dot) return;
-
-      const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.9 });
-      tl.from(letters, {
-        yPercent: 118,
-        duration: Math.max(0.45, duration * 0.18),
-        ease: "power3.out",
-        stagger: 0.07,
-      });
-      if (dot) {
-        tl.from(
-          dot,
-          { scale: 0, opacity: 0, duration: 0.5, ease: "back.out(3)" },
-          "-=0.25"
-        );
-      }
-      tl.to(letters, {
-        opacity: 0,
-        yPercent: -40,
-        duration: 0.6,
-        ease: "power2.in",
-        stagger: { each: 0.04, from: "end" },
-      });
-      if (dot) tl.to(dot, { scale: 0, opacity: 0, duration: 0.4, ease: "power2.in" }, "<");
-      return tl;
-    },
-  });
-
   return (
     <div
-      ref={rootRef}
-      className="absolute inset-0 flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor }}
+      className="flex h-full w-full items-center justify-center overflow-hidden p-6"
+      style={{ backgroundColor, minHeight: "100%" }}
     >
       <div
         className="flex flex-col items-center justify-center gap-1 text-center"
@@ -118,6 +86,24 @@ export default function KineticTypography01({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+export default function KineticTypography01({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor, duration, speed } = config;
+  const rows = useMemo(() => text.toUpperCase().split("\n").filter(Boolean), [text]);
+
+  const rootRef = useAnimationEngine({
+    deps: [rows, accentColor, duration, speed],
+    speed,
+    build: (root) =>
+      buildKineticType(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
+  });
+
+  return (
+    <div ref={rootRef} className="absolute inset-0">
+      <KineticTypography01Frame config={config} />
     </div>
   );
 }
