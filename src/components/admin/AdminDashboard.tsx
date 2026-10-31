@@ -431,9 +431,9 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <a href={`/templates/${row.slug}`} target="_blank" rel="noopener noreferrer"
+                    <a href={`/admin/preview/${row.id}`} target="_blank" rel="noopener noreferrer"
                       className="inline-flex h-9 items-center gap-2 rounded-full border border-line px-3 text-xs font-medium text-ink hover:border-accent/50"
-                      title={row.is_published ? "Ouvrir l’aperçu" : "Brouillon : l’aperçu public peut être indisponible"}>
+                      title="Aperçu privé administrateur, y compris pour les brouillons">
                       <Eye className="h-3.5 w-3.5" /> Aperçu
                     </a>
                     <button
