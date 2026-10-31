@@ -7,6 +7,19 @@ import { createServerClient } from "@supabase/ssr";
  * sans variables d'environnement, il laisse passer la requête (mode démo).
  */
 export async function proxy(request: NextRequest) {
+  // Construction mode: hide all public pages, including Studio, server-side.
+  // Keep the existing admin area and API routes operational for development.
+  const path = request.nextUrl.pathname;
+  const allowed = path === "/construction" || path.startsWith("/admin") ||
+    path.startsWith("/api/") || path === "/api" ||
+    path === "/robots.txt" || path === "/sitemap.xml";
+  if (!allowed) {
+    const destination = request.nextUrl.clone();
+    destination.pathname = "/construction";
+    destination.search = "";
+    return NextResponse.redirect(destination, 307);
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return NextResponse.next();
