@@ -17,7 +17,8 @@ import type { AnimationConfig } from "@/types/animation";
  */
 export type AnimationBuilder = (
   root: HTMLElement,
-  config: AnimationConfig
+  config: AnimationConfig,
+  opts?: BuilderOptions
 ) => gsap.core.Timeline | void;
 
 export interface BuilderOptions {

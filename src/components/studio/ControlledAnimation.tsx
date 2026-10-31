@@ -1,9 +1,25 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ComponentType } from "react";
 import gsap from "gsap";
 import type { AnimationConfig, ComponentKey } from "@/types/animation";
+import type { AnimationComponentProps } from "@/types/animation";
 import { ANIMATION_BUILDERS, type AnimationBuilder } from "@/lib/animations/builders";
+import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
+import { TextReveal01Frame } from "@/components/animations/TextReveal01";
+import { ElasticText01Frame } from "@/components/animations/ElasticText01";
+import { ShapeMorph01Frame } from "@/components/animations/ShapeMorph01";
+import { StaggeredCards01Frame } from "@/components/animations/StaggeredCards01";
+import { LogoReveal01Frame } from "@/components/animations/LogoReveal01";
+
+const STUDIO_FRAMES: Record<ComponentKey, ComponentType<AnimationComponentProps>> = {
+  "kinetic-type-01": KineticTypography01Frame,
+  "text-reveal-01": TextReveal01Frame,
+  "elastic-text-01": ElasticText01Frame,
+  "shape-morph-01": ShapeMorph01Frame,
+  "staggered-cards-01": StaggeredCards01Frame,
+  "logo-reveal-01": LogoReveal01Frame,
+};
 
 /**
  * Lecteur d'animation piloté par le temps de la timeline Studio.
@@ -57,7 +73,9 @@ export default function ControlledAnimation({
     tl.pause(target);
   }, [localTime, config.speed]);
 
-  if (!builder) {
+  const Frame = STUDIO_FRAMES[templateKey];
+
+  if (!builder || !Frame) {
     return (
       <div
         className="absolute inset-0 flex items-center justify-center text-xs text-muted"
@@ -73,6 +91,8 @@ export default function ControlledAnimation({
       ref={rootRef}
       className="absolute inset-0 h-full w-full overflow-hidden"
       style={{ backgroundColor: config.backgroundColor }}
-    />
+    >
+      <Frame config={config} />
+    </div>
   );
 }
