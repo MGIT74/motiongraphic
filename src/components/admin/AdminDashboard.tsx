@@ -176,6 +176,22 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
     }
   };
 
+  const deleteTemplate = async (row: AnimationRowMapped) => {
+    if (!window.confirm(`Supprimer définitivement « ${row.title} » ? Cette action supprimera également ses prompts et statistiques associés. Elle est irréversible.`)) return;
+    const client = createSupabaseBrowserClient();
+    if (!client) return;
+    const { data, error } = await client.from("animations").delete().eq("id", row.id).select("id");
+    if (error) {
+      notify("error", `Suppression : ${error.message}`);
+    } else if (!data?.length) {
+      notify("error", "Suppression non autorisée ou template introuvable.");
+    } else {
+      notify("ok", `Template « ${row.title} » supprimé.`);
+      if (editor?.id === row.id) setEditor(null);
+      await load();
+    }
+  };
+
   const validate = (e: EditorState): string | null => {
     if (!e.title.trim()) return "Le titre est requis.";
     const slug = e.slug.trim();
@@ -475,6 +491,11 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
                       className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-line px-3 text-xs font-medium text-muted transition-colors hover:border-accent/50 hover:text-ink"
                     >
                       <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Modifier
+                    </button>
+                    <button type="button" onClick={() => void deleteTemplate(row)}
+                      className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-line px-3 text-xs font-medium text-muted transition-colors hover:border-red-500/50 hover:text-red-400"
+                      aria-label={`Supprimer le template ${row.title}`}>
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Supprimer
                     </button>
                   </div>
                 </div>
