@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
 import { buildElasticText } from "@/lib/animations/builders";
