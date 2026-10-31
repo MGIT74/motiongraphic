@@ -144,7 +144,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
     }
     const statsRes = await client.from("template_events").select("animation_id, event_type, created_at").eq("event_type", "prompt_copy").limit(10000);
     if (!statsRes.error) {
-      setCopyStats((statsRes.data ?? []) as { animation_id: string; event_type: string }[]);
+      setCopyStats((statsRes.data ?? []) as { animation_id: string; event_type: string; created_at: string }[]);
       setAnalyticsReady(true);
     } else {
       setAnalyticsReady(false);
