@@ -507,7 +507,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
             ))}
           </ul>
         </section>
-      )}
+      ) : null}
 
         </div>
       </div>
