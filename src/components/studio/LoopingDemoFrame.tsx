@@ -4,6 +4,8 @@ import type { AnimationComponentProps, ComponentKey } from "@/types/animation";
 import gsap from "gsap";
 import { useEffect, useRef } from "react";
 import { ANIMATION_BUILDERS } from "@/lib/animations/builders";
+import { baseEngineKeyOf } from "@/lib/studio/project-model";
+import { isStudioTemplateKey } from "@/lib/studio/template-registry";
 import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
 import { TextReveal01Frame } from "@/components/animations/TextReveal01";
 import { ElasticText01Frame } from "@/components/animations/ElasticText01";
@@ -34,7 +36,8 @@ export default function LoopingDemoFrame({ templateKey, config }: AnimationCompo
 
   useEffect(() => {
     const root = rootRef.current;
-    const builder = ANIMATION_BUILDERS[templateKey];
+    const engineKey = isStudioTemplateKey(templateKey) ? baseEngineKeyOf(templateKey) : templateKey;
+    const builder = ANIMATION_BUILDERS[engineKey] ?? ANIMATION_BUILDERS[templateKey];
     if (!root || !builder) return;
 
     const ctx = gsap.context(() => {
@@ -45,7 +48,7 @@ export default function LoopingDemoFrame({ templateKey, config }: AnimationCompo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateKey, config.text, config.primaryColor, config.accentColor, config.backgroundColor, config.duration]);
 
-  const Frame = DEMO_FRAMES[templateKey];
+  const Frame = DEMO_FRAMES[templateKey] ?? DEMO_FRAMES[(baseEngineKeyOf(templateKey)) as ComponentKey];
   if (!Frame) return null;
 
   return (

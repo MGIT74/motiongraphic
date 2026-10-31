@@ -1,5 +1,5 @@
 import { isComponentKey } from "@/lib/animations/registry";
-import { getStudioTemplate } from "@/lib/studio/template-registry";
+import { getStudioTemplate, isStudioTemplateKey, underlyingComponentKeyOf } from "@/lib/studio/template-registry";
 import { sanitizeConfig } from "@/lib/animations/config";
 import type { AnimationConfig } from "@/types/animation";
 
@@ -225,7 +225,7 @@ export function validateProject(input: unknown): StudioProject | null {
       for (const elRaw of (Array.isArray(s.elements) ? s.elements : []) as unknown[]) {
         const e = (typeof elRaw === "object" && elRaw !== null ? elRaw : {}) as Record<string, unknown>;
         if (typeof e.id !== "string") return null;
-        if (typeof e.templateKey !== "string" || !isComponentKey(e.templateKey)) return null;
+        if (typeof e.templateKey !== "string" || !(isComponentKey(e.templateKey) || isStudioTemplateKey(e.templateKey))) return null;
         const kind = e.kind as ElementKind;
         if (kind !== "text" && kind !== "shape" && kind !== "cards" && kind !== "logo") return null;
         elements.push({
@@ -320,7 +320,7 @@ export function replaceElementTemplate(
   elementId: string,
   newTemplateKey: string
 ): StudioProject | null {
-  if (!isComponentKey(newTemplateKey)) return null;
+  if (!(isComponentKey(newTemplateKey) || isStudioTemplateKey(newTemplateKey))) return null;
   const source = findElement(project, elementId);
   if (!source || source.sceneId !== sceneId) return null;
   if (getStudioTemplate(newTemplateKey)?.elementKind !== source.element.kind) return null;
@@ -330,6 +330,16 @@ export function replaceElementTemplate(
     templateKey: newTemplateKey,
   }));
 }
+
+/** Le composant de base d'une clé (builder/frame) du moteur. */
+export function baseEngineKeyOf(templateKey: string): string {
+  const underlying = underlyingComponentKeyOf(templateKey);
+  return underlying ?? templateKey;
+}
+
+const isStudioTemplateKeyExport = isStudioTemplateKey;
+export { isStudioTemplateKeyExport as isStudioTemplateKeyFromRegistry };
+void isStudioTemplateKeyExport;
 
 /** Ajoute un élément d'animation à une scène. */
 export function appendElement(

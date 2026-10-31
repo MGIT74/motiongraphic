@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CircleAlert, Loader2, Pencil, Plus, Power, Trash2, Eye, LayoutDashboard, Layers3, FolderOpen, BarChart3, ExternalLink, TrendingUp, Copy, Activity, ArrowUpRight, Film } from "lucide-react";
+import { CircleAlert, Loader2, Pencil, Plus, Power, Trash2, Eye, LayoutDashboard, Layers3, FolderOpen, BarChart3, ExternalLink, TrendingUp, Copy, Activity, ArrowUpRight, Film , Code2} from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import TemplateLab from "@/components/admin/TemplateLab";
 import { ANIMATION_SELECT, type AnimationRowLike } from "@/lib/template-mappers";
 import { COMPONENT_KEYS } from "@/lib/animations/registry";
 import type { AnimationConfig, ComponentKey } from "@/types/animation";
@@ -94,7 +95,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [rows, setRows] = useState<AnimationRowMapped[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [tab, setTab] = useState<"overview" | "templates" | "categories" | "analytics">("overview");
+  const [tab, setTab] = useState<"overview" | "templates" | "categories" | "analytics" | "lab">("overview");
   const [copyStats, setCopyStats] = useState<{ animation_id: string; event_type: string; created_at: string }[]>([]);
   const [analyticsReady, setAnalyticsReady] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -355,6 +356,10 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
               <Icon className="h-4 w-4" /> {label}
             </button>
           ))}
+          <button type="button" onClick={() => setTab("lab")}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${tab === "lab" ? "admin-nav-active" : "text-muted hover:bg-elevated hover:text-ink"}`}>
+            <Code2 className="h-4 w-4" /> Template Lab
+          </button>
           <a href="/explore" target="_blank" rel="noopener noreferrer" className="mt-5 flex items-center gap-3 border-t border-line px-3 py-4 text-sm text-muted hover:text-ink">
             <ExternalLink className="h-4 w-4" /> Voir le site
           </a>
@@ -524,6 +529,8 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
             ))}
           </ul>
         </section>
+      ) : tab === "lab" ? (
+        <TemplateLab backend="supabase" />
       ) : null}
 
         </div>

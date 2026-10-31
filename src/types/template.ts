@@ -25,10 +25,18 @@ export interface TemplateSummary {
   slug: string;
   description: string;
   category: { name: string; slug: string } | null;
-  componentKey: ComponentKey;
+  /** Clé du composant React approuvé (absent pour les templates « code »). */
+  componentKey?: ComponentKey;
   config: AnimationConfig;
   duration: number;
   isFeatured: boolean;
+  /** Template personnalisé publié (source : administration). */
+  custom?: {
+    id: string;
+    sourceKind: "component" | "code";
+    code?: string;
+    version: number;
+  };
 }
 
 /** Page de détail : summary + prompts (utilisé aussi par l'admin). */

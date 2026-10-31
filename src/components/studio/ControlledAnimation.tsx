@@ -5,6 +5,8 @@ import gsap from "gsap";
 import type { AnimationConfig, ComponentKey } from "@/types/animation";
 import type { AnimationComponentProps } from "@/types/animation";
 import { ANIMATION_BUILDERS, type AnimationBuilder } from "@/lib/animations/builders";
+import { baseEngineKeyOf } from "@/lib/studio/project-model";
+import { isStudioTemplateKey } from "@/lib/studio/template-registry";
 import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
 import { TextReveal01Frame } from "@/components/animations/TextReveal01";
 import { ElasticText01Frame } from "@/components/animations/ElasticText01";
@@ -45,7 +47,9 @@ export default function ControlledAnimation({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
 
-  const builder: AnimationBuilder | undefined = ANIMATION_BUILDERS[templateKey];
+  // Clé de moteurs : template intégré OU template custom (via composant de base).
+  const engineKey = isStudioTemplateKey(templateKey) ? baseEngineKeyOf(templateKey) : templateKey;
+  const builder: AnimationBuilder | undefined = ANIMATION_BUILDERS[engineKey] ?? ANIMATION_BUILDERS[templateKey];
 
   useEffect(() => {
     const root = rootRef.current;
@@ -76,7 +80,7 @@ export default function ControlledAnimation({
     tl.pause(target);
   }, [localTime, config.speed]);
 
-  const Frame = STUDIO_FRAMES[templateKey];
+  const Frame = STUDIO_FRAMES[engineKey as ComponentKey] ?? STUDIO_FRAMES[templateKey];
 
   if (!builder || !Frame) {
     return (

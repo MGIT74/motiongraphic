@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { StudioElement } from "@/lib/studio/project-model";
 import type { StudioProject } from "@/lib/studio/project-model";
 import {
@@ -13,7 +13,7 @@ import {
   sceneOffsets,
   updateElement,
 } from "@/lib/studio/project-model";
-import { getStudioTemplate } from "@/lib/studio/template-registry";
+import { getStudioTemplate, registerCustomStudioTemplates } from "@/lib/studio/template-registry";
 import { loadLatestOrDefault, saveProject } from "@/lib/studio/persistence";
 import { useProjectHistory } from "@/lib/studio/history";
 import { useStudioClock } from "@/lib/studio/clock";
@@ -47,10 +47,35 @@ function computeSelection(
   return null;
 }
 
-export default function StudioApp() {
+export default function StudioApp({
+  customTemplates = [],
+}: {
+  /** Templates personnalisés PUBLIÉS (serveur) — bibliothèque commune + timeline. */
+  customTemplates?: {
+    id: string;
+    slug: string;
+    name: string;
+    category: string;
+    sourceKind: string;
+    componentKey?: string;
+    elementKind: string;
+    defaultConfig: import("@/types/animation").AnimationConfig;
+  }[];
+}) {
   const [initial] = useState(loadLatestOrDefault);
   const { project, canUndo, canRedo, commit, undo, redo, reset } = useProjectHistory(initial);
   const clock = useStudioClock(project);
+
+  // Enregistre les templates custom PUBLIÉS dans le registre runtime
+  // (une fois par liste ; les temps pilotés passent par le composant de base).
+  const registeredRef = useRef<string>("");
+  useEffect(() => {
+    if (!customTemplates.length) return;
+    const signature = customTemplates.map((t) => t.slug).join("|");
+    if (registeredRef.current === signature) return;
+    registeredRef.current = signature;
+    registerCustomStudioTemplates(customTemplates);
+  }, [customTemplates]);
 
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("saved");
