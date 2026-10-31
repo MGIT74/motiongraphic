@@ -19,6 +19,7 @@ const ANIMATION_COMPONENTS: Record<
   "shape-morph-01": dynamic(() => import("@/components/animations/ShapeMorph01")),
   "staggered-cards-01": dynamic(() => import("@/components/animations/StaggeredCards01")),
   "logo-reveal-01": dynamic(() => import("@/components/animations/LogoReveal01")),
+  "minimal-saas-ui-01": dynamic(() => import("@/components/animations/MinimalSaaSUIShowcase01")),
 };
 
 function PlayerPlaceholder({ active, backgroundColor }: { active: boolean; backgroundColor: string }) {
