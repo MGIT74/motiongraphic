@@ -7,16 +7,12 @@ import { buildStaggeredCards } from "@/lib/animations/builders";
 /**
  * Staggered Cards — apparition progressive de cartes en cascade,
  * avec rebond léger (back.out) et sortie inversée en boucle.
+ *
+ * `StaggeredCards01Frame` = DOM pur (réutilisé tel quel par le Studio).
  */
-export default function StaggeredCards01({
-  config: { text, primaryColor, accentColor, backgroundColor, duration, speed },
-}: AnimationComponentProps) {
-  const rootRef = useAnimationEngine({
-    deps: [text, primaryColor, accentColor, duration, speed],
-    speed,
-    build: (root) =>
-      buildStaggeredCards(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
-  });
+export function StaggeredCards01Frame({ config }: AnimationComponentProps) {
+  const { text, accentColor, backgroundColor, primaryColor: _primary } = config;
+  void _primary;
 
   const cardStyle = {
     background: "rgba(255,255,255,0.045)",
@@ -26,9 +22,8 @@ export default function StaggeredCards01({
 
   return (
     <div
-      ref={rootRef}
-      className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden p-6"
-      style={{ backgroundColor }}
+      className="flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden p-6"
+      style={{ backgroundColor, minHeight: "100%" }}
     >
       {text ? (
         <span
@@ -66,6 +61,23 @@ export default function StaggeredCards01({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+export default function StaggeredCards01({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor, duration, speed } = config;
+
+  const rootRef = useAnimationEngine({
+    deps: [text, primaryColor, accentColor, duration, speed],
+    speed,
+    build: (root) =>
+      buildStaggeredCards(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
+  });
+
+  return (
+    <div ref={rootRef} className="absolute inset-0">
+      <StaggeredCards01Frame config={config} />
     </div>
   );
 }

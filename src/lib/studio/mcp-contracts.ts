@@ -127,10 +127,8 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: "split_clip",
     description: "Coupe virtuellement un élément en deux à un temps local donné (mêmes params).",
-    run: (project, input) => {
-      // Implémentation Phase 3 (médias). Contrat stabilisé dès maintenant.
-      return fail("split_clip : disponible avec l'import des médias (Phase 3)");
-    },
+    run: () => fail("split_clip : disponible avec l’import des médias (Phase 3)"),
+
   },
 ];
 // Contrats déclarés mais actifs en Phase 4 (serveur MCP) :

@@ -13,10 +13,13 @@ interface AnimatedLetter {
 /**
  * Kinetic Typography — apparition séquentielle des lettres,
  * glissement depuis le bas derrière un masque, point d'accent final.
+ *
+ * `KineticTypography01Frame` = DOM pur (réutilisé tel quel par le Studio :
+ * le moteur de timeline Studio reconstruit la même animation avec
+ * `buildKineticType`).
  */
-export default function KineticTypography01({
-  config: { text, primaryColor, accentColor, backgroundColor, duration, speed },
-}: AnimationComponentProps) {
+export function KineticTypography01Frame({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor } = config;
   const rows = useMemo<AnimatedLetter[][]>(
     () => {
       let globalIndex = 0;
@@ -33,18 +36,10 @@ export default function KineticTypography01({
     [text]
   );
 
-  const rootRef = useAnimationEngine({
-    deps: [rows, accentColor, duration, speed],
-    speed,
-    build: (root) =>
-      buildKineticType(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
-  });
-
   return (
     <div
-      ref={rootRef}
-      className="absolute inset-0 flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor }}
+      className="flex h-full w-full items-center justify-center overflow-hidden p-6"
+      style={{ backgroundColor, minHeight: "100%" }}
     >
       <div
         className="flex flex-col items-center justify-center gap-1 text-center"
@@ -91,6 +86,24 @@ export default function KineticTypography01({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+export default function KineticTypography01({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor, duration, speed } = config;
+  const rows = useMemo(() => text.toUpperCase().split("\n").filter(Boolean), [text]);
+
+  const rootRef = useAnimationEngine({
+    deps: [rows, accentColor, duration, speed],
+    speed,
+    build: (root) =>
+      buildKineticType(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
+  });
+
+  return (
+    <div ref={rootRef} className="absolute inset-0">
+      <KineticTypography01Frame config={config} />
     </div>
   );
 }

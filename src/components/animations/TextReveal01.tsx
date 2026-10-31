@@ -7,24 +7,17 @@ import { buildTextReveal } from "@/lib/animations/builders";
 /**
  * Text Reveal — révélation du texte par masque vertical, ligne par ligne,
  * avec un balayage lumineux et une sortie douce en boucle.
+ *
+ * `TextReveal01Frame` = DOM pur (réutilisé tel quel par le Studio).
  */
-export default function TextReveal01({
-  config: { text, primaryColor, accentColor, backgroundColor, duration, speed },
-}: AnimationComponentProps) {
+export function TextReveal01Frame({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor } = config;
   const lines = text.toUpperCase().split("\n").filter(Boolean);
-
-  const rootRef = useAnimationEngine({
-    deps: [text, primaryColor, accentColor, duration, speed],
-    speed,
-    build: (root) =>
-      buildTextReveal(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
-  });
 
   return (
     <div
-      ref={rootRef}
-      className="absolute inset-0 flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor }}
+      className="flex h-full w-full items-center justify-center overflow-hidden p-6"
+      style={{ backgroundColor, minHeight: "100%" }}
     >
       <div className="relative flex flex-col items-start justify-center text-center sm:items-center">
         {lines.map((line, i) => (
@@ -53,6 +46,23 @@ export default function TextReveal01({
           }}
         />
       </div>
+    </div>
+  );
+}
+
+export default function TextReveal01({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor, duration, speed } = config;
+
+  const rootRef = useAnimationEngine({
+    deps: [text, primaryColor, accentColor, duration, speed],
+    speed,
+    build: (root) =>
+      buildTextReveal(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
+  });
+
+  return (
+    <div ref={rootRef} className="absolute inset-0">
+      <TextReveal01Frame config={config} />
     </div>
   );
 }

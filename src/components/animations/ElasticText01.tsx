@@ -1,18 +1,23 @@
 "use client";
 
-import { useMemo } from "react";
 import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
 import { buildElasticText } from "@/lib/animations/builders";
 
+interface ElasticLetter {
+  char: string;
+  pop: boolean;
+}
+
 /**
  * Elastic Text — le texte rebondit en place avec un easing élastique,
  * lettre par lettre.
+ *
+ * `ElasticText01Frame` = DOM pur (réutilisé tel quel par le Studio).
  */
-export default function ElasticText01({
-  config: { text, primaryColor, accentColor, backgroundColor, duration, speed },
-}: AnimationComponentProps) {
-  const words = useMemo(
+export function ElasticText01Frame({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor } = config;
+  const words = useMemo<ElasticLetter[][]>(
     () => {
       let globalIndex = 0;
       return text
@@ -28,18 +33,10 @@ export default function ElasticText01({
     [text]
   );
 
-  const rootRef = useAnimationEngine({
-    deps: [text, primaryColor, accentColor, duration, speed],
-    speed,
-    build: (root) =>
-      buildElasticText(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
-  });
-
   return (
     <div
-      ref={rootRef}
-      className="absolute inset-0 flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor }}
+      className="flex h-full w-full items-center justify-center overflow-hidden p-6"
+      style={{ backgroundColor, minHeight: "100%" }}
     >
       <div
         className="flex flex-col items-center justify-center"
@@ -74,6 +71,23 @@ export default function ElasticText01({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+export default function ElasticText01({ config }: AnimationComponentProps) {
+  const { text, primaryColor, accentColor, backgroundColor, duration, speed } = config;
+
+  const rootRef = useAnimationEngine({
+    deps: [text, primaryColor, accentColor, duration, speed],
+    speed,
+    build: (root) =>
+      buildElasticText(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
+  });
+
+  return (
+    <div ref={rootRef} className="absolute inset-0">
+      <ElasticText01Frame config={config} />
     </div>
   );
 }
