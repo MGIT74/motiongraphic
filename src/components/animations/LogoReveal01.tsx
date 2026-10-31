@@ -1,8 +1,8 @@
 "use client";
 
-import gsap from "gsap";
 import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
+import { buildLogoReveal } from "@/lib/animations/builders";
 
 /**
  * Logo Reveal — logo abstrait (SVG) : tracé du cercle par la lumière,
@@ -14,49 +14,8 @@ export default function LogoReveal01({
   const rootRef = useAnimationEngine({
     deps: [text, primaryColor, accentColor, duration, speed],
     speed,
-    build: (root) => {
-      const ring = root.querySelector<SVGCircleElement>("[data-ring]");
-      const core = root.querySelector<SVGPolygonElement>("[data-core]");
-      const pulse = root.querySelector<SVGCircleElement>("[data-pulse]");
-      const name = root.querySelector<HTMLElement>("[data-wordmark]");
-      if (!ring && !core) return;
-
-      const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.9 });
-      if (ring) {
-        const len = 2 * Math.PI * 46;
-        tl.fromTo(
-          ring,
-          { strokeDasharray: len, strokeDashoffset: len },
-          { strokeDashoffset: 0, duration: Math.max(0.8, duration * 0.3), ease: "power2.inOut" }
-        );
-      }
-      tl.from(
-        core,
-        { scale: 0, opacity: 0, transformOrigin: "center center", duration: 0.55, ease: "back.out(2.4)" },
-        "-=0.15"
-      );
-      if (pulse) {
-        tl.fromTo(
-          pulse,
-          { scale: 0.6, opacity: 0.7 },
-          { scale: 1.35, opacity: 0, duration: Math.max(0.6, duration * 0.24), ease: "power2.out" },
-          "-=0.4"
-        );
-      }
-      if (name) {
-        tl.from(name, { opacity: 0, y: 8, letterSpacing: "0.6em", duration: 0.6, ease: "power3.out" }, "-=0.35");
-      }
-      const hold = Math.max(0.6, duration * 0.34);
-      tl.to([core, ring, name].filter(Boolean), {
-        opacity: 0,
-        scale: 0.94,
-        transformOrigin: "center center",
-        duration: 0.45,
-        ease: "power2.in",
-        delay: hold,
-      });
-      return tl;
-    },
+    build: (root) =>
+      buildLogoReveal(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
   });
 
   const accent = accentColor;

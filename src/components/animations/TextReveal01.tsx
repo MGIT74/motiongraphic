@@ -1,8 +1,8 @@
 "use client";
 
-import gsap from "gsap";
 import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
+import { buildTextReveal } from "@/lib/animations/builders";
 
 /**
  * Text Reveal — révélation du texte par masque vertical, ligne par ligne,
@@ -16,35 +16,8 @@ export default function TextReveal01({
   const rootRef = useAnimationEngine({
     deps: [text, primaryColor, accentColor, duration, speed],
     speed,
-    build: (root) => {
-      const linesEls = root.querySelectorAll<HTMLElement>("[data-reveal-line]");
-      const sweep = root.querySelector<HTMLElement>("[data-sweep]");
-      if (!linesEls.length) return;
-
-      const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.9 });
-      tl.from(linesEls, {
-        yPercent: 115,
-        duration: Math.max(0.6, duration * 0.22),
-        ease: "power4.out",
-        stagger: 0.12,
-      });
-      if (sweep) {
-        tl.fromTo(
-          sweep,
-          { xPercent: -140 },
-          { xPercent: 240, duration: 0.9, ease: "power2.inOut" },
-          "-=0.35"
-        );
-      }
-      tl.to(linesEls, {
-        yPercent: -115,
-        duration: 0.55,
-        ease: "power2.in",
-        stagger: 0.06,
-        delay: Math.max(0.6, duration * 0.3),
-      });
-      return tl;
-    },
+    build: (root) =>
+      buildTextReveal(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
   });
 
   return (

@@ -1,8 +1,8 @@
 "use client";
 
-import gsap from "gsap";
 import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
+import { buildStaggeredCards } from "@/lib/animations/builders";
 
 /**
  * Staggered Cards — apparition progressive de cartes en cascade,
@@ -14,36 +14,8 @@ export default function StaggeredCards01({
   const rootRef = useAnimationEngine({
     deps: [text, primaryColor, accentColor, duration, speed],
     speed,
-    build: (root) => {
-      const cards = root.querySelectorAll<HTMLElement>("[data-card]");
-      if (!cards.length) return;
-
-      const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.8 });
-      tl.from(cards, {
-        y: 44,
-        opacity: 0,
-        rotation: -6,
-        duration: Math.max(0.55, duration * 0.16),
-        ease: "back.out(1.7)",
-        stagger: 0.16,
-      });
-      tl.from(root.querySelectorAll<HTMLElement>("[data-card-bar]"), {
-        scaleX: 0,
-        transformOrigin: "left center",
-        duration: 0.4,
-        ease: "power2.out",
-        stagger: 0.08,
-      });
-      tl.to(cards, {
-        y: -36,
-        opacity: 0,
-        duration: 0.45,
-        ease: "power2.in",
-        stagger: { each: 0.09, from: "end" },
-        delay: Math.max(0.7, duration * 0.34),
-      });
-      return tl;
-    },
+    build: (root) =>
+      buildStaggeredCards(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
   });
 
   const cardStyle = {

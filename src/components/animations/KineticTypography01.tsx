@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import gsap from "gsap";
 import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
+import { buildKineticType } from "@/lib/animations/builders";
 
 interface AnimatedLetter {
   char: string;
@@ -36,35 +36,8 @@ export default function KineticTypography01({
   const rootRef = useAnimationEngine({
     deps: [rows, accentColor, duration, speed],
     speed,
-    build: (root) => {
-      const letters = root.querySelectorAll<HTMLElement>("[data-letter-inner]");
-      const dot = root.querySelector<HTMLElement>("[data-accent-dot]");
-      if (!letters.length && !dot) return;
-
-      const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.9 });
-      tl.from(letters, {
-        yPercent: 118,
-        duration: Math.max(0.45, duration * 0.18),
-        ease: "power3.out",
-        stagger: 0.07,
-      });
-      if (dot) {
-        tl.from(
-          dot,
-          { scale: 0, opacity: 0, duration: 0.5, ease: "back.out(3)" },
-          "-=0.25"
-        );
-      }
-      tl.to(letters, {
-        opacity: 0,
-        yPercent: -40,
-        duration: 0.6,
-        ease: "power2.in",
-        stagger: { each: 0.04, from: "end" },
-      });
-      if (dot) tl.to(dot, { scale: 0, opacity: 0, duration: 0.4, ease: "power2.in" }, "<");
-      return tl;
-    },
+    build: (root) =>
+      buildKineticType(root, { text, primaryColor, accentColor, backgroundColor, duration, speed }),
   });
 
   return (
