@@ -62,9 +62,15 @@ export default function StudioApp({
     defaultConfig: import("@/types/animation").AnimationConfig;
   }[];
 }) {
-  const [initial] = useState(loadLatestOrDefault);
+  const [initial] = useState(makeDefaultProject);
   const { project, canUndo, canRedo, commit, undo, redo, reset } = useProjectHistory(initial);
   const clock = useStudioClock(project);
+  // Keep SSR and first client render identical; restore browser storage only after hydration.
+  useEffect(() => {
+    const stored = loadLatestOrDefault();
+    reset(stored);
+  }, [reset]);
+
 
   // Enregistre les templates custom PUBLIÉS dans le registre runtime
   // (une fois par liste ; les temps pilotés passent par le composant de base).
