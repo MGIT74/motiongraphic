@@ -118,3 +118,33 @@ body {
     transform: none;
   }
 }
+/* Admin-only themes: public site stays dark. */
+.admin-shell {
+  --color-background: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-elevated: #eef1f8;
+  --color-line: #e6e8f0;
+  --color-ink: #222438;
+  --color-muted: #777e92;
+  --color-accent: #6177f6;
+  --color-accent-2: #8799ff;
+  background: var(--color-background);
+  color: var(--color-ink);
+  color-scheme: light;
+  min-height: 100vh;
+}
+.admin-shell[data-admin-theme="dark"] {
+  --color-background: #0b0c12;
+  --color-surface: #151620;
+  --color-elevated: #202232;
+  --color-line: #303244;
+  --color-ink: #f5f6fc;
+  --color-muted: #a3a7ba;
+  --color-accent: #7487ff;
+  --color-accent-2: #a1b0ff;
+  color-scheme: dark;
+}
+.admin-shell .admin-panel { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 18px; }
+.admin-shell .admin-muted { color: var(--color-muted); }
+.admin-shell .admin-nav-active { background: #6177f6; color: white; }
+.admin-shell[data-admin-theme="dark"] .admin-nav-active { background: #4c5ac4; }
