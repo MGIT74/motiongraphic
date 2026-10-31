@@ -15,6 +15,7 @@ import {
 } from "@/lib/studio/project-model";
 import { getStudioTemplate, registerCustomStudioTemplates } from "@/lib/studio/template-registry";
 import { loadLatestOrDefault, saveProject } from "@/lib/studio/persistence";
+import { loadLatestCloudProject, saveProjectToCloud, type CloudSaveState as CloudStateKind } from "@/lib/studio/projects-supabase";
 import { useProjectHistory } from "@/lib/studio/history";
 import { useStudioClock } from "@/lib/studio/clock";
 import StudioTopBar from "./StudioTopBar";
@@ -62,7 +63,10 @@ export default function StudioApp({
     defaultConfig: import("@/types/animation").AnimationConfig;
   }[];
 }) {
-  const [initial] = useState(makeDefaultProject);
+  // Initial DÉTERMINISTE : le rendu serveur et le premier rendu client sont
+  // identiques ; le contenu réel (localStorage/nuage) est restauré après
+  // l'hydratation via `reset`.
+  const [initial] = useState(() => makeDefaultProject(undefined, { deterministic: true }));
   const { project, canUndo, canRedo, commit, undo, redo, reset } = useProjectHistory(initial);
   const clock = useStudioClock(project);
   // Keep SSR and first client render identical; restore browser storage only after hydration.
@@ -85,18 +89,39 @@ export default function StudioApp({
 
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("saved");
+  const [cloudState, setCloudState] = useState<CloudStateKind | null>(null);
+
+  /* Restauration après hydratation : localStorage puis cloud (si plus récent). */
+  useEffect(() => {
+    const restore = async () => {
+      const stored = loadLatestOrDefault();
+      reset(stored);
+      try {
+        const cloud = await loadLatestCloudProject();
+        const localIsPlaceholder = stored.id === "project-default";
+        if (cloud && (localIsPlaceholder || Date.parse(cloud.updatedAt) > Date.parse(stored.updatedAt))) {
+          reset(cloud);
+        }
+      } catch {
+        // Cloud indisponible : on garde le local, erreur silencieuse (assumé).
+      }
+    };
+    void restore();
+  }, [reset]);
 
   const { time, playing, duration, sceneIndex, seek, setPlaying } = clock;
 
   const selection = computeSelection(project, selectedElementId);
 
   /* ------------------------------ autosave ------------------------------ */
-  // "saving" n'est pas posé dans l'effet (règle setState-in-effect) : les
-  // états sauvegardé/erreur sont déduits du dernier cycle d'autosave.
+  // Local + cloud (Supabase RLS si configuré). "saving" n'est pas posé dans
+  // l'effet (règle setState-in-effect) : les états finaux arrivent en async.
   useEffect(() => {
-    const id = setTimeout(() => {
+    const id = setTimeout(async () => {
       const ok = saveProject(project);
       setSaveState(ok ? "saved" : "error");
+      const cloud = await saveProjectToCloud(project);
+      setCloudState(cloud.state);
     }, 600);
     return () => clearTimeout(id);
   }, [project]);
@@ -215,6 +240,7 @@ export default function StudioApp({
         time={time}
         duration={duration}
         saveState={saveState}
+        cloudState={cloudState}
         fps={project.fps}
       />
 

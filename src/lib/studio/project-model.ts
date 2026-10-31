@@ -118,10 +118,10 @@ export function makeElement(
   templateKey: string,
   kind: ElementKind,
   config: AnimationConfig,
-  opts: { start?: number; duration?: number; x?: number; y?: number; scale?: number; label?: string } = {}
+  opts: { start?: number; duration?: number; x?: number; y?: number; scale?: number; label?: string; id?: string } = {}
 ): StudioElement {
   return {
-    id: uid(),
+    id: opts.id ?? uid(),
     label: opts.label ?? (config.text.slice(0, 24) || templateKey),
     kind,
     templateKey,
@@ -134,14 +134,31 @@ export function makeElement(
   };
 }
 
-export function makeScene(name: string, duration = 5, elements: StudioElement[] = []): StudioScene {
-  return { id: uid(), name, duration: roundToFrame(clampNumber(duration, 1, 600)), elements };
+export function makeScene(
+  name: string,
+  duration = 5,
+  elements: StudioElement[] = [],
+  opts: { id?: string } = {}
+): StudioScene {
+  return {
+    id: opts.id ?? uid(),
+    name,
+    duration: roundToFrame(clampNumber(duration, 1, 600)),
+    elements,
+  };
 }
 
-export function makeDefaultProject(name = "Nouveau projet SaaS"): StudioProject {
-  const now = new Date().toISOString();
+export function makeDefaultProject(
+  name = "Nouveau projet SaaS",
+  opts: { deterministic?: boolean } = {}
+): StudioProject {
+  // Mode déterministe : ids/dates figés -> rendu serveur STRICTEMENT identique
+  // au premier rendu client (zéro erreur d'hydratation sur /studio).
+  const det = opts.deterministic ?? false;
+  const idOf = det ? (fixed: string) => fixed : () => uid();
+  const now = det ? "1970-01-01T00:00:00.000Z" : new Date().toISOString();
   return {
-    id: uid(),
+    id: idOf("project-default"),
     schemaVersion: PROJECT_SCHEMA_VERSION,
     name,
     fps: STUDIO_FPS,
@@ -156,8 +173,8 @@ export function makeDefaultProject(name = "Nouveau projet SaaS"): StudioProject 
           backgroundColor: "#000000",
           duration: 3.2,
           speed: 1,
-        }, { duration: 5, label: "Titre" }),
-      ]),
+        }, { duration: 5, label: "Titre", id: idOf("element-intro-title") }),
+      ], { id: idOf("scene-intro") }),
       makeScene("Démo produit", 6, [
         makeElement("staggered-cards-01", "cards", {
           text: "UI MOTION",
@@ -166,8 +183,8 @@ export function makeDefaultProject(name = "Nouveau projet SaaS"): StudioProject 
           backgroundColor: "#000000",
           duration: 4.2,
           speed: 1,
-        }, { duration: 6, label: "Cards UI" }),
-      ]),
+        }, { duration: 6, label: "Cards UI", id: idOf("element-demo-cards") }),
+      ], { id: idOf("scene-demo") }),
     ],
     media: [],
     createdAt: now,

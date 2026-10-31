@@ -28,6 +28,7 @@ export default function StudioTopBar({
   time,
   duration,
   saveState,
+  cloudState,
   fps,
 }: {
   projectName: string;
@@ -42,6 +43,7 @@ export default function StudioTopBar({
   time: number;
   duration: number;
   saveState: StudioSaveState;
+  cloudState?: "local" | "synced" | "error" | null;
   fps: number;
 }) {
   return (
@@ -118,6 +120,15 @@ export default function StudioTopBar({
             <>
               <span className="h-2 w-2 rounded-full bg-red-400" /> Échec de sauvegarde
             </>
+          ) : null}
+          {cloudState === "synced" ? (
+            <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-emerald-300" title="Projets synchronisés Supabase (RLS)">
+              Cloud ✓
+            </span>
+          ) : cloudState === "error" ? (
+            <span className="ml-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300" title="Échec de synchronisation Supabase">
+              Cloud ✕
+            </span>
           ) : null}
         </span>
 
