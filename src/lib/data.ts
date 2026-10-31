@@ -138,14 +138,33 @@ export async function getAllTemplateDetails(): Promise<TemplateDetail[]> {
   if (!isSupabaseConfigured()) return demoStore.templates.map(demoDetail);
   const client = await createSupabaseServerClient();
   if (!client) return demoStore.templates.map(demoDetail);
+  // Fetch animations and prompts separately: this also works when the
+  // PostgREST schema cache has not picked up the FK relationship yet.
   const { data, error } = await client
     .from("animations")
-    .select(`${ANIMATION_SELECT}, prompts(id, animation_id, type, content, version)`)
+    .select(ANIMATION_SELECT)
     .order("created_at", { ascending: false });
   if (error) throw new Error(`Supabase (admin animations) : ${error.message}`);
-  return (((data ?? []) as unknown as (AnimationRowLike & {
-    prompts?: TemplateDetail["prompts"];
-  })[]) ).map((row) => toDetail(row, row.prompts ?? [], row.updated_at));
+
+  const animations = (data ?? []) as unknown as AnimationRowLike[];
+  if (animations.length === 0) return [];
+
+  const { data: promptData, error: promptsError } = await client
+    .from("prompts")
+    .select("id, animation_id, type, content, version")
+    .in("animation_id", animations.map((animation) => animation.id));
+  if (promptsError) throw new Error(`Supabase (admin prompts) : ${promptsError.message}`);
+
+  const promptsByAnimation = new Map<string, TemplateDetail["prompts"]>();
+  for (const prompt of (promptData ?? []) as unknown as (TemplateDetail["prompts"][number] & { animation_id: string })[]) {
+    const existing = promptsByAnimation.get(prompt.animation_id) ?? [];
+    existing.push(prompt);
+    promptsByAnimation.set(prompt.animation_id, existing);
+  }
+
+  return animations.map((animation) =>
+    toDetail(animation, promptsByAnimation.get(animation.id) ?? [], animation.updated_at)
+  );
 }
 
 /** Le site tourne-t-il actuellement en mode démonstration ? */
