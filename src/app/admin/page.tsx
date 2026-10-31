@@ -34,12 +34,20 @@ export default async function AdminPage() {
             (<code className="font-mono text-xs text-ink">supabase/migrations/0001_init.sql</code>), puis
             rechargez cette page. Guide complet dans le README.
           </p>
-          <Link
-            href="/"
-            className="mt-6 inline-flex h-10 items-center rounded-full border border-line bg-surface px-5 text-sm font-medium text-ink transition-colors hover:border-accent/50"
-          >
-            Retour au site
-          </Link>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href="/admin/lab"
+              className="inline-flex h-10 items-center rounded-full bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent/85"
+            >
+              Ouvrir le Template Lab (démo)
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex h-10 items-center rounded-full border border-line bg-surface px-5 text-sm font-medium text-ink transition-colors hover:border-accent/50"
+            >
+              Retour au site
+            </Link>
+          </div>
         </div>
       </div>
     );

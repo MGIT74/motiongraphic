@@ -33,6 +33,35 @@ construit la timeline avec `loop: false` et pilote `timeline.time(t)`.
    le canvas remonte le nouveau composant immédiatement (clé React stable
    par élément, rebuild de la timeline GSAP uniquement).
 
+## Pipeline des templates interactifs (Template Lab)
+
+```
+Admin crée le template (nom/catégorie/description/identifiant/config/prompts)
+        │
+        ├── source "component"  → dérivé d'un composant APPROUVÉ (7 codés)
+        │     → publication instantanée : données seules (aucun code en base)
+        │     → galerie + fiche publique + Studio (timeline, piloté par le
+        │       builder du composant de base)
+        │
+        └── source "code" (React/HTML/CSS/SVG)
+              → 1. validateTemplateCode() autoritaire (POST /api/templates/validate-code) :
+                   réseau / storage / eval / imports dynamiques / DOM parent interdits
+              → 2. statut candidate (jamais rendu hors bac à sable)
+              → 3. rendu publique : iframe sandbox="allow-scripts" (origine nulle)
+                   + contrat postMessage (MGSI_CONFIG / mgsi:configchange / mgsi:replay)
+              → 4. intégration timeline : Phase 2 (compilation build-time du code
+                   validé dans le code source, via Git) — PAS de publication
+                   instantanée promise pour le pilotage timeline.
+```
+
+Statuts : `draft` / `candidate` / `published` — version incrémentée sur
+chaque modification publiée (table `custom_templates`, migration 0005,
+RLS : admin seul écrit, visiteurs ne lisent que les publiés).
+
+Le visiteur ne peut jamais modifier le code source ni les templates publiés :
+il ne contrôle que ses propre réglages (texte, couleurs, vitesse, durée) dans
+la fiche publique — appliqués localement (React ou postMessage sandbox).
+
 ## Sécurité
 
 - Aucun code arbitraire : un `templateKey` invalide est rejeté par `validateProject`.
