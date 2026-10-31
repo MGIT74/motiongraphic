@@ -416,6 +416,13 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
         <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Templates</h2>
+            <div className="flex flex-wrap items-center gap-2">
+            {!rows.some((r) => r.component_key === "minimal-saas-ui-01") && (
+              <button type="button" onClick={() => {
+                const base = emptyEditor(categories);
+                setEditor({ ...base, title: "Minimal SaaS UI Showcase", slug: "minimal-saas-ui-showcase", description: "Interface SaaS minimaliste interactive avec lecteur audio, analytics, recherche et micro-interactions.", componentKey: "minimal-saas-ui-01", configText: "Minimal SaaS UI", primaryColor: "#171923", accentColor: "#F45A83", backgroundColor: "#F7F8FA", duration: "5", isPublished: false, promptWeb: "Crée une interface SaaS minimaliste animée avec lecteur audio, réglage de volume, graphique analytics, sélecteur de période, recherche et micro-interactions fluides en React/TypeScript/CSS." });
+              }} className="inline-flex h-10 items-center rounded-full border border-accent px-4 text-sm font-semibold text-accent hover:bg-accent/10">Préparer SaaS UI Showcase</button>
+            )}
             <button
               type="button"
               onClick={() => setEditor(emptyEditor(categories))}
@@ -423,6 +430,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
             >
               <Plus className="h-4 w-4" aria-hidden="true" /> Ajouter un template
             </button>
+            </div>
           </div>
 
           <ul className="flex flex-col gap-3">
