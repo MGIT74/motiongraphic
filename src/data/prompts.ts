@@ -185,6 +185,17 @@ const PROMPTS = {
         "Le cercle se dessine via des keyframes de tracé (Trim Paths), le cœur apparaît en scale avec pop, un halo (calque solide animé en scale/opacité, flou gaussien) s'échappe, puis le mot-symbole apparaît ; tenue, léger recadrage, boucle.",
     }),
   },
+  "minimal-saas-ui-01": {
+    web: webPrompt("minimal-saas-ui-01", {
+      visuel: "- Interface SaaS minimaliste claire avec lecteur audio, graphique analytics, recherche et bouton d'action.\n- Cartes blanches arrondies, fond gris très clair, accent rose.",
+      easing: "Entrées progressives des cartes, transition fluide de la courbe et micro-interactions sur les contrôles.",
+      boucle: "Présenter successivement le lecteur, les analytics, la recherche et l'action, puis recommencer.",
+    }),
+    after_effects: jsxPrompt("minimal-saas-ui-01", {
+      compo: "- Composition 1920×1080, 30 fps, interface SaaS épurée en quatre scènes.",
+      comportement: "Animer l'apparition des cartes, le tracé du graphique, la recherche et le bouton avec des interpolations douces.",
+    }),
+  },
 } as const satisfies Record<ComponentKey, { web: string; after_effects: string }>;
 
 export const DEMO_PROMPTS = PROMPTS;
