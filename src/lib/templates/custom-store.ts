@@ -116,8 +116,6 @@ interface GlobalCustomStore {
 const globalStore = globalThis as GlobalCustomStore;
 const memory: Map<string, CustomTemplate> = (globalStore.__mgsiCustomTemplates ??= new Map());
 
-const memorySeeded = globalStore.__mgsiCustomSeeded ?? false;
-
 function ensureDemoSeed() {
   if (globalStore.__mgsiCustomSeeded) return;
   globalStore.__mgsiCustomSeeded = true;
