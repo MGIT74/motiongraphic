@@ -22,7 +22,13 @@ create table if not exists public.custom_templates (
   -- 'code' : code source hébergé ici, rendu UNIQUEMENT dans un iframe
   -- sandbox="allow-scripts" (origine nulle). Aucun exec dynamique côté app.
   source_kind         text not null check (source_kind in ('component', 'code')),
-  component_key       text references public.animations (component_key) on delete set null,
+  -- Pas de clé étrangère : animations.component_key n'est pas unique (Postgres la refuse).
+  -- Même liste blanche que la contrainte de public.animations (migration 0004).
+  component_key       text check (component_key in (
+    'kinetic-type-01', 'text-reveal-01', 'elastic-text-01',
+    'shape-morph-01', 'staggered-cards-01', 'logo-reveal-01',
+    'minimal-saas-ui-01'
+  )),
   code                text check (char_length(code) <= 60000),
   default_config      jsonb not null default '{}'::jsonb,
   prompt_web          text not null default '',
@@ -30,7 +36,9 @@ create table if not exists public.custom_templates (
   version             integer not null default 1 check (version >= 1),
   status              text not null default 'draft' check (status in ('draft', 'candidate', 'published')),
   created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now()
+  updated_at          timestamptz not null default now(),
+  -- Rapport de validation du code (Template Lab), écrit par le serveur.
+  validation          jsonb
 );
 
 create index if not exists custom_templates_status_idx on public.custom_templates (status, updated_at desc);

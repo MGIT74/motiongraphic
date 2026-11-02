@@ -84,3 +84,16 @@ export async function loadLatestCloudProject(): Promise<StudioProject | null> {
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   return validateProject(rows[0]?.data ?? null);
 }
+/** Charge un projet cloud précis de l'utilisateur connecté (RLS) — ex. ?project=<id>. */
+export async function loadCloudProject(projectId: string): Promise<StudioProject | null> {
+  const client = await getBrowserClient();
+  if (!client) return null;
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await client
+    .from("studio_projects")
+    .select("id, name, data, updated_at")
+    .eq("id", projectId);
+  if (error || !Array.isArray(data) || data.length === 0) return null;
+  return validateProject((data as { data: unknown }[])[0]?.data ?? null);
+}

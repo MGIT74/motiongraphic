@@ -221,13 +221,6 @@ create policy profiles_update_self
   using (id = auth.uid())
   with check (id = auth.uid());
 
-drop trigger if exists prevent_role_escalation on public.profiles;
-create trigger prevent_role_escalation
-  before update on public.profiles
-  for each row
-  when (new.role <> old.role)
-  execute function public.guard_role_change();
-
 create or replace function public.guard_role_change()
 returns trigger
 language plpgsql
@@ -241,6 +234,14 @@ begin
   return new;
 end;
 $$;
+
+-- Le déclencheur est créé APRÈS sa fonction (sinon échec sur une base neuve).
+drop trigger if exists prevent_role_escalation on public.profiles;
+create trigger prevent_role_escalation
+  before update on public.profiles
+  for each row
+  when (new.role <> old.role)
+  execute function public.guard_role_change();
 
 -- favorites : chaque utilisateur gère ses favoris uniquement
 drop policy if exists favorites_read on public.favorites;
@@ -279,32 +280,32 @@ on conflict (id) do nothing;
 insert into public.animations
   (id, title, slug, description, category_id, component_key, default_config, duration, is_published, is_featured)
 values
-  ('00000000-0000-4000-8000-000000000011', 'Kinetic Typography',
+  ('00000000-0000-4000-8000-000000000011', 'Kinetic Typography', 'kinetic-type-01',
    'Typographie cinétique : chaque lettre glisse depuis un masque bas avec un décalage rythmé, puis un point d''accent vient sceller le mot. Ideal pour des accroches, titres de showreel ou intros de marque.',
    '00000000-0000-4000-8000-000000000001', 'kinetic-type-01',
    '{"text":"MOTION","primaryColor":"#F5F5F7","accentColor":"#0A84FF","backgroundColor":"#000000","duration":3.2,"speed":1}'::jsonb,
    3.2, true, true),
-  ('00000000-0000-4000-8000-000000000012', 'Text Reveal — Masque',
+  ('00000000-0000-4000-8000-000000000012', 'Text Reveal — Masque', 'text-reveal-01',
    'Révélation de texte par masque vertical, ligne par ligne, traversée par un balayage lumineux. Un classique du motion design revisité en code, parfait pour des slogans en deux lignes.',
    '00000000-0000-4000-8000-000000000001', 'text-reveal-01',
    '{"text":"CRÉER\nEN CODE","primaryColor":"#F5F5F7","accentColor":"#0A84FF","backgroundColor":"#000000","duration":3.6,"speed":1}'::jsonb,
    3.6, true, true),
-  ('00000000-0000-4000-8000-000000000013', 'Elastic Text',
+  ('00000000-0000-4000-8000-000000000013', 'Elastic Text', 'elastic-text-01',
    'Le texte rebondit en place avec un easing élastique, lettre par lettre : énergie maximale pour des mots-clés courts, des badges ou des annonces.',
    '00000000-0000-4000-8000-000000000001', 'elastic-text-01',
    '{"text":"BOUNCE","primaryColor":"#F5F5F7","accentColor":"#64D2FF","backgroundColor":"#000000","duration":3,"speed":1}'::jsonb,
    3, true, true),
-  ('00000000-0000-4000-8000-000000000014', 'Shape Morph',
+  ('00000000-0000-4000-8000-000000000014', 'Shape Morph', 'shape-morph-01',
    'Une forme lumineuse se transforme sans interruption : carré, octogone, étoile à quatre branches. Un morphing pur code, fluide à 60 fps, pour des transitions géométriques élégantes.',
    '00000000-0000-4000-8000-000000000002', 'shape-morph-01',
    '{"text":"MORPH","primaryColor":"#F5F5F7","accentColor":"#64D2FF","backgroundColor":"#000000","duration":6,"speed":1}'::jsonb,
    6, true, true),
-  ('00000000-0000-4000-8000-000000000015', 'Staggered Cards',
+  ('00000000-0000-4000-8000-000000000015', 'Staggered Cards', 'staggered-cards-01',
    'Trois cartes vitrées s''empilent en cascade avec un rebond maîtrisé. La mise en scène idéale pour présenter des étapes, des fonctionnalités ou des maquettes d''interface.',
    '00000000-0000-4000-8000-000000000003', 'staggered-cards-01',
    '{"text":"UI MOTION","primaryColor":"#E7E7EF","accentColor":"#0A84FF","backgroundColor":"#000000","duration":4.2,"speed":1}'::jsonb,
    4.2, true, true),
-  ('00000000-0000-4000-8000-000000000016', 'Logo Reveal',
+  ('00000000-0000-4000-8000-000000000016', 'Logo Reveal', 'logo-reveal-01',
    'Un logo abstrait se dessine par la lumière : le trait se trace, le cœur pop, un halo s''échappe et le mot-symbole s''éclaircit. Pensez intros de marque et identités animées.',
    '00000000-0000-4000-8000-000000000004', 'logo-reveal-01',
    '{"text":"STUDIO","primaryColor":"#F5F5F7","accentColor":"#64D2FF","backgroundColor":"#000000","duration":4.4,"speed":1}'::jsonb,
@@ -350,7 +351,7 @@ CRITÈRES D'ACCEPTATION
 - Aucune console d'erreur, aucune dépendance inutile.
 - La boucle est parfaitement fluide et sans saut visuel.
 - Rendu responsive, centré, premium (dark, minimalist).
-$prompt$), 1),
+$prompt$, 1),
 
 -- kinetic-type-01 — After Effects
 ('00000000-0000-4000-8000-0000000001b0', '00000000-0000-4000-8000-000000000011', 'after_effects',
@@ -382,7 +383,7 @@ ANIMATION
 LIVRABLE
 - Un seul fichier .jsx complet, copiable-collable, prêt à l'exécution.
 - Aucun appel réseau, aucun fichier externe requis.
-$prompt$), 1),
+$prompt$, 1),
 
 -- text-reveal-01 — Web
 ('00000000-0000-4000-8000-0000000002a0', '00000000-0000-4000-8000-000000000012', 'web',
@@ -417,7 +418,7 @@ CRITÈRES D'ACCEPTATION
 - Aucune console d'erreur, aucune dépendance inutile.
 - La boucle est parfaitement fluide et sans saut visuel.
 - Rendu responsive, centré, premium (dark, minimalist).
-$prompt$), 1),
+$prompt$, 1),
 
 -- text-reveal-01 — After Effects
 ('00000000-0000-4000-8000-0000000002b0', '00000000-0000-4000-8000-000000000012', 'after_effects',
@@ -449,7 +450,7 @@ ANIMATION
 LIVRABLE
 - Un seul fichier .jsx complet, copiable-collable, prêt à l'exécution.
 - Aucun appel réseau, aucun fichier externe requis.
-$prompt$), 1),
+$prompt$, 1),
 
 -- elastic-text-01 — Web
 ('00000000-0000-4000-8000-0000000003a0', '00000000-0000-4000-8000-000000000013', 'web',
@@ -483,7 +484,7 @@ CRITÈRES D'ACCEPTATION
 - Aucune console d'erreur, aucune dépendance inutile.
 - La boucle est parfaitement fluide et sans saut visuel.
 - Rendu responsive, centré, premium (dark, minimalist).
-$prompt$), 1),
+$prompt$, 1),
 
 -- elastic-text-01 — After Effects
 ('00000000-0000-4000-8000-0000000003b0', '00000000-0000-4000-8000-000000000013', 'after_effects',
@@ -515,7 +516,7 @@ ANIMATION
 LIVRABLE
 - Un seul fichier .jsx complet, copiable-collable, prêt à l'exécution.
 - Aucun appel réseau, aucun fichier externe requis.
-$prompt$), 1),
+$prompt$, 1),
 
 -- shape-morph-01 — Web
 ('00000000-0000-4000-8000-0000000004a0', '00000000-0000-4000-8000-000000000014', 'web',
@@ -548,7 +549,7 @@ CRITÈRES D'ACCEPTATION
 - Aucune console d'erreur, aucune dépendance inutile.
 - La boucle est parfaitement fluide et sans saut visuel.
 - Rendu responsive, centré, premium (dark, minimalist).
-$prompt$), 1),
+$prompt$, 1),
 
 -- shape-morph-01 — After Effects
 ('00000000-0000-4000-8000-0000000004b0', '00000000-0000-4000-8000-000000000014', 'after_effects',
@@ -580,7 +581,7 @@ ANIMATION
 LIVRABLE
 - Un seul fichier .jsx complet, copiable-collable, prêt à l'exécution.
 - Aucun appel réseau, aucun fichier externe requis.
-$prompt$), 1),
+$prompt$, 1),
 
 -- staggered-cards-01 — Web
 ('00000000-0000-4000-8000-0000000005a0', '00000000-0000-4000-8000-000000000015', 'web',
@@ -615,7 +616,7 @@ CRITÈRES D'ACCEPTATION
 - Aucune console d'erreur, aucune dépendance inutile.
 - La boucle est parfaitement fluide et sans saut visuel.
 - Rendu responsive, centré, premium (dark, minimalist).
-$prompt$), 1),
+$prompt$, 1),
 
 -- staggered-cards-01 — After Effects
 ('00000000-0000-4000-8000-0000000005b0', '00000000-0000-4000-8000-000000000015', 'after_effects',
@@ -647,7 +648,7 @@ ANIMATION
 LIVRABLE
 - Un seul fichier .jsx complet, copiable-collable, prêt à l'exécution.
 - Aucun appel réseau, aucun fichier externe requis.
-$prompt$), 1),
+$prompt$, 1),
 
 -- logo-reveal-01 — Web
 ('00000000-0000-4000-8000-0000000006a0', '00000000-0000-4000-8000-000000000016', 'web',
@@ -680,7 +681,7 @@ CRITÈRES D'ACCEPTATION
 - Aucune console d'erreur, aucune dépendance inutile.
 - La boucle est parfaitement fluide et sans saut visuel.
 - Rendu responsive, centré, premium (dark, minimalist).
-$prompt$), 1),
+$prompt$, 1),
 
 -- logo-reveal-01 — After Effects
 ('00000000-0000-4000-8000-0000000006b0', '00000000-0000-4000-8000-000000000016', 'after_effects',
@@ -712,6 +713,5 @@ ANIMATION
 LIVRABLE
 - Un seul fichier .jsx complet, copiable-collable, prêt à l'exécution.
 - Aucun appel réseau, aucun fichier externe requis.
-$prompt$
-), 1)
+$prompt$, 1)
 on conflict (animation_id, type) do update set content = excluded.content, version = prompts.version + 1;

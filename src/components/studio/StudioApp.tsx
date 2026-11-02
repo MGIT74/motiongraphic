@@ -16,7 +16,7 @@ import {
 } from "@/lib/studio/project-model";
 import { getStudioTemplate, registerCustomStudioTemplates } from "@/lib/studio/template-registry";
 import { loadLatestOrDefault, saveProject } from "@/lib/studio/persistence";
-import { loadLatestCloudProject, saveProjectToCloud, type CloudSaveState as CloudStateKind } from "@/lib/studio/projects-supabase";
+import { loadCloudProject, loadLatestCloudProject, saveProjectToCloud, type CloudSaveState as CloudStateKind } from "@/lib/studio/projects-supabase";
 import { useProjectHistory } from "@/lib/studio/history";
 import { useStudioClock } from "@/lib/studio/clock";
 import StudioTopBar from "./StudioTopBar";
@@ -92,6 +92,19 @@ export default function StudioApp({
      qui en utilisent passent la validation. */
   useEffect(() => {
     const restore = async () => {
+      // Lien direct vers un projet (ex. créé par le MCP) : /studio?project=<id>.
+      const requestedId = new URLSearchParams(window.location.search).get("project");
+      if (requestedId) {
+        try {
+          const requested = await loadCloudProject(requestedId);
+          if (requested) {
+            reset(requested);
+            return;
+          }
+        } catch {
+          // Projet introuvable ou cloud indisponible : on retombe sur le dernier projet.
+        }
+      }
       const stored = loadLatestOrDefault();
       reset(stored);
       try {

@@ -2,31 +2,33 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 /**
- * Proxy (ex-middleware Next 16), deux rôles :
- * 1. Mode construction : toute page publique (Studio compris) est redirigée
- *    vers /construction ; /admin, /api, robots.txt et sitemap.xml restent accessibles.
- * 2. Rafraîchissement de la session Supabase pour les routes autorisées,
+ * Proxy (ex-middleware Next 16), trois rôles :
+ * 1. Mode construction : toute page publique est redirigée vers /construction ;
+ *    /admin, /login, /api, /.well-known, robots.txt et sitemap.xml restent accessibles.
+ * 2. Studio réservé aux admins pendant la construction : /studio s'ouvre
+ *    uniquement pour un utilisateur connecté dont `profiles.role = 'admin'`
+ *    (vérifié côté serveur via la session Supabase + RLS) ; sinon /construction.
+ * 3. Rafraîchissement de la session Supabase pour les routes autorisées,
  *    uniquement quand Supabase est configuré (sinon : mode démo, requête inchangée).
  */
 export async function proxy(request: NextRequest) {
-  // Construction mode: block public pages, including Studio, on the server.
-  // Preserve administrative access and APIs for ongoing development.
   const path = request.nextUrl.pathname;
-  const allowed = path === "/construction" || path.startsWith("/admin") ||
+  const publicAllowed = path === "/construction" || path.startsWith("/admin") ||
+    path === "/login" ||
     path.startsWith("/api/") || path === "/api" ||
     path === "/robots.txt" || path === "/sitemap.xml" ||
     // Découverte OAuth des clients MCP : répondre 404, pas la page HTML de construction.
     path.startsWith("/.well-known/");
-  if (!allowed) {
-    const destination = request.nextUrl.clone();
-    destination.pathname = "/construction";
-    destination.search = "";
-    return NextResponse.redirect(destination, 307);
-  }
+  const adminOnly = path === "/studio" || path.startsWith("/studio/");
+
+  if (!publicAllowed && !adminOnly) return redirectToConstruction(request);
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return NextResponse.next();
+  if (!url || !key) {
+    // Sans Supabase, impossible de vérifier un admin : le Studio reste fermé.
+    return adminOnly ? redirectToConstruction(request) : NextResponse.next();
+  }
 
   let response = NextResponse.next({ request });
 
@@ -47,10 +49,33 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // Déclenche le refresh du token si nécessaire (écrit via setAll ci-dessus).
-  await supabase.auth.getUser();
+  // Vérifie le JWT auprès de Supabase (et rafraîchit le token si nécessaire).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (adminOnly) {
+    let isAdmin = false;
+    if (user) {
+      const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+      isAdmin = (data as { role?: string } | null)?.role === "admin";
+    }
+    if (!isAdmin) {
+      const redirect = redirectToConstruction(request);
+      // Conserve les cookies de session éventuellement rafraîchis.
+      response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+      return redirect;
+    }
+  }
 
   return response;
+}
+
+function redirectToConstruction(request: NextRequest): NextResponse {
+  const destination = request.nextUrl.clone();
+  destination.pathname = "/construction";
+  destination.search = "";
+  return NextResponse.redirect(destination, 307);
 }
 
 export const config = {
