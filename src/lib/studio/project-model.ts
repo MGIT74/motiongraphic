@@ -216,7 +216,7 @@ export function makeDefaultProject(
           backgroundColor: "#000000",
           duration: 3.2,
           speed: 1,
-        }, { duration: 5, label: "Titre", id: idOf("element-intro-title") }),
+        }, { duration: 5, label: "Titre", id: idOf("element-intro-title"), timing: "fit" }),
       ], { id: idOf("scene-intro") }),
       makeScene("Démo produit", 6, [
         makeElement("staggered-cards-01", "cards", {
@@ -226,7 +226,7 @@ export function makeDefaultProject(
           backgroundColor: "#000000",
           duration: 4.2,
           speed: 1,
-        }, { duration: 6, label: "Cards UI", id: idOf("element-demo-cards") }),
+        }, { duration: 6, label: "Cards UI", id: idOf("element-demo-cards"), timing: "fit" }),
       ], { id: idOf("scene-demo") }),
     ],
     media: [],

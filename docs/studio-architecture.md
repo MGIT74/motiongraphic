@@ -93,3 +93,15 @@ la fiche publique — appliqués localement (React ou postMessage sandbox).
 | CI GitHub Actions : lint, types, build, tests navigateur (`npm run test:e2e`, mode démo) | `.github/workflows/ci.yml`, `tests/e2e` |
 
 Outils MCP ajoutés : `update_scene`, `delete_scene`, `delete_element`, `set_format`, `set_brand` ; `add_element` / `update_element` acceptent couleurs, `transparent`, `speed`, `font_family`, `timing`, `layer`.
+
+## Rendu vidéo (MP4)
+
+1. `POST /api/studio/render { project_id }` (admin connecté ou jeton MCP) crée un job (table `studio_renders`) placé en file d'attente — un rendu à la fois.
+2. Un Chromium sans fenêtre (`@sparticuz/chromium`, ou `CHROMIUM_PATH`, piloté par `playwright-core`) ouvre `/render/<id>?k=<HMAC>` : la scène est rendue par `StageLayers` (même moteur que le Studio), CSS côté long 1000 px, facteur d'échelle → 1920×1080 / 1080×1920 / 1080×1080.
+3. Pour chaque image (30 i/s) : `window.__mgsiRender.seek(t)` puis capture JPEG → ffmpeg (`ffmpeg-static`, H.264 CRF 20, yuv420p, faststart).
+4. Le MP4 est déposé dans Supabase Storage (bucket privé `studio-renders`, créé au besoin) ; lien signé 7 jours. Secours : `/api/studio/render/<id>/file?k=<HMAC>` depuis le disque du serveur.
+5. Suivi : `GET /api/studio/render/<id>` → `status`, `progress`, `url`.
+
+MCP : `preview_frame` (image JPEG d'un instant), `render_project`, `get_render`. Studio : bouton « Exporter MP4 ».
+Variables optionnelles : `RENDER_SECRET` (sinon `MCP_ACCESS_TOKEN`), `RENDER_BASE_URL` (URL que le navigateur interne utilise pour joindre l'app ; sinon l'origine de la requête), `CHROMIUM_PATH`, `FFMPEG_PATH`.
+Mesuré : 15 s de vidéo 1080p rendues en ~57 s (4 cœurs).

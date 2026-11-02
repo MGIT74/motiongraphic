@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   // lisent les cookies Supabase au runtime (phase 1). Une migration vers
   // cacheComponents se fera via <Suspense> + "use cache" plus tard.
   cacheComponents: false,
+  // Rendu vidéo : modules natifs/binaires chargés tels quels côté serveur.
+  serverExternalPackages: ["playwright-core", "@sparticuz/chromium", "ffmpeg-static"],
   turbopack: {
     rules: {
       "*.css": {

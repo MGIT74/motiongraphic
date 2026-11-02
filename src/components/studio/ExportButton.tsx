@@ -1,0 +1,96 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Download, Film, Loader2, RotateCcw } from "lucide-react";
+
+type ExportState =
+  | { kind: "idle" }
+  | { kind: "running"; renderId: string; progress: number }
+  | { kind: "done"; url: string }
+  | { kind: "error"; message: string };
+
+/**
+ * Export MP4 depuis le Studio : enregistre le projet dans le cloud, lance le
+ * rendu serveur, affiche la progression puis le lien de téléchargement.
+ */
+export default function ExportButton({
+  projectId,
+  beforeExport,
+}: {
+  projectId: string;
+  /** Sauvegarde cloud préalable (le rendu lit la version enregistrée). */
+  beforeExport: () => Promise<boolean>;
+}) {
+  const [state, setState] = useState<ExportState>({ kind: "idle" });
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => {
+    if (timer.current) clearInterval(timer.current);
+  }, []);
+
+  const start = async () => {
+    setState({ kind: "running", renderId: "", progress: 0 });
+    if (!(await beforeExport())) {
+      setState({ kind: "error", message: "Connectez-vous : l'export nécessite la sauvegarde cloud." });
+      return;
+    }
+    const res = await fetch("/api/studio/render", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ project_id: projectId }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { render_id?: string; error?: string };
+    if (!res.ok || !body.render_id) {
+      setState({ kind: "error", message: body.error ?? `Échec (${res.status})` });
+      return;
+    }
+    const renderId = body.render_id;
+    setState({ kind: "running", renderId, progress: 0 });
+    timer.current = setInterval(async () => {
+      const r = await fetch(`/api/studio/render/${renderId}`).catch(() => null);
+      const s = (await r?.json().catch(() => null)) as { status?: string; progress?: number; url?: string | null; error?: string | null } | null;
+      if (!s) return;
+      if (s.status === "done" && s.url) {
+        if (timer.current) clearInterval(timer.current);
+        setState({ kind: "done", url: s.url });
+      } else if (s.status === "error") {
+        if (timer.current) clearInterval(timer.current);
+        setState({ kind: "error", message: s.error ?? "Erreur de rendu." });
+      } else {
+        setState({ kind: "running", renderId, progress: s.progress ?? 0 });
+      }
+    }, 1500);
+  };
+
+  const base =
+    "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors";
+
+  if (state.kind === "running") {
+    return (
+      <span className={`${base} cursor-default border-accent/40 text-accent`} aria-live="polite">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        {state.renderId ? `Rendu ${state.progress} %` : "Préparation…"}
+      </span>
+    );
+  }
+  if (state.kind === "done") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <a href={state.url} className={`${base} border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20`} download>
+          <Download className="h-3.5 w-3.5" aria-hidden="true" /> Télécharger le MP4
+        </a>
+        <button type="button" onClick={() => setState({ kind: "idle" })} className={`${base} border-line text-muted hover:text-ink`} aria-label="Nouvel export">
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      {state.kind === "error" ? <span className="max-w-56 truncate text-[11px] text-red-300" title={state.message}>{state.message}</span> : null}
+      <button type="button" onClick={() => void start()} className={`${base} border-line text-ink hover:border-accent/50`}>
+        <Film className="h-3.5 w-3.5" aria-hidden="true" /> Exporter MP4
+      </button>
+    </span>
+  );
+}

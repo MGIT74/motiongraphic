@@ -19,7 +19,9 @@ export async function proxy(request: NextRequest) {
     path.startsWith("/api/") || path === "/api" ||
     path === "/robots.txt" || path === "/sitemap.xml" ||
     // Découverte OAuth des clients MCP : répondre 404, pas la page HTML de construction.
-    path.startsWith("/.well-known/");
+    path.startsWith("/.well-known/") ||
+    // Page de rendu vidéo interne : protégée par son propre jeton signé.
+    path.startsWith("/render/");
   // Interrupteur : CONSTRUCTION_MODE=off ouvre tout le site (et le Studio) au public.
   const construction = process.env.CONSTRUCTION_MODE !== "off";
   const adminOnly = construction && (path === "/studio" || path.startsWith("/studio/"));

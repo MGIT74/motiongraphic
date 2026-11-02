@@ -1,5 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { MCP_PROJECT_TOOLS, McpToolError } from "@/lib/studio/mcp-server";
+import { MCP_PROJECT_TOOLS, McpToolError, type McpToolOutput } from "@/lib/studio/mcp-server";
+import { rememberBaseUrl } from "@/lib/render/engine";
+
+export const runtime = "nodejs";
 
 /**
  * Serveur MCP distant — transport "Streamable HTTP" (JSON-RPC 2.0) :
@@ -138,9 +141,13 @@ export async function POST(request: NextRequest) {
         }
         const input = ((params as { arguments?: unknown }).arguments ?? {}) as Record<string, unknown>;
         try {
-          const output = await tool.run(input);
+          // Origine publique : utilisée par le rendu (navigateur interne) pour joindre l'app.
+          const proto = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
+          const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host;
+          rememberBaseUrl(`${proto}://${host}`);
+          const output = (await tool.run(input)) as McpToolOutput;
           return json(id, {
-            content: [{ type: "text", text: output }],
+            content: typeof output === "string" ? [{ type: "text", text: output }] : output.content,
             isError: false,
           });
         } catch (error) {

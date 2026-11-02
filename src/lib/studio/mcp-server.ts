@@ -217,6 +217,11 @@ function hintMigration(): string {
 
 type McpInput = Record<string, unknown>;
 
+/** Résultat d'un outil : texte (JSON) ou contenu MCP riche (image…). */
+export type McpToolOutput =
+  | string
+  | { content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] };
+
 function needString(input: McpInput, key: string, label = key): string {
   const value = input[key];
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -730,6 +735,66 @@ export const MCP_PROJECT_TOOLS = [
       const next = input.apply === true ? applyBrand(project, brand) : { ...project, brand };
       await persistProject(requireValid(next), userId, project);
       return JSON.stringify({ ok: true, brand: { ...brand, logoUrl: brand.logoUrl ? "(défini)" : undefined }, applied: input.apply === true, studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "preview_frame",
+    description:
+      "Capture une image du projet à un instant donné (secondes depuis le début), telle qu'elle apparaîtra dans la vidéo. Utile pour vérifier une composition avant l'export.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id", "time"],
+      properties: {
+        project_id: { type: "string" },
+        time: { type: "number", description: "Instant en secondes (0 = début)." },
+        width: { type: "number", description: "Largeur de l'image en pixels (320 à 1920, défaut 960)." },
+      },
+    },
+    run: async (input: McpInput): Promise<McpToolOutput> => {
+      const { projectId } = await needProject(input);
+      const { previewFrame } = await import("@/lib/render/engine");
+      const time = optNumber(input, "time") ?? 0;
+      const width = Math.max(320, Math.min(1920, optNumber(input, "width") ?? 960));
+      const jpeg = await previewFrame(projectId, time, width);
+      return {
+        content: [
+          { type: "image", data: jpeg.toString("base64"), mimeType: "image/jpeg" },
+          { type: "text", text: JSON.stringify({ project_id: projectId, time, width }) },
+        ],
+      };
+    },
+  },
+  {
+    name: "render_project",
+    description:
+      "Lance l'export MP4 (H.264, 30 i/s, 1920×1080 / 1080×1920 / 1080×1080 selon le format). Asynchrone : renvoie render_id, à suivre avec get_render (environ 3 à 6 s de calcul par seconde de vidéo).",
+    inputSchema: { type: "object", required: ["project_id"], properties: { project_id: { type: "string" } } },
+    run: async (input: McpInput) => {
+      const { projectId, project } = await needProject(input);
+      const { startRender } = await import("@/lib/render/engine");
+      const job = await startRender(projectId);
+      return JSON.stringify({ render_id: job.id, status: job.status, frames: job.frames, format: formatOf(project), hint: "Appelez get_render avec render_id jusqu'à status = done." });
+    },
+  },
+  {
+    name: "get_render",
+    description: "État d'un export MP4 : pending, running (progress en %), done (url de téléchargement signée, valable 7 jours) ou error.",
+    inputSchema: { type: "object", required: ["render_id"], properties: { render_id: { type: "string" } } },
+    run: async (input: McpInput) => {
+      const conf = mcpConfigCheck();
+      if (!conf.ok) throw new McpToolError(conf.reason);
+      const { getRender } = await import("@/lib/render/engine");
+      const job = await getRender(needString(input, "render_id", "render_id"));
+      if (!job || job.userId !== process.env.MCP_USER_ID) throw new McpToolError("Rendu introuvable.");
+      return JSON.stringify({
+        render_id: job.id,
+        project_id: job.projectId,
+        status: job.status,
+        progress: Math.round(job.progress * 100),
+        url: job.url ?? null,
+        size_mb: job.sizeBytes ? Math.round((job.sizeBytes / 1048576) * 10) / 10 : null,
+        error: job.error ?? null,
+      });
     },
   },
   {
