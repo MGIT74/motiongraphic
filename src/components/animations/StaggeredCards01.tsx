@@ -23,23 +23,23 @@ export function StaggeredCards01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%" }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size" }}
     >
       {text ? (
         <span
-          className="text-[11px] font-semibold uppercase tracking-[0.4em]"
-          style={{ color: accentColor }}
+          className="font-semibold uppercase tracking-[0.4em]"
+          style={{ color: accentColor, fontSize: "2cqmin" }}
         >
           {text}
         </span>
       ) : null}
-      <div className="flex items-center justify-center gap-3 sm:gap-4">
+      <div className="flex items-center justify-center" style={{ gap: "2.8cqmin" }}>
         {[0, 1, 2].map((i) => (
           <div
             key={i}
             data-card
-            className="flex h-[38%] min-h-16 w-16 flex-col gap-2 rounded-xl p-3 will-change-transform sm:h-24 sm:w-20"
-            style={{ ...cardStyle, backgroundColor: i === 1 ? "rgba(255,255,255,0.08)" : undefined, aspectRatio: "0.82", height: "auto" }}
+            className="flex flex-col gap-2 rounded-xl p-3 will-change-transform"
+            style={{ ...cardStyle, backgroundColor: i === 1 ? "rgba(255,255,255,0.08)" : undefined, aspectRatio: "0.82", width: "14cqmin", height: "auto" }}
           >
             <span
               className="h-2.5 w-2.5 rounded-full"

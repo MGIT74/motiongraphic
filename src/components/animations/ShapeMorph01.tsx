@@ -16,7 +16,7 @@ export function ShapeMorph01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden"
-      style={{ backgroundColor, minHeight: "100%" }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size" }}
     >
       <div className="relative flex h-2/5 w-auto max-w-[70%] items-center justify-center" style={{ aspectRatio: "1" }}>
         <div
@@ -39,8 +39,8 @@ export function ShapeMorph01Frame({ config }: AnimationComponentProps) {
       </div>
       {text ? (
         <span
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] font-medium uppercase tracking-[0.35em]"
-          style={{ color: accentColor, opacity: 0.75 }}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 font-medium uppercase tracking-[0.35em]"
+          style={{ color: accentColor, opacity: 0.75, fontSize: "2cqmin" }}
         >
           {text}
         </span>

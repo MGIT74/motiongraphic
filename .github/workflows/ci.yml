@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Mode démo (sans Supabase) et site ouvert : le Studio est testable sans compte.
+      CONSTRUCTION_MODE: "off"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Types
+        run: npx next typegen && npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Installer Chromium (tests navigateur)
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests du Studio (navigateur)
+        run: |
+          npm start -- -p 3000 &
+          npx --yes wait-on@8 http://localhost:3000/studio --timeout 60000
+          BASE_URL=http://localhost:3000 SHOTS_DIR=${{ runner.temp }} npm run test:e2e
+
+      - name: Captures d'écran
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-e2e
+          path: ${{ runner.temp }}/*.png
+          if-no-files-found: ignore

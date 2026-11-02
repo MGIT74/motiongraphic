@@ -1,5 +1,14 @@
 import type { AnimationConfig, ComponentKey } from "@/types/animation";
 import { getComponentMeta } from "@/lib/animations/registry";
+import { isBrandFont } from "@/lib/brand/fonts";
+
+/** Logo importé : data URL image uniquement (rendue via <image>, jamais exécutée). */
+const LOGO_RE = /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+export const LOGO_MAX_CHARS = 400_000;
+
+export function isSafeLogoUrl(value: unknown): value is string {
+  return typeof value === "string" && value.length <= LOGO_MAX_CHARS && LOGO_RE.test(value);
+}
 
 const HEX_RE = /^(#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|rgb\(|hsl\(|transparent|black|white)$/;
 const NAMED = new Set([
@@ -46,8 +55,12 @@ export function sanitizeConfig(input: unknown, fallback: AnimationConfig): Anima
       : fallback.backgroundColor,
     duration: clamp(raw.duration, 1, 30, fallback.duration),
     speed: clamp(raw.speed, 0.25, 3, fallback.speed),
+    ...(isBrandFont(raw.fontFamily) ? { fontFamily: raw.fontFamily as string } : fallback.fontFamily ? { fontFamily: fallback.fontFamily } : {}),
+    ...(isSafeLogoUrl(raw.logoUrl) ? { logoUrl: raw.logoUrl as string } : {}),
   };
 }
+
+export { isSafeColor };
 
 export function sanitizeConfigByKey(key: ComponentKey, input: unknown): AnimationConfig {
   return sanitizeConfig(input, getComponentMeta(key).defaultConfig);

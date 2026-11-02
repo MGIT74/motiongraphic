@@ -1,6 +1,7 @@
 import { isComponentKey } from "@/lib/animations/registry";
 import { getStudioTemplate, isStudioTemplateKey, underlyingComponentKeyOf } from "@/lib/studio/template-registry";
-import { sanitizeConfig } from "@/lib/animations/config";
+import { isSafeColor, isSafeLogoUrl, sanitizeConfig } from "@/lib/animations/config";
+import { isBrandFont } from "@/lib/brand/fonts";
 import type { AnimationConfig } from "@/types/animation";
 
 /* ------------------------------------------------------------------ */
@@ -73,12 +74,49 @@ export interface StudioElement {
   x: number; // 0-100 (% du centre)
   y: number;
   scale: number; // 0.1-3
+  /**
+   * Adaptation de l'animation à la durée de l'élément :
+   * - "natural" (défaut historique) : l'animation joue à sa vitesse, coupée à la fin ;
+   * - "fit" : entrée, maintien jusqu'à la fin, puis sortie qui se termine pile à la fin ;
+   * - "hold" : entrée puis maintien figé (pas de sortie) — idéal en fin de vidéo.
+   */
+  timing?: ElementTiming;
+}
+
+export type ElementTiming = "natural" | "fit" | "hold";
+export const ELEMENT_TIMINGS: ElementTiming[] = ["natural", "fit", "hold"];
+
+/** Formats de sortie proposés (pixels du rendu final). */
+export const PROJECT_FORMATS = {
+  "16:9": { width: 1920, height: 1080, label: "Paysage 16:9" },
+  "9:16": { width: 1080, height: 1920, label: "Vertical 9:16" },
+  "1:1": { width: 1080, height: 1080, label: "Carré 1:1" },
+} as const;
+export type ProjectFormat = keyof typeof PROJECT_FORMATS;
+
+export function formatOf(project: Pick<StudioProject, "width" | "height">): ProjectFormat {
+  if (project.height > project.width) return "9:16";
+  if (project.height === project.width) return "1:1";
+  return "16:9";
+}
+
+/** Kit de marque du projet (appliqué aux éléments via applyBrand). */
+export interface BrandKit {
+  name?: string;
+  primaryColor: string;
+  accentColor: string;
+  backgroundColor: string;
+  fontFamily?: string;
+  logoUrl?: string;
 }
 
 export interface StudioScene {
   id: string;
   name: string;
   duration: number;
+  /** Fond de la scène, sous tous les calques (défaut #000000). */
+  background?: string;
+  /** Calques : le premier est au fond, le dernier au premier plan. */
   elements: StudioElement[];
 }
 
@@ -91,6 +129,8 @@ export interface StudioProject {
   width: number;
   height: number;
   scenes: StudioScene[];
+  /** Kit de marque (couleurs, police, logo) — optionnel. */
+  brand?: BrandKit;
   /** Phase 3 : médias importés (rushs, images, logos) — découpés virtuellement. */
   media: unknown[];
   createdAt: string;
@@ -118,9 +158,10 @@ export function makeElement(
   templateKey: string,
   kind: ElementKind,
   config: AnimationConfig,
-  opts: { start?: number; duration?: number; x?: number; y?: number; scale?: number; label?: string; id?: string } = {}
+  opts: { start?: number; duration?: number; x?: number; y?: number; scale?: number; label?: string; id?: string; timing?: ElementTiming } = {}
 ): StudioElement {
   return {
+    ...(opts.timing ? { timing: opts.timing } : {}),
     id: opts.id ?? uid(),
     label: opts.label ?? (config.text.slice(0, 24) || templateKey),
     kind,
@@ -138,11 +179,12 @@ export function makeScene(
   name: string,
   duration = 5,
   elements: StudioElement[] = [],
-  opts: { id?: string } = {}
+  opts: { id?: string; background?: string } = {}
 ): StudioScene {
   return {
     id: opts.id ?? uid(),
     name,
+    ...(opts.background ? { background: opts.background } : {}),
     duration: roundToFrame(clampNumber(duration, 1, 600)),
     elements,
   };
@@ -150,8 +192,9 @@ export function makeScene(
 
 export function makeDefaultProject(
   name = "Nouveau projet SaaS",
-  opts: { deterministic?: boolean } = {}
+  opts: { deterministic?: boolean; format?: ProjectFormat } = {}
 ): StudioProject {
+  const dims = PROJECT_FORMATS[opts.format ?? "16:9"];
   // Mode déterministe : ids/dates figés -> rendu serveur STRICTEMENT identique
   // au premier rendu client (zéro erreur d'hydratation sur /studio).
   const det = opts.deterministic ?? false;
@@ -162,8 +205,8 @@ export function makeDefaultProject(
     schemaVersion: PROJECT_SCHEMA_VERSION,
     name,
     fps: STUDIO_FPS,
-    width: 1920,
-    height: 1080,
+    width: dims.width,
+    height: dims.height,
     scenes: [
       makeScene("Intro", 5, [
         makeElement("kinetic-type-01", "text", {
@@ -256,12 +299,14 @@ export function validateProject(input: unknown): StudioProject | null {
           x: clampNumber(Number(e.x), 0, 100),
           y: clampNumber(Number(e.y), 0, 100),
           scale: clampNumber(Number(e.scale), 0.2, 3),
+          ...(ELEMENT_TIMINGS.includes(e.timing as ElementTiming) ? { timing: e.timing as ElementTiming } : {}),
         });
       }
       scenes.push({
         id: s.id,
         name: typeof s.name === "string" ? s.name.slice(0, 80) : "Scène",
         duration: sceneDuration,
+        ...(isSafeColor(s.background) ? { background: s.background as string } : {}),
         elements,
       });
     }
@@ -271,9 +316,9 @@ export function validateProject(input: unknown): StudioProject | null {
       schemaVersion: PROJECT_SCHEMA_VERSION,
       name: typeof raw.name === "string" ? raw.name.slice(0, 120) : "Projet Studio",
       fps: STUDIO_FPS,
-      width: clampNumber(Number(raw.width), 320, 3840),
-      height: clampNumber(Number(raw.height), 320, 2160),
+      ...snapFormat(Number(raw.width), Number(raw.height)),
       scenes,
+      ...(sanitizeBrand(raw.brand) ? { brand: sanitizeBrand(raw.brand) as BrandKit } : {}),
       media: Array.isArray(raw.media) ? raw.media : [],
       createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
       updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
@@ -284,6 +329,27 @@ export function validateProject(input: unknown): StudioProject | null {
     void validationError;
     return null;
   }
+}
+
+/** Ramène des dimensions quelconques au format proposé le plus proche. */
+function snapFormat(width: number, height: number): { width: number; height: number } {
+  const w = Number.isFinite(width) && width > 0 ? width : 1920;
+  const h = Number.isFinite(height) && height > 0 ? height : 1080;
+  const { width: fw, height: fh } = PROJECT_FORMATS[formatOf({ width: w, height: h })];
+  return { width: fw, height: fh };
+}
+
+export function sanitizeBrand(input: unknown): BrandKit | null {
+  if (typeof input !== "object" || input === null) return null;
+  const b = input as Record<string, unknown>;
+  return {
+    ...(typeof b.name === "string" && b.name.trim() ? { name: b.name.trim().slice(0, 60) } : {}),
+    primaryColor: isSafeColor(b.primaryColor) ? (b.primaryColor as string) : "#F5F5F7",
+    accentColor: isSafeColor(b.accentColor) ? (b.accentColor as string) : "#0A84FF",
+    backgroundColor: isSafeColor(b.backgroundColor) ? (b.backgroundColor as string) : "#000000",
+    ...(isBrandFont(b.fontFamily) ? { fontFamily: b.fontFamily as string } : {}),
+    ...(isSafeLogoUrl(b.logoUrl) ? { logoUrl: b.logoUrl as string } : {}),
+  };
 }
 
 function makeDefaultConfig(): AnimationConfig {
@@ -381,6 +447,110 @@ export function removeElement(project: StudioProject, sceneId: string, elementId
     scenes: project.scenes.map((scene) =>
       scene.id === sceneId ? { ...scene, elements: scene.elements.filter((el) => el.id !== elementId) } : scene
     ),
+  };
+}
+
+/** Met à jour une scène (nom, durée, fond). */
+export function updateScene(
+  project: StudioProject,
+  sceneId: string,
+  patch: Partial<Pick<StudioScene, "name" | "duration" | "background">>
+): StudioProject {
+  return {
+    ...project,
+    updatedAt: new Date().toISOString(),
+    scenes: project.scenes.map((scene) => {
+      if (scene.id !== sceneId) return scene;
+      const next = { ...scene };
+      if (typeof patch.name === "string") next.name = patch.name.slice(0, 80) || scene.name;
+      if (typeof patch.duration === "number") next.duration = roundToFrame(clampNumber(patch.duration, 1, 600));
+      if (patch.background !== undefined) {
+        if (isSafeColor(patch.background)) next.background = patch.background;
+      }
+      return next;
+    }),
+  };
+}
+
+/** Supprime une scène (au moins une scène est conservée). */
+export function removeScene(project: StudioProject, sceneId: string): StudioProject {
+  if (project.scenes.length <= 1) return project;
+  return { ...project, updatedAt: new Date().toISOString(), scenes: project.scenes.filter((s) => s.id !== sceneId) };
+}
+
+/** Déplace un calque dans sa scène : index cible (0 = fond) ou "up"/"down". */
+export function moveElementLayer(
+  project: StudioProject,
+  sceneId: string,
+  elementId: string,
+  target: number | "up" | "down" | "front" | "back"
+): StudioProject {
+  return {
+    ...project,
+    updatedAt: new Date().toISOString(),
+    scenes: project.scenes.map((scene) => {
+      if (scene.id !== sceneId) return scene;
+      const from = scene.elements.findIndex((el) => el.id === elementId);
+      if (from < 0) return scene;
+      const last = scene.elements.length - 1;
+      const to =
+        target === "up" ? Math.min(last, from + 1)
+        : target === "down" ? Math.max(0, from - 1)
+        : target === "front" ? last
+        : target === "back" ? 0
+        : Math.max(0, Math.min(last, Math.round(target)));
+      if (to === from) return scene;
+      const elements = [...scene.elements];
+      const [moved] = elements.splice(from, 1);
+      elements.splice(to, 0, moved);
+      return { ...scene, elements };
+    }),
+  };
+}
+
+/** Change le format (16:9, 9:16, 1:1). */
+export function setProjectFormat(project: StudioProject, format: ProjectFormat): StudioProject {
+  const dims = PROJECT_FORMATS[format];
+  return { ...project, updatedAt: new Date().toISOString(), width: dims.width, height: dims.height };
+}
+
+/** Config d'un nouvel élément aux couleurs/police/logo de la marque du projet. */
+export function brandedConfig(config: AnimationConfig, kind: ElementKind, brand: BrandKit | undefined): AnimationConfig {
+  if (!brand) return config;
+  return {
+    ...config,
+    primaryColor: brand.primaryColor,
+    accentColor: brand.accentColor,
+    backgroundColor: config.backgroundColor === "transparent" ? "transparent" : brand.backgroundColor,
+    ...(brand.fontFamily ? { fontFamily: brand.fontFamily } : {}),
+    ...(kind === "logo" && brand.logoUrl ? { logoUrl: brand.logoUrl } : {}),
+  };
+}
+
+/**
+ * Applique le kit de marque à tout le projet : couleurs/police/logo de chaque
+ * élément ; fonds des scènes. Les éléments à fond transparent le restent.
+ */
+export function applyBrand(project: StudioProject, brand: BrandKit): StudioProject {
+  return {
+    ...project,
+    brand,
+    updatedAt: new Date().toISOString(),
+    scenes: project.scenes.map((scene) => ({
+      ...scene,
+      background: brand.backgroundColor,
+      elements: scene.elements.map((el) => ({
+        ...el,
+        config: {
+          ...el.config,
+          primaryColor: brand.primaryColor,
+          accentColor: brand.accentColor,
+          backgroundColor: el.config.backgroundColor === "transparent" ? "transparent" : brand.backgroundColor,
+          ...(brand.fontFamily ? { fontFamily: brand.fontFamily } : {}),
+          ...(el.kind === "logo" && brand.logoUrl ? { logoUrl: brand.logoUrl } : {}),
+        },
+      })),
+    })),
   };
 }
 

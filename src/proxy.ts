@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 /**
- * Proxy (ex-middleware Next 16), trois rôles :
+ * Proxy (ex-middleware Next 16), trois rôles (mode construction actif sauf si
+ * la variable d'environnement CONSTRUCTION_MODE vaut "off") :
  * 1. Mode construction : toute page publique est redirigée vers /construction ;
  *    /admin, /login, /api, /.well-known, robots.txt et sitemap.xml restent accessibles.
  * 2. Studio réservé aux admins pendant la construction : /studio s'ouvre
@@ -19,9 +20,11 @@ export async function proxy(request: NextRequest) {
     path === "/robots.txt" || path === "/sitemap.xml" ||
     // Découverte OAuth des clients MCP : répondre 404, pas la page HTML de construction.
     path.startsWith("/.well-known/");
-  const adminOnly = path === "/studio" || path.startsWith("/studio/");
+  // Interrupteur : CONSTRUCTION_MODE=off ouvre tout le site (et le Studio) au public.
+  const construction = process.env.CONSTRUCTION_MODE !== "off";
+  const adminOnly = construction && (path === "/studio" || path.startsWith("/studio/"));
 
-  if (!publicAllowed && !adminOnly) return redirectToConstruction(request);
+  if (construction && !publicAllowed && !adminOnly) return redirectToConstruction(request);
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

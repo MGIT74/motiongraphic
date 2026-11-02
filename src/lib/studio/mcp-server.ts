@@ -5,10 +5,26 @@ import { listAllPublishedTemplates } from "@/lib/templates/registry";
 import { listPublishedCustomTemplates } from "@/lib/templates/custom-store";
 import { customElementKind } from "@/lib/templates/custom-model";
 import { registerCustomStudioTemplates } from "./template-registry";
+import { isSafeColor } from "@/lib/animations/config";
+import { BRAND_FONTS, isBrandFont } from "@/lib/brand/fonts";
 import {
+  applyBrand,
+  brandedConfig,
+  ELEMENT_TIMINGS,
+  formatOf,
   makeDefaultProject,
   makeElement,
   makeScene,
+  moveElementLayer,
+  PROJECT_FORMATS,
+  removeElement,
+  removeScene,
+  sanitizeBrand,
+  setProjectFormat,
+  updateScene,
+  type ElementKind,
+  type ElementTiming,
+  type ProjectFormat,
   replaceElementTemplate,
   roundToFrame,
   serializeProject,
@@ -59,6 +75,7 @@ interface ProjectSelectBuilder extends PromiseLike<DbResult> {
 
 interface supabase_project_Update_builder extends PromiseLike<DbResult> {
   eq: (col: string, value: string) => supabase_project_Update_builder;
+  select: (sel: string) => PromiseLike<DbResult>;
 }
 
 interface SupabaseAdminLike {
@@ -141,12 +158,22 @@ async function loadProjectRow(projectId: string, userId: string): Promise<Studio
   if (!row) return null;
   const project = validateProject(row.data ?? null);
   if (!project) throw new McpToolError(`Projet ${projectId} : données non valides (shema/schema version).`);
+  loadedVersions.set(project, row.updated_at);
   return project;
 }
 
-async function persistProject(project: StudioProject, userId: string): Promise<void> {
+/** Version (`updated_at`) de chaque projet chargé : verrou optimiste à l'écriture. */
+const loadedVersions = new WeakMap<StudioProject, string>();
+
+/**
+ * Enregistre `project` uniquement si la version en base est toujours celle de
+ * `base` (le projet chargé au début de l'outil) : une modification faite entre-temps
+ * dans le Studio (ou par un autre appel MCP) n'est jamais écrasée.
+ */
+async function persistProject(project: StudioProject, userId: string, base: StudioProject): Promise<void> {
   const client = await adminClient();
-  const { error } = await client
+  const version = loadedVersions.get(base);
+  let query = client
     .from("studio_projects")
     .update({
       name: project.name,
@@ -158,7 +185,14 @@ async function persistProject(project: StudioProject, userId: string): Promise<v
     })
     .eq("id", project.id)
     .eq("user_id", userId);
+  if (version) query = query.eq("updated_at", version);
+  const { data, error } = await query.select("id");
   if (error) throw new McpToolError(mapDbError(error), error.code === "PGRST205" ? hintMigration() : undefined);
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new McpToolError(
+      "Conflit : le projet a été modifié entre-temps (Studio ouvert ou autre appel). Rien n'a été écrasé — relancez l'opération."
+    );
+  }
 }
 
 /** Lien pour ouvrir le projet dans le Studio (réservé aux admins connectés en mode construction). */
@@ -207,6 +241,60 @@ function needIndex(input: McpInput, project: StudioProject, key = "scene_index")
   return i;
 }
 
+const FONT_IDS = BRAND_FONTS.map((f) => f.id);
+const STYLE_PROPERTIES = {
+  primary_color: { type: "string", description: "Couleur principale (#RRGGBB)." },
+  accent_color: { type: "string", description: "Couleur d'accent (#RRGGBB)." },
+  background_color: { type: "string", description: "Fond de l'élément (#RRGGBB ou 'transparent')." },
+  transparent: { type: "boolean", description: "true = fond transparent : le calque se superpose aux calques inférieurs." },
+  speed: { type: "number", description: "Vitesse de l'animation (0.25 à 3)." },
+  font_family: { type: "string", enum: FONT_IDS, description: "Police de la liste blanche." },
+  timing: {
+    type: "string",
+    enum: ELEMENT_TIMINGS,
+    description: "fit = entrée, maintien, sortie terminée à la fin de l'élément ; hold = figé à la fin sans sortie ; natural = vitesse d'origine (coupée).",
+  },
+} as const;
+
+/** Applique les réglages de style (couleurs, transparence, vitesse, police) à une config. */
+function applyStyle(config: AnimationConfig, input: McpInput): AnimationConfig {
+  const next = { ...config };
+  if (isSafeColor(input.primary_color)) next.primaryColor = input.primary_color as string;
+  if (isSafeColor(input.accent_color)) next.accentColor = input.accent_color as string;
+  if (isSafeColor(input.background_color)) next.backgroundColor = input.background_color as string;
+  if (input.transparent === true) next.backgroundColor = "transparent";
+  if (input.transparent === false && next.backgroundColor === "transparent") next.backgroundColor = "#000000";
+  const speed = optNumber(input, "speed");
+  if (speed !== undefined) next.speed = Math.max(0.25, Math.min(3, speed));
+  if (isBrandFont(input.font_family)) next.fontFamily = input.font_family as string;
+  return next;
+}
+
+function optTiming(input: McpInput): ElementTiming | undefined {
+  return ELEMENT_TIMINGS.includes(input.timing as ElementTiming) ? (input.timing as ElementTiming) : undefined;
+}
+
+/** Scène ciblée par scene_id OU scene_index. */
+function needScene(input: McpInput, project: StudioProject): number {
+  if (typeof input.scene_id === "string") {
+    const i = project.scenes.findIndex((s) => s.id === input.scene_id);
+    if (i < 0) throw new McpToolError(`Scène introuvable : ${input.scene_id}`);
+    return i;
+  }
+  return needIndex(input, project);
+}
+
+/** Charge le projet (ou lève une erreur explicite). */
+async function needProject(input: McpInput): Promise<{ project: StudioProject; projectId: string; userId: string }> {
+  const conf = mcpConfigCheck();
+  if (!conf.ok) throw new McpToolError(conf.reason);
+  const userId = process.env.MCP_USER_ID as string;
+  const projectId = needString(input, "project_id", "project_id");
+  const project = await loadProjectRow(projectId, userId);
+  if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
+  return { project, projectId, userId };
+}
+
 export const MCP_PROJECT_TOOLS = [
   {
     name: "list_templates",
@@ -247,14 +335,23 @@ export const MCP_PROJECT_TOOLS = [
   },
   {
     name: "create_project",
-    description: "Crée un projet Studio (squelette type marketing SaaS) et renvoie son id + le lien studio_url pour l'ouvrir.",
-    inputSchema: { type: "object", properties: { name: { type: "string" } } },
+    description: "Crée un projet Studio (squelette type marketing SaaS : 2 scènes) et renvoie son id + le lien studio_url pour l'ouvrir.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        format: { type: "string", enum: Object.keys(PROJECT_FORMATS), description: "16:9 (défaut), 9:16 (vertical) ou 1:1." },
+      },
+    },
     run: async (input: McpInput) => {
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
       const userId = process.env.MCP_USER_ID as string;
       const name = typeof input.name === "string" ? input.name.trim().slice(0, 120) : undefined;
-      const project = makeDefaultProject(name || "Projet MCP");
+      const format = (Object.keys(PROJECT_FORMATS) as ProjectFormat[]).includes(input.format as ProjectFormat)
+        ? (input.format as ProjectFormat)
+        : "16:9";
+      const project = makeDefaultProject(name || "Projet MCP", { format });
       const client = await adminClient();
       const { error } = await client.from("studio_projects").insert({
         id: project.id,
@@ -292,13 +389,13 @@ export const MCP_PROJECT_TOOLS = [
       const name = typeof input.name === "string" ? input.name.trim().slice(0, 80) || "Scène" : `Scène ${project.scenes.length + 1}`;
       const duration = roundToFrame(Math.max(1, Math.min(600, optNumber(input, "duration") ?? 5)));
       const next = { ...project, scenes: [...project.scenes, makeScene(name, duration)] };
-      await persistProject(requireValid(next), userId);
+      await persistProject(requireValid(next), userId, project);
       return JSON.stringify({ project_id: projectId, scene_count: next.scenes.length, scenes: next.scenes.map((s) => ({ id: s.id, name: s.name })) });
     },
   },
   {
     name: "add_element",
-    description: "Ajoute un élément d'animation (template publié) à une scène du projet.",
+    description: "Ajoute un élément d'animation (template publié) à une scène, au premier plan. Par défaut timing = fit. Utilisez transparent=true pour superposer le calque à ceux du dessous.",
     inputSchema: {
       type: "object",
       required: ["project_id", "template_key"],
@@ -309,12 +406,10 @@ export const MCP_PROJECT_TOOLS = [
         start: { type: "number" },
         duration: { type: "number" },
         text: { type: "string" },
-        primary_color: { type: "string" },
-        accent_color: { type: "string" },
-        background_color: { type: "string" },
         x: { type: "number" },
         y: { type: "number" },
         scale: { type: "number" },
+        ...STYLE_PROPERTIES,
       },
     },
     run: async (input: McpInput) => {
@@ -334,11 +429,12 @@ export const MCP_PROJECT_TOOLS = [
         ...template.meta.defaultConfig,
         text: typeof input.text === "string" ? input.text.slice(0, 120) : template.meta.defaultConfig.text,
       };
-      if (typeof input.primary_color === "string") config.primaryColor = input.primary_color;
-      if (typeof input.accent_color === "string") config.accentColor = input.accent_color;
-      if (typeof input.background_color === "string") config.backgroundColor = input.background_color;
+      // Couleurs, transparence, vitesse, police : appliquées par applyStyle (valeurs validées).
 
-      const element = makeElement(template.templateId, template.meta.elementKind as never, config, {
+      // Marque du projet d'abord (couleurs, police, logo), puis les réglages explicites de l'appel.
+      const kind = template.meta.elementKind as ElementKind;
+      const element = makeElement(template.templateId, kind as never, applyStyle(brandedConfig(config, kind, project.brand), input), {
+        timing: optTiming(input) ?? "fit",
         start: optNumber(input, "start") ?? currentSceneEnd(project, sceneIdx),
         duration: optNumber(input, "duration") ?? template.meta.timelineDuration,
         x: optNumber(input, "x"),
@@ -353,13 +449,13 @@ export const MCP_PROJECT_TOOLS = [
           i === sceneIdx ? { ...scene, elements: [...scene.elements, element] } : scene
         ),
       };
-      await persistProject(requireValid(next), userId);
+      await persistProject(requireValid(next), userId, project);
       return JSON.stringify({ ok: true, element_id: element.id, scene_index: sceneIdx, total_elements: next.scenes[sceneIdx].elements.length, studio_url: studioUrl(projectId) });
     },
   },
   {
     name: "update_element",
-    description: "Met à jour un élément de timeline (durée, position, échelle, libellé, config).",
+    description: "Met à jour un élément : durée, début, position, échelle, libellé, texte, couleurs, transparence, vitesse, police, timing et ordre du calque.",
     inputSchema: {
       type: "object",
       required: ["project_id", "element_id"],
@@ -374,6 +470,11 @@ export const MCP_PROJECT_TOOLS = [
         y: { type: "number" },
         scale: { type: "number" },
         text: { type: "string" },
+        ...STYLE_PROPERTIES,
+        layer: {
+          description: "Ordre du calque : 'up', 'down', 'front', 'back' ou index (0 = fond).",
+          oneOf: [{ type: "string", enum: ["up", "down", "front", "back"] }, { type: "number" }],
+        },
       },
     },
     run: async (input: McpInput) => {
@@ -395,11 +496,19 @@ export const MCP_PROJECT_TOOLS = [
         if (optNumber(input, "scale") !== undefined) patched.scale = Math.max(0.2, Math.min(3, optNumber(input, "scale") as number));
         if (typeof input.label === "string") patched.label = input.label.slice(0, 60);
         if (typeof input.text === "string") patched.config = { ...patched.config, text: input.text.slice(0, 120) };
+        patched.config = applyStyle(patched.config, input);
+        const timing = optTiming(input);
+        if (timing) patched.timing = timing;
         return patched;
       });
-      const valid = requireValid(next);
+      const layer = input.layer;
+      const layered =
+        layer === "up" || layer === "down" || layer === "front" || layer === "back" || typeof layer === "number"
+          ? moveElementLayer(next, located.scene.id, elementId, layer as number | "up" | "down" | "front" | "back")
+          : next;
+      const valid = requireValid(layered);
       validateLocated(valid, projectId, located);
-      await persistProject(valid, userId);
+      await persistProject(valid, userId, project);
       return JSON.stringify({ ok: true });
     },
   },
@@ -430,7 +539,7 @@ export const MCP_PROJECT_TOOLS = [
       if (!next) {
         throw new McpToolError(`Remplacement refusé : ${newKey} est absent du registre ou incompatible avec le type « ${located.element.kind} ».`);
       }
-      await persistProject(requireValid(next), userId);
+      await persistProject(requireValid(next), userId, project);
       return JSON.stringify({ ok: true, template_key: newKey });
     },
   },
@@ -460,7 +569,7 @@ export const MCP_PROJECT_TOOLS = [
       const reordered = (ids as string[]).map((id) => byId.get(id)).filter(Boolean) as StudioProject["scenes"];
       if (reordered.length !== project.scenes.length) throw new McpToolError("ids de scènes inconnus.");
       const next = { ...project, scenes: reordered };
-      await persistProject(requireValid(next), userId);
+      await persistProject(requireValid(next), userId, project);
       return JSON.stringify({ ok: true, order: reordered.map((scene) => scene.id) });
     },
   },
@@ -479,7 +588,10 @@ export const MCP_PROJECT_TOOLS = [
       const projectId = needString(input, "project_id", "project_id");
       const project = await loadProjectRow(projectId, userId);
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
-      return serializeProject(project);
+      // Les logos (data URL de plusieurs centaines de Ko) sont abrégés dans la réponse.
+      return JSON.stringify(project, (key, value) =>
+        key === "logoUrl" && typeof value === "string" ? `(logo ${Math.round(value.length / 1024)} Ko)` : value
+      );
     },
   },
   {
@@ -498,8 +610,126 @@ export const MCP_PROJECT_TOOLS = [
       const project = await loadProjectRow(projectId, userId);
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId}.`);
       const next = typeof input.name === "string" ? { ...project, name: input.name.trim().slice(0, 120) || project.name } : project;
-      await persistProject(requireValid(next), userId);
+      await persistProject(requireValid(next), userId, project);
       return JSON.stringify({ ok: true, project_id: projectId, name: next.name, updated_at: new Date().toISOString(), studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "update_scene",
+    description: "Modifie une scène (scene_id ou scene_index) : nom, durée (s), couleur de fond sous les calques.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id"],
+      properties: {
+        project_id: { type: "string" },
+        scene_id: { type: "string" },
+        scene_index: { type: "number" },
+        name: { type: "string" },
+        duration: { type: "number" },
+        background: { type: "string", description: "#RRGGBB" },
+      },
+    },
+    run: async (input: McpInput) => {
+      const { project, projectId, userId } = await needProject(input);
+      const idx = needScene(input, project);
+      const next = updateScene(project, project.scenes[idx].id, {
+        name: typeof input.name === "string" ? input.name : undefined,
+        duration: optNumber(input, "duration"),
+        background: typeof input.background === "string" ? input.background : undefined,
+      });
+      await persistProject(requireValid(next), userId, project);
+      const scene = next.scenes[idx];
+      return JSON.stringify({ ok: true, scene: { id: scene.id, name: scene.name, duration: scene.duration, background: scene.background ?? "#000000" }, studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "delete_scene",
+    description: "Supprime une scène (scene_id ou scene_index). Le projet garde au moins une scène.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id"],
+      properties: { project_id: { type: "string" }, scene_id: { type: "string" }, scene_index: { type: "number" } },
+    },
+    run: async (input: McpInput) => {
+      const { project, projectId, userId } = await needProject(input);
+      if (project.scenes.length <= 1) throw new McpToolError("Impossible : le projet doit garder au moins une scène.");
+      const idx = needScene(input, project);
+      const next = removeScene(project, project.scenes[idx].id);
+      await persistProject(requireValid(next), userId, project);
+      return JSON.stringify({ ok: true, scene_count: next.scenes.length, studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "delete_element",
+    description: "Supprime un élément (calque) du projet.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id", "element_id"],
+      properties: { project_id: { type: "string" }, element_id: { type: "string" } },
+    },
+    run: async (input: McpInput) => {
+      const { project, projectId, userId } = await needProject(input);
+      const elementId = needString(input, "element_id", "element_id");
+      const located = findLocated(project, elementId);
+      const next = removeElement(project, located.scene.id, elementId);
+      await persistProject(requireValid(next), userId, project);
+      return JSON.stringify({ ok: true, studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "set_format",
+    description: "Change le format de la vidéo : 16:9 (paysage), 9:16 (vertical Reels/TikTok/Shorts) ou 1:1 (carré).",
+    inputSchema: {
+      type: "object",
+      required: ["project_id", "format"],
+      properties: { project_id: { type: "string" }, format: { type: "string", enum: Object.keys(PROJECT_FORMATS) } },
+    },
+    run: async (input: McpInput) => {
+      const { project, projectId, userId } = await needProject(input);
+      const format = input.format as ProjectFormat;
+      if (!(format in PROJECT_FORMATS)) throw new McpToolError("format invalide : 16:9, 9:16 ou 1:1.");
+      const next = setProjectFormat(project, format);
+      await persistProject(requireValid(next), userId, project);
+      return JSON.stringify({ ok: true, format: formatOf(next), width: next.width, height: next.height, studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "set_brand",
+    description:
+      "Définit le kit de marque du projet (nom, couleurs, police, logo). apply=true l'applique aussi à toutes les scènes (fond) et à tous les éléments (couleurs, police, logo des Logo Reveal ; les calques transparents le restent).",
+    inputSchema: {
+      type: "object",
+      required: ["project_id"],
+      properties: {
+        project_id: { type: "string" },
+        name: { type: "string" },
+        primary_color: { type: "string" },
+        accent_color: { type: "string" },
+        background_color: { type: "string" },
+        font_family: { type: "string", enum: FONT_IDS },
+        logo_url: { type: "string", description: "data:image/(png|jpeg|webp|svg+xml);base64,… (≤ 300 Ko)" },
+        apply: { type: "boolean" },
+      },
+    },
+    run: async (input: McpInput) => {
+      const { project, projectId, userId } = await needProject(input);
+      const current = project.brand ?? { primaryColor: "#F5F5F7", accentColor: "#0A84FF", backgroundColor: "#000000" };
+      const brand = sanitizeBrand({
+        ...current,
+        ...(typeof input.name === "string" ? { name: input.name } : {}),
+        ...(input.primary_color !== undefined ? { primaryColor: input.primary_color } : {}),
+        ...(input.accent_color !== undefined ? { accentColor: input.accent_color } : {}),
+        ...(input.background_color !== undefined ? { backgroundColor: input.background_color } : {}),
+        ...(input.font_family !== undefined ? { fontFamily: input.font_family } : {}),
+        ...(input.logo_url !== undefined ? { logoUrl: input.logo_url } : {}),
+      });
+      if (!brand) throw new McpToolError("Kit de marque invalide.");
+      if (typeof input.logo_url === "string" && !brand.logoUrl) {
+        throw new McpToolError("logo_url refusé : data URL image (png, jpeg, webp, svg) en base64, 300 Ko maximum.");
+      }
+      const next = input.apply === true ? applyBrand(project, brand) : { ...project, brand };
+      await persistProject(requireValid(next), userId, project);
+      return JSON.stringify({ ok: true, brand: { ...brand, logoUrl: brand.logoUrl ? "(défini)" : undefined }, applied: input.apply === true, studio_url: studioUrl(projectId) });
     },
   },
   {

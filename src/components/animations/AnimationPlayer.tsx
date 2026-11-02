@@ -54,7 +54,10 @@ export default function AnimationPlayer({
   const Animation = ANIMATION_COMPONENTS[componentKey];
 
   return (
-    <div className={`relative overflow-hidden ${className}`}>
+    // `relative` seulement si l'appelant ne positionne pas déjà le cadre : avec
+    // `absolute inset-0`, Tailwind 4 donnait la priorité à `relative` et le
+    // cadre retombait à 0 px de haut (galerie et fiches sans animation visible).
+    <div className={`${/\b(absolute|fixed|sticky)\b/.test(className) ? "" : "relative "}overflow-hidden ${className}`}>
       {Animation && active ? (
         <Animation config={config} />
       ) : (

@@ -80,3 +80,16 @@ la fiche publique — appliqués localement (React ou postMessage sandbox).
 - Pas d'import de médias (Phase 3) : pistes Rushs/Audio affichées en attente.
 - Sauvegarde locale (localStorage) : Supabase en Phase 3 (0003 prête, non exécutée).
 - Aucun export MP4 (Phase 5) — architecture rendu séparée prévue (Remotion/FFmpeg).
+## Studio V2 (novembre 2026)
+
+| Fonction | Où |
+| --- | --- |
+| Calques : fond de scène (`scene.background`) + éléments superposés (ordre = calques, le dernier au premier plan), fond d'élément `transparent` | `project-model.ts`, `StageLayers.tsx`, panneau droit |
+| Timing adaptatif : `timing` = `fit` (entrée → maintien → sortie à la fin), `hold` (figé), `natural` (historique). Repère GSAP `out` dans chaque builder | `lib/studio/timing.ts`, `lib/animations/builders.ts` |
+| Formats 16:9 / 9:16 / 1:1 (`PROJECT_FORMATS`), tailles des templates en unités de conteneur (`cqmin`) | `project-model.ts`, frames `src/components/animations` |
+| Kit de marque (`project.brand` : nom, couleurs, police de la liste blanche, logo data URL ≤ 300 Ko) appliqué via `applyBrand` ; les nouveaux éléments héritent de la marque | `lib/brand/fonts.ts`, onglet « Marque » |
+| Synchronisation : verrou optimiste sur `updated_at` (Studio et MCP), rechargement en direct toutes les 4 s, alerte « Modifié ailleurs » | `projects-supabase.ts`, `StudioApp.tsx`, `mcp-server.ts` |
+| Interrupteur `CONSTRUCTION_MODE=off` (site ouvert) ; sinon `/studio` réservé aux admins connectés | `src/proxy.ts` |
+| CI GitHub Actions : lint, types, build, tests navigateur (`npm run test:e2e`, mode démo) | `.github/workflows/ci.yml`, `tests/e2e` |
+
+Outils MCP ajoutés : `update_scene`, `delete_scene`, `delete_element`, `set_format`, `set_brand` ; `add_element` / `update_element` acceptent couleurs, `transparent`, `speed`, `font_family`, `timing`, `layer`.

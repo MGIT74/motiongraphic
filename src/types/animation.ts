@@ -20,6 +20,10 @@ export interface AnimationConfig {
   duration: number;
   /** Multiplicateur de vitesse (0.25 - 3) */
   speed: number;
+  /** Police (identifiant de la liste blanche BRAND_FONTS) — optionnel. */
+  fontFamily?: string;
+  /** Logo importé (data URL image, ≤ 400 Ko) — utilisé par Logo Reveal. */
+  logoUrl?: string;
 }
 
 export interface AnimationComponentProps {

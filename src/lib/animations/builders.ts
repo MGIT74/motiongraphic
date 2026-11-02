@@ -55,6 +55,8 @@ export function buildKineticType(
   if (dot) {
     tl.from(dot, { scale: 0, opacity: 0, duration: 0.5, ease: "back.out(3)" }, "-=0.25");
   }
+  // Début de la sortie : sert au timing « fit / hold » du Studio.
+  tl.addLabel("out");
   tl.to(letters, {
     opacity: 0,
     yPercent: -40,
@@ -97,13 +99,14 @@ export function buildTextReveal(
       "-=0.35"
     );
   }
+  // Début de la sortie : sert au timing « fit / hold » du Studio.
+  tl.addLabel("out", `+=${Math.max(0.6, duration * 0.3)}`);
   tl.to(lines, {
     yPercent: -115,
     duration: 0.55,
     ease: "power2.in",
     stagger: 0.06,
-    delay: Math.max(0.6, duration * 0.3),
-  });
+  }, "out");
   return tl;
 }
 
@@ -132,6 +135,8 @@ export function buildElasticText(
     ease: "elastic.out(1, 0.42)",
     stagger: 0.06,
   });
+  // Début de la sortie : sert au timing « fit / hold » du Studio.
+  tl.addLabel("out", `+=${Math.max(0.5, duration * 0.35)}`);
   tl.to(letters, {
     opacity: 0,
     scale: 0,
@@ -139,8 +144,7 @@ export function buildElasticText(
     duration: 0.5,
     ease: "power2.in",
     stagger: { each: 0.05, from: "end" },
-    delay: Math.max(0.5, duration * 0.35),
-  });
+  }, "out");
   return tl;
 }
 
@@ -215,14 +219,15 @@ export function buildStaggeredCards(
     ease: "power2.out",
     stagger: 0.08,
   });
+  // Début de la sortie : sert au timing « fit / hold » du Studio.
+  tl.addLabel("out", `+=${Math.max(0.7, duration * 0.34)}`);
   tl.to(cards, {
     y: -36,
     opacity: 0,
     duration: 0.45,
     ease: "power2.in",
     stagger: { each: 0.09, from: "end" },
-    delay: Math.max(0.7, duration * 0.34),
-  });
+  }, "out");
   return tl;
 }
 
@@ -239,7 +244,7 @@ export function buildLogoReveal(
   const loop = opts.loop ?? true;
 
   const ring = root.querySelector<SVGCircleElement>("[data-ring]");
-  const core = root.querySelector<SVGPolygonElement>("[data-core]");
+  const core = root.querySelector<SVGGraphicsElement>("[data-core]");
   const pulse = root.querySelector<SVGCircleElement>("[data-pulse]");
   const name = root.querySelector<HTMLElement>("[data-wordmark]");
   if (!ring && !core) return;
@@ -270,14 +275,15 @@ export function buildLogoReveal(
     tl.from(name, { opacity: 0, y: 8, letterSpacing: "0.6em", duration: 0.6, ease: "power3.out" }, "-=0.35");
   }
   const hold = Math.max(0.6, duration * 0.34);
+  // Début de la sortie : sert au timing « fit / hold » du Studio.
+  tl.addLabel("out", `+=${hold}`);
   tl.to([core, ring, name].filter(Boolean), {
     opacity: 0,
     scale: 0.94,
     transformOrigin: "center center",
     duration: 0.45,
     ease: "power2.in",
-    delay: hold,
-  });
+  }, "out");
   return tl;
 }
 
