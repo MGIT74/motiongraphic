@@ -14,7 +14,9 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const allowed = path === "/construction" || path.startsWith("/admin") ||
     path.startsWith("/api/") || path === "/api" ||
-    path === "/robots.txt" || path === "/sitemap.xml";
+    path === "/robots.txt" || path === "/sitemap.xml" ||
+    // Découverte OAuth des clients MCP : répondre 404, pas la page HTML de construction.
+    path.startsWith("/.well-known/");
   if (!allowed) {
     const destination = request.nextUrl.clone();
     destination.pathname = "/construction";

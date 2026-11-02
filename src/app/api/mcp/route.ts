@@ -5,7 +5,7 @@ import { MCP_PROJECT_TOOLS, McpToolError } from "@/lib/studio/mcp-server";
  * Serveur MCP distant — transport "Streamable HTTP" (JSON-RPC 2.0) :
  *
  *   POST /api/mcp
- *     Authorization: Bearer <MCP_ACCESS_TOKEN>
+ *     Authorization: Bearer <MCP_ACCESS_TOKEN>   (ou x-auth-token / x-api-key: <MCP_ACCESS_TOKEN>)
  *     { "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { ... } }
  *
  * Méthodes gérées : initialize, notifications/initialized, ping, tools/list,
@@ -17,7 +17,7 @@ import { MCP_PROJECT_TOOLS, McpToolError } from "@/lib/studio/mcp-server";
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Auth-Token, X-Api-Key, Mcp-Session-Id, MCP-Protocol-Version",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -60,12 +60,14 @@ export async function POST(request: NextRequest) {
   if (!token) {
     return errorResponse(null, INTERNAL_ERROR, "Serveur MCP non configuré : définissez MCP_ACCESS_TOKEN (serveur).");
   }
-  const header = request.headers.get("authorization") ?? "";
-  const provided = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  // Token accepté dans `Authorization: Bearer <token>` OU dans `x-auth-token` /
+  // `x-api-key` : certains clients MCP (connecteurs claude.ai à en-têtes fixes)
+  // réservent `Authorization` à OAuth et n'envoient le token que dans un en-tête dédié.
+  const provided = extractToken(request);
   const constantTimeEqual = safeEqual(provided, token);
   if (!provided || !constantTimeEqual) {
     return new NextResponse(
-      JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "Non autorisé (Bearer MCP_ACCESS_TOKEN requis)." } }),
+      JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "Non autorisé : MCP_ACCESS_TOKEN requis (Authorization: Bearer, x-auth-token ou x-api-key)." } }),
       { status: 401, headers: { ...CORS, "Content-Type": "application/json" } }
     );
   }
@@ -163,6 +165,20 @@ export async function POST(request: NextRequest) {
   } catch {
     return errorResponse(id, INTERNAL_ERROR, "Erreur interne du serveur MCP.");
   }
+}
+
+/** Lit le token MCP depuis les en-têtes acceptés (le premier non vide l'emporte). */
+function extractToken(request: NextRequest): string {
+  const authorization = request.headers.get("authorization")?.trim() ?? "";
+  if (/^bearer\s+/i.test(authorization)) {
+    const bearer = authorization.replace(/^bearer\s+/i, "").trim();
+    if (bearer) return bearer;
+  }
+  for (const name of ["x-auth-token", "x-api-key"]) {
+    const value = request.headers.get(name)?.trim() ?? "";
+    if (value) return value.replace(/^bearer\s+/i, "").trim();
+  }
+  return "";
 }
 
 /** Comparaison de tokens en temps constant (timing-attack safe). */
