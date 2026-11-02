@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, MousePointerClick as MousePointerClickIcon, Palette, Trash2, Type } from "lucide-react";
-import type { StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
+import { ArrowDownToLine, ArrowUpToLine, Check, ChevronDown, ChevronUp, Layers, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
+import { BRAND_FONTS } from "@/lib/brand/fonts";
+import type { ElementTiming, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
 import { getStudioTemplate, templatesForKind } from "@/lib/studio/template-registry";
 import LoopingDemoFrame from "@/components/studio/LoopingDemoFrame";
 import type { ComponentKey } from "@/types/animation";
@@ -23,6 +24,7 @@ export default function StudioRightPanel({
   onChangeTemplate,
   onPatchElement,
   onDeleteElement,
+  onMoveLayer,
 }: {
   project: StudioProject;
   selection: StudioSelection | null;
@@ -30,6 +32,7 @@ export default function StudioRightPanel({
   onChangeTemplate: (elementId: string, newTemplateKey: string) => void;
   onPatchElement: (elementId: string, patch: Partial<StudioElement>) => void;
   onDeleteElement: (elementId: string) => void;
+  onMoveLayer?: (elementId: string, target: "up" | "down" | "front" | "back") => void;
 }) {
   return (
     <aside className="hidden w-72 shrink-0 flex-col overflow-y-auto border-l border-line bg-surface/40 lg:flex xl:w-80">
@@ -45,7 +48,7 @@ export default function StudioRightPanel({
         </div>
       ) : (
         <>
-          <ElementProperties selection={selection} onPatchElement={onPatchElement} onDeleteElement={onDeleteElement} />
+          <ElementProperties selection={selection} onPatchElement={onPatchElement} onDeleteElement={onDeleteElement} onMoveLayer={onMoveLayer} />
           <CompatibleStyles
             element={selection.element}
             project={project}
@@ -65,10 +68,12 @@ function ElementProperties({
   selection,
   onPatchElement,
   onDeleteElement,
+  onMoveLayer,
 }: {
   selection: StudioSelection;
   onPatchElement: (elementId: string, patch: Partial<StudioElement>) => void;
   onDeleteElement: (elementId: string) => void;
+  onMoveLayer?: (elementId: string, target: "up" | "down" | "front" | "back") => void;
 }) {
   const { element, scene } = selection;
   const template = getStudioTemplate(element.templateKey);
@@ -214,6 +219,7 @@ function ElementProperties({
                 <span className="relative flex h-9 items-center overflow-hidden rounded-lg border border-line">
                   <input
                     type="color"
+                    disabled={key === "backgroundColor" && config.backgroundColor === "transparent"}
                     value={toValidHex(config[key])}
                     onChange={(e) => onPatchElement(element.id, { config: { ...config, [key]: e.target.value } })}
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-90"
@@ -224,6 +230,82 @@ function ElementProperties({
             ))}
           </div>
         </div>
+
+        <div className="col-span-2">
+          <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-line bg-background px-2.5 py-2">
+            <span className="text-[11px] font-medium text-ink">Fond transparent (calque superposable)</span>
+            <input
+              type="checkbox"
+              checked={config.backgroundColor === "transparent"}
+              onChange={(e) =>
+                onPatchElement(element.id, {
+                  config: { ...config, backgroundColor: e.target.checked ? "transparent" : "#000000" },
+                })
+              }
+              className="h-4 w-4 cursor-pointer accent-[#0A84FF]"
+              aria-label="Fond transparent"
+            />
+          </label>
+        </div>
+
+        <div className="col-span-2">
+          <label htmlFor="pr-timing" className={labelCls}>
+            <Timer className="mr-1 inline-block h-3 w-3" aria-hidden="true" /> Adaptation à la durée
+          </label>
+          <select
+            id="pr-timing"
+            value={element.timing ?? "natural"}
+            onChange={(e) => onPatchElement(element.id, { timing: e.target.value as ElementTiming })}
+            className={inputCls}
+          >
+            <option value="fit">Ajustée : entrée, maintien, sortie à la fin</option>
+            <option value="hold">Figée à la fin (sans sortie)</option>
+            <option value="natural">Naturelle (vitesse d’origine)</option>
+          </select>
+        </div>
+
+        <div className="col-span-2">
+          <label htmlFor="pr-font" className={labelCls}>Police</label>
+          <select
+            id="pr-font"
+            value={config.fontFamily ?? "system"}
+            onChange={(e) => onPatchElement(element.id, { config: { ...config, fontFamily: e.target.value } })}
+            className={inputCls}
+          >
+            {BRAND_FONTS.map((font) => (
+              <option key={font.id} value={font.id}>{font.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {onMoveLayer ? (
+          <div className="col-span-2">
+            <p className={labelCls}>
+              <Layers className="mr-1 inline-block h-3 w-3" aria-hidden="true" /> Calque {scene.elements.findIndex((el) => el.id === element.id) + 1}/{scene.elements.length}
+            </p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {(
+                [
+                  ["back", "Tout au fond", ArrowDownToLine],
+                  ["down", "Descendre", ChevronDown],
+                  ["up", "Monter", ChevronUp],
+                  ["front", "Premier plan", ArrowUpToLine],
+                ] as const
+              ).map(([target, label, Icon]) => (
+                <button
+                  key={target}
+                  type="button"
+                  onClick={() => onMoveLayer(element.id, target)}
+                  className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-line text-muted transition-colors hover:border-accent/50 hover:text-ink"
+                  aria-label={label}
+                  title={label}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

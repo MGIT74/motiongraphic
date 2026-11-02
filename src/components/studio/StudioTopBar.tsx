@@ -1,8 +1,9 @@
 "use client";
 
+import type React from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, Loader2, Play, Plus, Redo2, Undo2 } from "lucide-react";
-import { STUDIO_FPS } from "@/lib/studio/project-model";
+import { PROJECT_FORMATS, STUDIO_FPS, type ProjectFormat } from "@/lib/studio/project-model";
 
 function formatTimecode(time: number, fps = STUDIO_FPS): string {
   const totalFrames = Math.floor(time * fps);
@@ -30,6 +31,11 @@ export default function StudioTopBar({
   saveState,
   cloudState,
   fps,
+  format,
+  onChangeFormat,
+  onReloadRemote,
+  onKeepLocal,
+  exportSlot,
 }: {
   projectName: string;
   onRename: (name: string) => void;
@@ -43,8 +49,14 @@ export default function StudioTopBar({
   time: number;
   duration: number;
   saveState: StudioSaveState;
-  cloudState?: "local" | "synced" | "error" | null;
+  cloudState?: "local" | "synced" | "error" | "conflict" | null;
   fps: number;
+  format?: ProjectFormat;
+  onChangeFormat?: (format: ProjectFormat) => void;
+  onReloadRemote?: () => void;
+  onKeepLocal?: () => void;
+  /** Bouton d'export vidéo (rendu MP4), fourni par l'orchestrateur. */
+  exportSlot?: React.ReactNode;
 }) {
   return (
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-surface/60 px-4">
@@ -66,6 +78,18 @@ export default function StudioTopBar({
         <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
           Studio · Bêta
         </span>
+        {format && onChangeFormat ? (
+          <select
+            value={format}
+            onChange={(e) => onChangeFormat(e.target.value as ProjectFormat)}
+            className="h-8 cursor-pointer rounded-lg border border-line bg-background px-2 text-xs text-ink focus:border-accent/60 focus:outline-none"
+            aria-label="Format de la vidéo"
+          >
+            {(Object.keys(PROJECT_FORMATS) as ProjectFormat[]).map((key) => (
+              <option key={key} value={key}>{PROJECT_FORMATS[key].label}</option>
+            ))}
+          </select>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2">
@@ -125,12 +149,25 @@ export default function StudioTopBar({
             <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-emerald-300" title="Projets synchronisés Supabase (RLS)">
               Cloud ✓
             </span>
+          ) : cloudState === "conflict" ? (
+            <span className="ml-1 inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300" role="alert">
+              Modifié ailleurs
+              <button type="button" onClick={onReloadRemote} className="cursor-pointer underline underline-offset-2 hover:text-amber-100">
+                Recharger
+              </button>
+              ·
+              <button type="button" onClick={onKeepLocal} className="cursor-pointer underline underline-offset-2 hover:text-amber-100">
+                Garder la mienne
+              </button>
+            </span>
           ) : cloudState === "error" ? (
             <span className="ml-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300" title="Échec de synchronisation Supabase">
               Cloud ✕
             </span>
           ) : null}
         </span>
+
+        {exportSlot}
 
         <button
           type="button"

@@ -7,6 +7,9 @@ import type { AnimationComponentProps } from "@/types/animation";
 import { ANIMATION_BUILDERS, type AnimationBuilder } from "@/lib/animations/builders";
 import { baseEngineKeyOf } from "@/lib/studio/project-model";
 import { isStudioTemplateKey } from "@/lib/studio/template-registry";
+import { timelineTimeFor } from "@/lib/studio/timing";
+import type { ElementTiming } from "@/lib/studio/project-model";
+import { fontCss } from "@/lib/brand/fonts";
 import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
 import { TextReveal01Frame } from "@/components/animations/TextReveal01";
 import { ElasticText01Frame } from "@/components/animations/ElasticText01";
@@ -38,14 +41,25 @@ export default function ControlledAnimation({
   templateKey,
   config,
   localTime,
+  elementDuration,
+  timing,
 }: {
   templateKey: ComponentKey;
   config: AnimationConfig;
   /** Temps local (depuis le début de l'élément), en secondes. */
   localTime: number;
+  /** Durée de l'élément dans la timeline (requis pour le timing « fit »). */
+  elementDuration?: number;
+  timing?: ElementTiming;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
+  // Dernières valeurs de lecture : une timeline reconstruite (texte, police…)
+  // se repositionne immédiatement au bon instant au lieu de rester à 0.
+  const playbackRef = useRef({ localTime, elementDuration, timing, speed: config.speed });
+  useEffect(() => {
+    playbackRef.current = { localTime, elementDuration, timing, speed: config.speed };
+  });
 
   // Clé de moteurs : template intégré OU template custom (via composant de base).
   const engineKey = isStudioTemplateKey(templateKey) ? baseEngineKeyOf(templateKey) : templateKey;
@@ -58,10 +72,17 @@ export default function ControlledAnimation({
     const ctx = gsap.context(() => {
       const built = builder(root, config) ?? undefined;
       if (built) {
-        built
-          .repeat(0)
-          .repeatDelay(0)
-          .pause(0);
+        built.repeat(0).repeatDelay(0);
+        const p = playbackRef.current;
+        built.pause(
+          timelineTimeFor(p.localTime, {
+            total: built.duration(),
+            outAt: built.labels.out,
+            elementDuration: p.elementDuration ?? built.duration(),
+            timing: p.timing,
+            speed: p.speed,
+          })
+        );
         timelineRef.current = built;
       }
     }, root);
@@ -70,15 +91,22 @@ export default function ControlledAnimation({
       ctx.revert();
       timelineRef.current = null;
     };
+    // Reconstruit aussi quand la police ou le logo changent (le DOM mesuré change).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [builder, templateKey, config.text, config.primaryColor, config.accentColor, config.backgroundColor, config.duration]);
+  }, [builder, templateKey, config.text, config.primaryColor, config.accentColor, config.backgroundColor, config.duration, config.fontFamily, config.logoUrl]);
 
   useEffect(() => {
     const tl = timelineRef.current;
     if (!tl) return;
-    const target = Math.max(0, Math.min(tl.duration(), localTime * (config.speed > 0 ? config.speed : 1)));
+    const target = timelineTimeFor(localTime, {
+      total: tl.duration(),
+      outAt: tl.labels.out,
+      elementDuration: elementDuration ?? tl.duration(),
+      timing,
+      speed: config.speed,
+    });
     tl.pause(target);
-  }, [localTime, config.speed]);
+  }, [localTime, config.speed, elementDuration, timing]);
 
   const Frame = STUDIO_FRAMES[engineKey as ComponentKey] ?? STUDIO_FRAMES[templateKey];
 
@@ -97,7 +125,8 @@ export default function ControlledAnimation({
     <div
       ref={rootRef}
       className="absolute inset-0 h-full w-full overflow-hidden"
-      style={{ backgroundColor: config.backgroundColor }}
+      style={{ backgroundColor: config.backgroundColor, fontFamily: fontCss(config.fontFamily) }}
+      data-mgsi-element
     >
       <Frame config={config} />
     </div>

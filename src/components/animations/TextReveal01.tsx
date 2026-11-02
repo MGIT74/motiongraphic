@@ -17,7 +17,7 @@ export function TextReveal01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%" }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size" }}
     >
       <div className="relative flex flex-col items-start justify-center text-center sm:items-center">
         {lines.map((line, i) => (
@@ -27,7 +27,7 @@ export function TextReveal01Frame({ config }: AnimationComponentProps) {
               className="block will-change-transform"
               style={{
                 color: primaryColor,
-                fontSize: "clamp(1.5rem, 6.5vw, 3.8rem)",
+                fontSize: "10.8cqmin",
                 fontWeight: 750,
                 letterSpacing: "0.03em",
                 lineHeight: 1.1,

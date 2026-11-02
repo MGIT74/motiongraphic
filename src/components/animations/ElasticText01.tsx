@@ -37,7 +37,7 @@ export function ElasticText01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%" }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size" }}
     >
       <div
         className="flex flex-col items-center justify-center"
@@ -51,14 +51,14 @@ export function ElasticText01Frame({ config }: AnimationComponentProps) {
                 className="inline-block overflow-visible align-bottom"
               >
                 {char === " " ? (
-                  <span className="inline-block">&nbsp;</span>
+                  <span className="inline-block" style={{ fontSize: "11.4cqmin", lineHeight: 1.2 }}>&nbsp;</span>
                 ) : (
                   <span
                     data-elastic-letter
                     className="inline-block will-change-transform"
                     style={{
                       color: pop ? accentColor : primaryColor,
-                      fontSize: "clamp(1.6rem, 7vw, 4rem)",
+                      fontSize: "11.4cqmin",
                       fontWeight: 800,
                       letterSpacing: "0.04em",
                       lineHeight: 1.2,

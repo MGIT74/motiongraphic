@@ -39,7 +39,7 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%" }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size" }}
     >
       <div
         className="flex flex-col items-center justify-center gap-1 text-center"
@@ -54,14 +54,15 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
                 style={{ paddingBottom: "0.06em" }}
               >
                 {char === " " ? (
-                  <span>&nbsp;</span>
+                  // Espace à la taille du titre (sinon les mots se collent).
+                  <span style={{ fontSize: "12cqmin", lineHeight: 1.15 }}>&nbsp;</span>
                 ) : (
                   <span
                     data-letter-inner
                     className="inline-block will-change-transform"
                     style={{
                       color: accent ? accentColor : primaryColor,
-                      fontSize: "clamp(1.6rem, 7vw, 4.2rem)",
+                      fontSize: "12cqmin",
                       fontWeight: 800,
                       letterSpacing: "0.02em",
                       lineHeight: 1.15,
@@ -78,8 +79,8 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
                 className="ml-2 inline-block rounded-full will-change-transform"
                 style={{
                   background: accentColor,
-                  width: "clamp(0.5rem, 1.6vw, 0.9rem)",
-                  height: "clamp(0.5rem, 1.6vw, 0.9rem)",
+                  width: "2.6cqmin",
+                  height: "2.6cqmin",
                 }}
               />
             )}

@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import type { StudioElement } from "@/lib/studio/project-model";
+import "@/app/studio-fonts.css";
+import type { BrandKit, ProjectFormat, StudioElement } from "@/lib/studio/project-model";
 import type { StudioProject } from "@/lib/studio/project-model";
 import {
   appendElement,
+  applyBrand,
+  brandedConfig,
+  formatOf,
+  moveElementLayer,
+  setProjectFormat,
+  updateScene,
   makeDefaultProject,
   makeElement,
   makeScene,
@@ -16,7 +23,14 @@ import {
 } from "@/lib/studio/project-model";
 import { getStudioTemplate, registerCustomStudioTemplates } from "@/lib/studio/template-registry";
 import { loadLatestOrDefault, saveProject } from "@/lib/studio/persistence";
-import { loadCloudProject, loadLatestCloudProject, saveProjectToCloud, type CloudSaveState as CloudStateKind } from "@/lib/studio/projects-supabase";
+import {
+  fetchCloudVersion,
+  loadCloudProject,
+  loadLatestCloudProject,
+  saveProjectToCloud,
+  type CloudProject,
+  type CloudSaveState as CloudStateKind,
+} from "@/lib/studio/projects-supabase";
 import { useProjectHistory } from "@/lib/studio/history";
 import { useStudioClock } from "@/lib/studio/clock";
 import StudioTopBar from "./StudioTopBar";
@@ -87,9 +101,33 @@ export default function StudioApp({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("saved");
   const [cloudState, setCloudState] = useState<CloudStateKind | null>(null);
 
-  /* Restauration après hydratation : localStorage puis cloud (si plus récent).
-     Déclarée APRÈS l'enregistrement des templates custom pour que les projets
-     qui en utilisent passent la validation. */
+  /* ----------------------- synchronisation cloud ----------------------- */
+  // Version distante connue (updated_at) : undefined = projet jamais synchronisé.
+  const remoteVersionRef = useRef<string | undefined>(undefined);
+  // Prochaine sauvegarde à ignorer (le projet vient d'être chargé depuis le cloud).
+  const skipSaveRef = useRef(false);
+  // Modifications locales pas encore enregistrées dans le cloud.
+  const dirtyRef = useRef(false);
+  const projectRef = useRef(project);
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
+
+  /** Remplace le projet par sa version cloud, sans la réenregistrer. */
+  const applyRemote = useCallback(
+    (remote: CloudProject) => {
+      skipSaveRef.current = true;
+      dirtyRef.current = false;
+      remoteVersionRef.current = remote.updatedAt;
+      reset(remote.project);
+      setCloudState("synced");
+    },
+    [reset]
+  );
+
+  /* Restauration après hydratation : lien ?project=, sinon localStorage puis cloud
+     (si plus récent). Déclarée APRÈS l'enregistrement des templates custom pour que
+     les projets qui en utilisent passent la validation. */
   useEffect(() => {
     const restore = async () => {
       // Lien direct vers un projet (ex. créé par le MCP) : /studio?project=<id>.
@@ -98,7 +136,7 @@ export default function StudioApp({
         try {
           const requested = await loadCloudProject(requestedId);
           if (requested) {
-            reset(requested);
+            applyRemote(requested);
             return;
           }
         } catch {
@@ -106,36 +144,80 @@ export default function StudioApp({
         }
       }
       const stored = loadLatestOrDefault();
+      remoteVersionRef.current = undefined;
       reset(stored);
       try {
         const cloud = await loadLatestCloudProject();
         const localIsPlaceholder = stored.id === "project-default";
-        if (cloud && (localIsPlaceholder || Date.parse(cloud.updatedAt) > Date.parse(stored.updatedAt))) {
-          reset(cloud);
+        if (cloud && (localIsPlaceholder || cloud.project.id === stored.id || Date.parse(cloud.updatedAt) > Date.parse(stored.updatedAt))) {
+          applyRemote(cloud);
         }
       } catch {
         // Cloud indisponible : on garde le local, erreur silencieuse (assumé).
       }
     };
     void restore();
-  }, [reset]);
+  }, [reset, applyRemote]);
 
   const { time, playing, duration, sceneIndex, seek, setPlaying } = clock;
 
   const selection = computeSelection(project, selectedElementId);
 
   /* ------------------------------ autosave ------------------------------ */
-  // Local + cloud (Supabase RLS si configuré). "saving" n'est pas posé dans
-  // l'effet (règle setState-in-effect) : les états finaux arrivent en async.
+  // Local + cloud (Supabase RLS si configuré), sans écraser une version distante
+  // plus récente (conflit signalé dans la barre du haut).
+  const saveNow = useCallback(async (target: StudioProject) => {
+    const ok = saveProject(target);
+    setSaveState(ok ? "saved" : "error");
+    const cloud = await saveProjectToCloud(target, remoteVersionRef.current);
+    setCloudState(cloud.state);
+    if (cloud.state === "synced") {
+      remoteVersionRef.current = cloud.updatedAt;
+      if (projectRef.current === target) dirtyRef.current = false;
+    }
+  }, []);
+
   useEffect(() => {
-    const id = setTimeout(async () => {
-      const ok = saveProject(project);
-      setSaveState(ok ? "saved" : "error");
-      const cloud = await saveProjectToCloud(project);
-      setCloudState(cloud.state);
-    }, 600);
+    if (skipSaveRef.current) {
+      skipSaveRef.current = false;
+      saveProject(project);
+      return;
+    }
+    dirtyRef.current = true;
+    const id = setTimeout(() => void saveNow(project), 600);
     return () => clearTimeout(id);
-  }, [project]);
+  }, [project, saveNow]);
+
+  /* Rechargement en direct : si le projet a été modifié ailleurs (MCP, autre onglet)
+     et qu'aucune modification locale n'est en attente, on affiche la nouvelle version. */
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (document.visibilityState !== "visible" || dirtyRef.current) return;
+      const current = projectRef.current;
+      if (remoteVersionRef.current === undefined) return;
+      try {
+        const version = await fetchCloudVersion(current.id);
+        if (!version || Date.parse(version) <= Date.parse(remoteVersionRef.current) + 1) return;
+        if (dirtyRef.current || projectRef.current !== current) return;
+        const remote = await loadCloudProject(current.id);
+        if (remote) applyRemote(remote);
+      } catch {
+        // Réseau indisponible : nouvel essai au prochain intervalle.
+      }
+    }, 4000);
+    return () => clearInterval(id);
+  }, [applyRemote]);
+
+  /** Conflit : recharger la version distante… */
+  const reloadRemote = async () => {
+    const remote = await loadCloudProject(projectRef.current.id);
+    if (remote) applyRemote(remote);
+  };
+  /** …ou garder la version locale (écrase la version distante). */
+  const keepLocal = async () => {
+    remoteVersionRef.current = (await fetchCloudVersion(projectRef.current.id)) ?? undefined;
+    await saveNow(projectRef.current);
+  };
 
   /* --------------------------- raccourcis clavier ---------------------------- */
   useEffect(() => {
@@ -197,10 +279,11 @@ export default function StudioApp({
     scene.elements.forEach((el) => {
       start = Math.max(start, el.start + el.duration);
     });
-    const element = makeElement(templateKey, template.elementKind, { ...template.defaultConfig }, {
+    const element = makeElement(templateKey, template.elementKind, brandedConfig({ ...template.defaultConfig }, template.elementKind, project.brand), {
       start,
       duration: template.timelineDuration,
       label: template.name,
+      timing: "fit",
     });
     commit(appendElement(project, scene.id, element), "add-element");
     setSelectedElementId(element.id);
@@ -229,8 +312,23 @@ export default function StudioApp({
     if (selectedElementId === elementId) setSelectedElementId(null);
   };
 
+  const moveLayer = (elementId: string, target: "up" | "down" | "front" | "back") => {
+    const located = computeSelection(project, elementId);
+    if (!located) return;
+    commit(moveElementLayer(project, located.scene.id, elementId, target), "move-layer");
+  };
+
+  const changeFormat = (format: ProjectFormat) => commit(setProjectFormat(project, format), "format");
+
+  const updateBrand = (brand: BrandKit) => commit({ ...project, brand }, "brand", "brand");
+  const applyBrandToProject = (brand: BrandKit) => commit(applyBrand(project, brand), "apply-brand");
+
+  const updateSceneBackground = (index: number, background: string) =>
+    commit(updateScene(project, project.scenes[index].id, { background }), "scene-background", `scene-bg:${project.scenes[index].id}`);
+
   const newProject = () => {
     const fresh = makeDefaultProject();
+    remoteVersionRef.current = undefined;
     reset(fresh);
     setSelectedElementId(null);
     seek(0);
@@ -271,6 +369,10 @@ export default function StudioApp({
         saveState={saveState}
         cloudState={cloudState}
         fps={project.fps}
+        format={formatOf(project)}
+        onChangeFormat={changeFormat}
+        onReloadRemote={() => void reloadRemote()}
+        onKeepLocal={() => void keepLocal()}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -283,6 +385,9 @@ export default function StudioApp({
           onRenameScene={renameScene}
           onUpdateSceneDuration={updateSceneDuration}
           onAddElement={(templateKey) => addElement(sceneIndex, templateKey)}
+          onUpdateSceneBackground={updateSceneBackground}
+          onUpdateBrand={updateBrand}
+          onApplyBrand={applyBrandToProject}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -319,6 +424,7 @@ export default function StudioApp({
           onChangeTemplate={changeElementTemplate}
           onPatchElement={patchElement}
           onDeleteElement={deleteElement}
+          onMoveLayer={moveLayer}
         />
       </div>
     </div>

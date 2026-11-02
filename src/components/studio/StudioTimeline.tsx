@@ -40,6 +40,28 @@ export default function StudioTimeline({
   onDeleteElement: (elementId: string) => void;
 }) {
   const offsets = useMemo(() => sceneOffsets(project), [project]);
+  // Calques qui se chevauchent : une ligne par superposition (attribution gloutonne).
+  const sceneElements = useMemo(() => project.scenes[sceneIndex]?.elements ?? [], [project, sceneIndex]);
+  const laneOf = useMemo(() => {
+    const ends: number[] = [];
+    const map = new Map<string, number>();
+    for (const el of sceneElements) {
+      let lane = ends.findIndex((end) => end <= el.start + 1e-6);
+      if (lane === -1) {
+        lane = ends.length;
+        ends.push(0);
+      }
+      ends[lane] = el.start + el.duration;
+      map.set(el.id, lane);
+    }
+    return { map, count: Math.max(1, ends.length) };
+  }, [sceneElements]);
+  const LANE_PX = 48;
+  const motionPx = laneOf.count * LANE_PX + 8;
+  const motionTop = 44; // sous la règle (32px) + marge
+  const mediaTop = motionTop + motionPx + 8;
+  const audioTop = mediaTop + 60;
+  const totalPx = audioTop + 60;
   const trackRef = useRef<HTMLDivElement | null>(null);
   const pxPerSec = 72;
   const width = Math.max(duration, 8) * pxPerSec;
@@ -109,17 +131,21 @@ export default function StudioTimeline({
   };
 
   return (
-    <div className="h-56 shrink-0 border-t border-line bg-surface/60">
+    <div className="shrink-0 border-t border-line bg-surface/60" style={{ height: Math.min(totalPx, 360) }}>
       {/* En-têtes de pistes + piste */}
-      <div ref={scrollRef} className="relative h-full overflow-x-auto overflow-y-hidden">
-        <div className="flex h-full min-w-max">
+      <div ref={scrollRef} className="relative h-full overflow-x-auto overflow-y-auto">
+        <div className="flex min-w-max" style={{ height: totalPx }}>
           {/* Colonne des labels de pistes */}
           <div className="w-28 shrink-0 border-r border-line bg-surface/80">
             <div className="flex h-8 items-center border-b border-line px-3 font-mono text-[10px] text-muted">
               TL · {project.scenes.length} scènes
             </div>
             {LANES.map((lane) => (
-              <div key={lane.id} className="flex h-14 items-center gap-2 border-b border-line/50 px-3">
+              <div
+                key={lane.id}
+                className="flex items-center gap-2 border-b border-line/50 px-3"
+                style={{ height: lane.id === "motion" ? motionPx + 12 : 60 }}
+              >
                 <lane.icon className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
                 <span className="text-[11px] font-medium text-ink/80">{lane.label}</span>
                 {lane.id !== "motion" ? (
@@ -158,7 +184,7 @@ export default function StudioTimeline({
               <div
                 key={`scene-mark-${scene.id}`}
                 className={`absolute border-l-2 border-line ${i === sceneIndex ? "bg-accent/[0.06]" : ""}`}
-                style={{ left: offsets[i] * pxPerSec, width: scene.duration * pxPerSec, top: "2.45rem", bottom: 0 }}
+                style={{ left: offsets[i] * pxPerSec, width: scene.duration * pxPerSec, top: 36, bottom: 0 }}
               >
                 <span className="absolute -left-0 top-1 z-10 rounded-r-full bg-elevated px-2 py-[2px] font-mono text-[9px] text-muted">
                   {scene.name}
@@ -167,8 +193,8 @@ export default function StudioTimeline({
             ))}
 
             {/* Piste Motion : éléments de la scène courante */}
-            <div className="absolute" style={{ top: "2.75rem", height: "3.5rem", left: 0, right: 0 }}>
-              {(project.scenes[sceneIndex]?.elements ?? []).map((element) => {
+            <div className="absolute" style={{ top: motionTop, height: motionPx, left: 0, right: 0 }}>
+              {sceneElements.map((element) => {
                 const sceneOffset = offsets[sceneIndex] ?? 0;
                 const selected = element.id === selectedElementId;
                 return (
@@ -183,8 +209,8 @@ export default function StudioTimeline({
                       // Les débuts sont relatifs à la scène : on ajoute son décalage global.
                       left: (sceneOffset + element.start) * pxPerSec,
                       width: Math.max(28, element.duration * pxPerSec),
-                      top: 4,
-                      height: 44,
+                      top: 4 + (laneOf.map.get(element.id) ?? 0) * LANE_PX,
+                      height: LANE_PX - 6,
                     }}
                     onPointerDown={(event: PointerEvent) => startElementDrag(event, project.scenes[sceneIndex].id, element.id, "move", element.start, element.duration)}
                     role="button"
@@ -217,7 +243,7 @@ export default function StudioTimeline({
             </div>
 
             {/* Piste Rushs — attente Phase 3 */}
-            <div className="absolute border-y border-line/30" style={{ top: "6.5rem", height: "3.5rem", left: 0, right: 0 }}>
+            <div className="absolute border-y border-line/30" style={{ top: mediaTop, height: 56, left: 0, right: 0 }}>
               {project.scenes.map((scene, si) => (
                 <span
                   key={`media-${scene.id}`}
@@ -232,7 +258,7 @@ export default function StudioTimeline({
             {/* Piste Audio — attente Phase 3 */}
             <div
               className="text-muted/40"
-              style={{ position: "absolute", top: "10.25rem", height: "3.5rem", left: 0, right: 0 }}
+              style={{ position: "absolute", top: audioTop, height: 56, left: 0, right: 0 }}
             >
               <span className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[9px]">
                 Audio — Phase 3
