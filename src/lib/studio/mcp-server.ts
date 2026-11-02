@@ -119,6 +119,12 @@ async function persistProject(project: StudioProject, userId: string): Promise<v
   if (error) throw new McpToolError(mapDbError(error), error.code === "PGRST205" ? hintMigration() : undefined);
 }
 
+/** Lien pour ouvrir le projet dans le Studio (réservé aux admins connectés en mode construction). */
+function studioUrl(projectId: string): string {
+  const base = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://motiongraphic.si").replace(/\/+$/, "");
+  return `${base}/studio?project=${encodeURIComponent(projectId)}`;
+}
+
 function mapDbError(error: { message: string }): string {
   return `Supabase : ${error.message}`;
 }
@@ -199,7 +205,7 @@ export const MCP_PROJECT_TOOLS = [
   },
   {
     name: "create_project",
-    description: "Crée un projet Studio (squelette type marketing SaaS) et renvoie son id + timeline.",
+    description: "Crée un projet Studio (squelette type marketing SaaS) et renvoie son id + le lien studio_url pour l'ouvrir.",
     inputSchema: { type: "object", properties: { name: { type: "string" } } },
     run: async (input: McpInput) => {
       const conf = mcpConfigCheck();
@@ -219,7 +225,7 @@ export const MCP_PROJECT_TOOLS = [
         data: JSON.parse(serializeProject(project)),
       });
       if (error) throw new McpToolError(mapDbError(error), error.code === "PGRST205" ? hintMigration() : undefined);
-      return JSON.stringify({ project_id: project.id, name: project.name });
+      return JSON.stringify({ project_id: project.id, name: project.name, studio_url: studioUrl(project.id) });
     },
   },
   {
@@ -308,7 +314,7 @@ export const MCP_PROJECT_TOOLS = [
       };
       validateProject(next);
       await persistProject(next, userId);
-      return JSON.stringify({ ok: true, element_id: element.id, scene_index: sceneIdx, total_elements: project.scenes[sceneIdx].elements.length });
+      return JSON.stringify({ ok: true, element_id: element.id, scene_index: sceneIdx, total_elements: next.scenes[sceneIdx].elements.length, studio_url: studioUrl(projectId) });
     },
   },
   {
@@ -456,7 +462,7 @@ export const MCP_PROJECT_TOOLS = [
       const next = typeof input.name === "string" ? { ...project, name: input.name.trim().slice(0, 120) || project.name } : project;
       validateProject(next);
       await persistProject(next, userId);
-      return JSON.stringify({ ok: true, project_id: projectId, name: next.name, updated_at: new Date().toISOString() });
+      return JSON.stringify({ ok: true, project_id: projectId, name: next.name, updated_at: new Date().toISOString(), studio_url: studioUrl(projectId) });
     },
   },
   {
