@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Tests de bout en bout du Studio (navigateur réel, mode démo sans Supabase).
  * Lancer :  CONSTRUCTION_MODE=off npm run build && CONSTRUCTION_MODE=off npm start &
