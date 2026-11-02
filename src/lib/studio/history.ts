@@ -24,9 +24,12 @@ export function useProjectHistory(initial: StudioProject) {
   const lastCoalesceRef = useRef<string | null>(null);
 
   const commit = useCallback((next: StudioProject, label: string, coalesceKey?: string) => {
+    // Décision prise HORS de la fonction de mise à jour : React peut l'exécuter
+    // deux fois (StrictMode) ; muter la ref à l'intérieur faisait croire à une
+    // fusion et perdait l'entrée d'historique (Annuler restait grisé).
+    const shouldCoalesce = coalesceKey !== undefined && lastCoalesceRef.current === coalesceKey;
+    lastCoalesceRef.current = coalesceKey ?? null;
     setHistory((h) => {
-      const shouldCoalesce = coalesceKey !== undefined && lastCoalesceRef.current === coalesceKey;
-      lastCoalesceRef.current = coalesceKey ?? null;
       return {
         past: shouldCoalesce ? h.past : [...h.past, h.present].slice(-MAX_HISTORY),
         present: next,

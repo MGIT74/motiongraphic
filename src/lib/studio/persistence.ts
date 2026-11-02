@@ -67,8 +67,13 @@ export function loadProject(projectId: string): StudioProject | null {
 export function deleteProject(projectId: string): void {
   const store = safeLocalStorage();
   if (!store) return;
-  store.removeItem(keyFor(projectId));
-  void listProjects().filter((e) => e.id !== projectId);
+  try {
+    store.removeItem(keyFor(projectId));
+    const index = listProjects().filter((e) => e.id !== projectId);
+    store.setItem(KEY_INDEX, JSON.stringify(index));
+  } catch {
+    // Stockage indisponible : rien à faire.
+  }
 }
 
 /** Charge le dernier projet en date, sinon crée le projet de démonstration. */

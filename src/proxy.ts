@@ -2,9 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 /**
- * Proxy (ex-middleware Next 16) : rafraîchement de la session Supabase avant
- * le rendu des routes. S'active uniquement quand Supabase est configuré —
- * sans variables d'environnement, il laisse passer la requête (mode démo).
+ * Proxy (ex-middleware Next 16), deux rôles :
+ * 1. Mode construction : toute page publique (Studio compris) est redirigée
+ *    vers /construction ; /admin, /api, robots.txt et sitemap.xml restent accessibles.
+ * 2. Rafraîchissement de la session Supabase pour les routes autorisées,
+ *    uniquement quand Supabase est configuré (sinon : mode démo, requête inchangée).
  */
 export async function proxy(request: NextRequest) {
   // Construction mode: block public pages, including Studio, on the server.
