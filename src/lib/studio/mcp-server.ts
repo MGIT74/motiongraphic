@@ -2,6 +2,9 @@ import type { AnimationConfig } from "@/types/animation";
 
 import { isSupabaseConfigured, supabaseUrl } from "@/lib/supabase/config";
 import { listAllPublishedTemplates } from "@/lib/templates/registry";
+import { listPublishedCustomTemplates } from "@/lib/templates/custom-store";
+import { customElementKind } from "@/lib/templates/custom-model";
+import { registerCustomStudioTemplates } from "./template-registry";
 import {
   makeDefaultProject,
   makeElement,
@@ -87,7 +90,46 @@ interface ProjectRow {
   updated_at: string;
 }
 
+/**
+ * Enregistre les templates custom PUBLIÉS (source « composant ») dans le registre
+ * Studio côté serveur, comme le fait la page /studio : sans cela, validateProject
+ * rejette tout projet contenant un template custom (ex. cta-hero-demo).
+ */
+async function ensureCustomTemplatesRegistered(): Promise<void> {
+  try {
+    const published = await listPublishedCustomTemplates();
+    registerCustomStudioTemplates(
+      published
+        .filter((t) => t.sourceKind === "component" && t.componentKey)
+        .map((t) => ({
+          id: t.id,
+          slug: t.slug,
+          name: t.name,
+          category: t.category,
+          sourceKind: t.sourceKind,
+          componentKey: t.componentKey,
+          elementKind: customElementKind(t),
+          defaultConfig: t.defaultConfig,
+        }))
+    );
+  } catch {
+    // Source custom indisponible : seuls les templates intégrés seront valides.
+  }
+}
+
+/** Valide le projet AVANT tout enregistrement : un projet invalide n'est jamais persisté. */
+function requireValid(project: StudioProject): StudioProject {
+  const valid = validateProject(project);
+  if (!valid) {
+    throw new McpToolError(
+      "Projet refusé : la validation a échoué (template inconnu ou non publié, ou valeurs hors limites). Rien n'a été enregistré."
+    );
+  }
+  return valid;
+}
+
 async function loadProjectRow(projectId: string, userId: string): Promise<StudioProject | null> {
+  await ensureCustomTemplatesRegistered();
   const client = await adminClient();
   const { data, error } = await client
     .from("studio_projects")
@@ -250,8 +292,7 @@ export const MCP_PROJECT_TOOLS = [
       const name = typeof input.name === "string" ? input.name.trim().slice(0, 80) || "Scène" : `Scène ${project.scenes.length + 1}`;
       const duration = roundToFrame(Math.max(1, Math.min(600, optNumber(input, "duration") ?? 5)));
       const next = { ...project, scenes: [...project.scenes, makeScene(name, duration)] };
-      validateProject(next);
-      await persistProject(next, userId);
+      await persistProject(requireValid(next), userId);
       return JSON.stringify({ project_id: projectId, scene_count: next.scenes.length, scenes: next.scenes.map((s) => ({ id: s.id, name: s.name })) });
     },
   },
@@ -312,8 +353,7 @@ export const MCP_PROJECT_TOOLS = [
           i === sceneIdx ? { ...scene, elements: [...scene.elements, element] } : scene
         ),
       };
-      validateProject(next);
-      await persistProject(next, userId);
+      await persistProject(requireValid(next), userId);
       return JSON.stringify({ ok: true, element_id: element.id, scene_index: sceneIdx, total_elements: next.scenes[sceneIdx].elements.length, studio_url: studioUrl(projectId) });
     },
   },
@@ -357,9 +397,9 @@ export const MCP_PROJECT_TOOLS = [
         if (typeof input.text === "string") patched.config = { ...patched.config, text: input.text.slice(0, 120) };
         return patched;
       });
-      validateProject(next);
-      validateLocated(next, projectId, located);
-      await persistProject(next, userId);
+      const valid = requireValid(next);
+      validateLocated(valid, projectId, located);
+      await persistProject(valid, userId);
       return JSON.stringify({ ok: true });
     },
   },
@@ -390,8 +430,7 @@ export const MCP_PROJECT_TOOLS = [
       if (!next) {
         throw new McpToolError(`Remplacement refusé : ${newKey} est absent du registre ou incompatible avec le type « ${located.element.kind} ».`);
       }
-      validateProject(next);
-      await persistProject(next, userId);
+      await persistProject(requireValid(next), userId);
       return JSON.stringify({ ok: true, template_key: newKey });
     },
   },
@@ -421,8 +460,7 @@ export const MCP_PROJECT_TOOLS = [
       const reordered = (ids as string[]).map((id) => byId.get(id)).filter(Boolean) as StudioProject["scenes"];
       if (reordered.length !== project.scenes.length) throw new McpToolError("ids de scènes inconnus.");
       const next = { ...project, scenes: reordered };
-      validateProject(next);
-      await persistProject(next, userId);
+      await persistProject(requireValid(next), userId);
       return JSON.stringify({ ok: true, order: reordered.map((scene) => scene.id) });
     },
   },
@@ -460,8 +498,7 @@ export const MCP_PROJECT_TOOLS = [
       const project = await loadProjectRow(projectId, userId);
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId}.`);
       const next = typeof input.name === "string" ? { ...project, name: input.name.trim().slice(0, 120) || project.name } : project;
-      validateProject(next);
-      await persistProject(next, userId);
+      await persistProject(requireValid(next), userId);
       return JSON.stringify({ ok: true, project_id: projectId, name: next.name, updated_at: new Date().toISOString(), studio_url: studioUrl(projectId) });
     },
   },
