@@ -80,6 +80,8 @@ export default function StudioTimeline({
     elementDuration: number
   ) => {
     e.stopPropagation();
+    // Un clic sur un bloc le sélectionne (avant un éventuel glissement).
+    onSelectElement(elementId);
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const startX = e.clientX;
     // Le linter réagit statiquement à cette mutation : elle est pourtant
@@ -167,17 +169,19 @@ export default function StudioTimeline({
             {/* Piste Motion : éléments de la scène courante */}
             <div className="absolute" style={{ top: "2.75rem", height: "3.5rem", left: 0, right: 0 }}>
               {(project.scenes[sceneIndex]?.elements ?? []).map((element) => {
+                const sceneOffset = offsets[sceneIndex] ?? 0;
                 const selected = element.id === selectedElementId;
                 return (
                   <div
                     key={element.id}
-                    className={`absolute flex items-center overflow-hidden rounded-lg border-2 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+                    className={`group absolute flex items-center overflow-hidden rounded-lg border-2 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
                       selected
                         ? "border-accent bg-accent/25 text-white"
                         : "border-line bg-elevated text-muted hover:border-accent/40"
                     }`}
                     style={{
-                      left: element.start * pxPerSec,
+                      // Les débuts sont relatifs à la scène : on ajoute son décalage global.
+                      left: (sceneOffset + element.start) * pxPerSec,
                       width: Math.max(28, element.duration * pxPerSec),
                       top: 4,
                       height: 44,
@@ -197,11 +201,10 @@ export default function StudioTimeline({
                     <span
                       className="pointer-events-auto absolute inset-y-0 right-0 w-2.5 cursor-ew-resize bg-white/10"
                       onPointerDown={(event) => startElementDrag(event, project.scenes[sceneIndex].id, element.id, "resize", element.start, element.duration)}
-                      onDoubleClick={() => onDeleteElement(element.id)}
-                      aria-label="Trim droit — double-clic pour supprimer l'élément"
+                      aria-label="Trim droit — glisser pour changer la durée"
                     />
                     <span
-                      className="absolute right-1 z-10 inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-red-300 opacity-0 transition-opacity hover:opacity-100"
+                      className="absolute right-4 z-10 inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-red-300 opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-70"
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={() => onDeleteElement(element.id)}
                       title="Supprimer l'élément"

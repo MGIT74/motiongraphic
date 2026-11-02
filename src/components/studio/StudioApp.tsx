@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { StudioElement } from "@/lib/studio/project-model";
 import type { StudioProject } from "@/lib/studio/project-model";
 import {
@@ -69,11 +70,6 @@ export default function StudioApp({
   const [initial] = useState(() => makeDefaultProject(undefined, { deterministic: true }));
   const { project, canUndo, canRedo, commit, undo, redo, reset } = useProjectHistory(initial);
   const clock = useStudioClock(project);
-  // Keep SSR and first client render identical; restore browser storage only after hydration.
-  useEffect(() => {
-    const stored = loadLatestOrDefault();
-    reset(stored);
-  }, [reset]);
 
 
   // Enregistre les templates custom PUBLIÉS dans le registre runtime
@@ -91,7 +87,9 @@ export default function StudioApp({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("saved");
   const [cloudState, setCloudState] = useState<CloudStateKind | null>(null);
 
-  /* Restauration après hydratation : localStorage puis cloud (si plus récent). */
+  /* Restauration après hydratation : localStorage puis cloud (si plus récent).
+     Déclarée APRÈS l'enregistrement des templates custom pour que les projets
+     qui en utilisent passent la validation. */
   useEffect(() => {
     const restore = async () => {
       const stored = loadLatestOrDefault();
@@ -211,10 +209,11 @@ export default function StudioApp({
   };
 
   const deleteElement = (elementId: string) => {
-    const located = selection;
+    // Retrouve la scène de l'élément par son ID (il n'est pas forcément sélectionné).
+    const located = computeSelection(project, elementId);
     if (!located) return;
     commit(removeElement(project, located.scene.id, elementId), "delete-element");
-    setSelectedElementId(null);
+    if (selectedElementId === elementId) setSelectedElementId(null);
   };
 
   const newProject = () => {
@@ -227,6 +226,23 @@ export default function StudioApp({
 
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-background text-ink">
+      {/* Petits écrans : l'éditeur (3 panneaux + timeline) n'y est pas utilisable. */}
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background px-8 text-center md:hidden">
+        <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
+          Studio · Bêta
+        </span>
+        <p className="text-lg font-semibold text-ink">Le Studio s&apos;utilise sur un écran plus grand.</p>
+        <p className="max-w-xs text-sm leading-relaxed text-muted">
+          Ouvrez-le sur un ordinateur ou une tablette en mode paysage pour
+          éditer vos animations sur la timeline.
+        </p>
+        <Link
+          href="/"
+          className="mt-2 inline-flex h-10 items-center rounded-full border border-line px-5 text-sm font-medium text-ink transition-colors hover:border-accent/50"
+        >
+          Retour au site
+        </Link>
+      </div>
       <StudioTopBar
         projectName={project.name}
         onRename={(name) => commit({ ...project, name }, "rename-project", `name:${name}`)}

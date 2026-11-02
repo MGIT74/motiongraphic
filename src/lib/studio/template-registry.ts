@@ -125,7 +125,10 @@ export function registerCustomStudioTemplates(
     if (!template.componentKey || !base) continue; // templates « code » : hors timeline (Phase 2)
     STUDIO_TEMPLATES[template.slug] = {
       ...base,
-      key: template.componentKey as import("@/types/animation").ComponentKey,
+      // Clé propre au template custom (son slug) : distincte du composant de base,
+      // sinon il se confond avec le template intégré (même clé React, même choix).
+      // Le moteur retrouve le composant via `underlyingComponentKey`.
+      key: template.slug as import("@/types/animation").ComponentKey,
       name: template.name,
       studioCategory: (template.category as StudioCategory) ?? base.studioCategory,
       timelineDuration: template.defaultConfig.duration,
