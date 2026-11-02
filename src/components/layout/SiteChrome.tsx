@@ -11,7 +11,8 @@ export default function SiteChrome({ children }: { children: React.ReactNode }) 
     pathname === "/admin" ||
     pathname.startsWith("/admin/") ||
     pathname === "/studio" ||
-    pathname.startsWith("/studio/");
+    pathname.startsWith("/studio/") ||
+    pathname.startsWith("/render/");
   return (
     <>
       {!appShell && <Header />}

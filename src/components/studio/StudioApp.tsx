@@ -38,6 +38,7 @@ import StudioLeftPanel from "./StudioLeftPanel";
 import StudioCanvas from "./StudioCanvas";
 import StudioRightPanel from "./StudioRightPanel";
 import StudioTimeline from "./StudioTimeline";
+import ExportButton from "./ExportButton";
 
 /**
  * MotionGraphic Studio V1 Bêta — orchestrateur.
@@ -373,6 +374,15 @@ export default function StudioApp({
         onChangeFormat={changeFormat}
         onReloadRemote={() => void reloadRemote()}
         onKeepLocal={() => void keepLocal()}
+        exportSlot={
+          <ExportButton
+            projectId={project.id}
+            beforeExport={async () => {
+              await saveNow(projectRef.current);
+              return remoteVersionRef.current !== undefined;
+            }}
+          />
+        }
       />
 
       <div className="flex min-h-0 flex-1">
