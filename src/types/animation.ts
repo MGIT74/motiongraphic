@@ -1,13 +1,18 @@
 export type ComponentKey =
   | "kinetic-type-01"
   | "text-reveal-01"
+  | "notification-stack-premium-02"
   | "elastic-text-01"
   | "shape-morph-01"
   | "staggered-cards-01"
   | "logo-reveal-01"
   | "minimal-saas-ui-01";
 
+export type EntranceDirection = "top" | "bottom" | "left" | "right";
+
 export interface AnimationConfig {
+  /** Direction d’entrée des éléments UI Motion. */
+  entranceDirection?: EntranceDirection;
   /** Texte principal affiché par l'animation */
   text: string;
   /** Couleur principale de l'animation (format CSS) */
