@@ -620,7 +620,11 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
   );
 
   return (
-    <div className="flex h-svh flex-col overflow-hidden bg-background text-ink" data-studio-layout={compact ? "compact" : "desktop"}>
+    <div
+      className={`flex flex-col overflow-hidden bg-background text-ink ${compact ? "fixed inset-0 overscroll-none" : "h-svh"}`}
+      style={compact ? { touchAction: "manipulation" } : undefined}
+      data-studio-layout={compact ? "compact" : "desktop"}
+    >
       <StudioTopBar
         projectName={project.name}
         onRename={(name) => commit({ ...project, name }, "rename-project", `name:${name}`)}

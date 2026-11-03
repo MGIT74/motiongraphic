@@ -1,5 +1,5 @@
 import type { AnimationConfig } from "@/types/animation";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import StudioApp from "@/components/studio/StudioApp";
 import { listPublishedCustomTemplates } from "@/lib/templates/custom-store";
 import { customElementKind } from "@/lib/templates/custom-model";
@@ -9,6 +9,19 @@ export const metadata: Metadata = {
   description:
     "Motion Studio : timeline, canvas animé, templates SaaS codés — composez vos vidéos marketing avec des animations de motion design en code.",
   robots: { index: false, follow: false },
+};
+
+/**
+ * Éditeur plein écran : sur mobile, pas de zoom de page (pincement, double toucher)
+ * qui ferait bouger toute l'interface pendant l'édition.
+ */
+export const viewport: Viewport = {
+  themeColor: "#000000",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 /** Template custom « composant » prêt pour la timeline du Studio. */

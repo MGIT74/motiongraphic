@@ -6,7 +6,6 @@ import type { StudioElement, StudioProject } from "@/lib/studio/project-model";
 import { roundToFrame, sceneOffsets } from "@/lib/studio/project-model";
 import { TEMPLATE_DRAG_TYPE } from "./TemplateLibrary";
 
-const LANE_PX = 48;
 const ZOOM_MIN = 24;
 const ZOOM_MAX = 240;
 const DEFAULT_ZOOM = 72;
@@ -65,6 +64,8 @@ export default function StudioTimeline({
   compact?: boolean;
 }) {
   const [pxPerSec, setPxPerSec] = useState(DEFAULT_ZOOM);
+  // Mobile : pistes un peu plus basses pour que tout tienne sans défilement vertical.
+  const LANE_PX = compact ? 40 : 48;
   const [snapOn, setSnapOn] = useState(true);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dropAt, setDropAt] = useState<number | null>(null);
@@ -80,7 +81,7 @@ export default function StudioTimeline({
 
   const motionPx = motionLanes.count * LANE_PX + 8;
   const mediaPx = mediaLanes.count * LANE_PX + 8;
-  const motionTop = 44; // sous la règle (32px) + marge
+  const motionTop = compact ? 38 : 44; // sous la règle (32px) + marge
   const mediaTop = motionTop + motionPx + 8;
   const audioTop = mediaTop + mediaPx + 8;
   const totalPx = audioTop + 60;
@@ -116,6 +117,25 @@ export default function StudioTimeline({
   /** Clic dans une zone vide des pistes : place le curseur et désélectionne. */
   const onEmptyTrackDown = (e: PointerEvent) => {
     if (e.target !== e.currentTarget) return;
+    if (e.pointerType === "touch") {
+      // Au doigt : un balayage fait défiler, seul un toucher place le curseur.
+      const sx = e.clientX;
+      const sy = e.clientY;
+      const cleanup = () => {
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", cleanup);
+      };
+      const onUp = (ev: globalThis.PointerEvent) => {
+        cleanup();
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 10) {
+          onSelectElement(null);
+          scrub(ev.clientX);
+        }
+      };
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", cleanup);
+      return;
+    }
     onSelectElement(null);
     scrub(e.clientX);
   };
@@ -159,6 +179,23 @@ export default function StudioTimeline({
   const startElementDrag = (e: PointerEvent, element: StudioElement, mode: DragMode) => {
     if (!scene || e.button !== 0) return;
     e.stopPropagation();
+    // Au doigt : un élément non sélectionné se sélectionne d'un toucher, et un balayage
+    // fait défiler la timeline. Seul l'élément sélectionné se déplace ou se redimensionne.
+    if (e.pointerType === "touch" && element.id !== selectedElementId) {
+      const sx = e.clientX;
+      const sy = e.clientY;
+      const cleanup = () => {
+        window.removeEventListener("pointerup", onTapUp);
+        window.removeEventListener("pointercancel", cleanup);
+      };
+      const onTapUp = (ev: globalThis.PointerEvent) => {
+        cleanup();
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 10) onSelectElement(element.id);
+      };
+      window.addEventListener("pointerup", onTapUp);
+      window.addEventListener("pointercancel", cleanup);
+      return;
+    }
     onSelectElement(element.id);
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const startX = e.clientX;
@@ -254,13 +291,15 @@ export default function StudioTimeline({
     return (
       <div
         key={element.id}
-        className={`group absolute flex touch-none items-center overflow-hidden rounded-lg border-2 text-[10px] font-semibold uppercase tracking-wider ${active ? "z-20 shadow-lg" : "transition-colors"} ${tone}`}
+        className={`group absolute flex items-center overflow-hidden rounded-lg border-2 text-[10px] font-semibold uppercase tracking-wider ${active ? "z-20 shadow-lg" : "transition-colors"} ${tone}`}
         style={{
           left: (sceneOffset + start) * pxPerSec,
           width: blockWidth,
           top: 4 + lane * LANE_PX,
           height: LANE_PX - 6,
           cursor: active ? "grabbing" : "grab",
+          // Non sélectionné : le doigt fait défiler la timeline ; sélectionné : il déplace l'élément.
+          touchAction: selected ? "none" : "pan-x",
         }}
         onPointerDown={(event: PointerEvent) => startElementDrag(event, element, "move")}
         onDoubleClick={() => onSeek(roundToFrame(sceneOffset + element.start + 0.05))}
@@ -275,6 +314,7 @@ export default function StudioTimeline({
       >
         {/* Poignée de début */}
         <span
+          hidden={compact && !selected}
           className={`absolute inset-y-0 left-0 z-10 ${compact ? "w-4" : "w-2.5"} cursor-ew-resize bg-white/10 opacity-60 hover:bg-white/30 group-hover:opacity-100`}
           onPointerDown={(event) => startElementDrag(event, element, "trim-start")}
           aria-label="Début — glisser pour changer le début"
@@ -292,6 +332,7 @@ export default function StudioTimeline({
         ) : null}
         {/* Poignée de fin */}
         <span
+          hidden={compact && !selected}
           className={`absolute inset-y-0 right-0 z-10 ${compact ? "w-4" : "w-2.5"} cursor-ew-resize bg-white/10 opacity-60 hover:bg-white/30 group-hover:opacity-100`}
           onPointerDown={(event) => startElementDrag(event, element, "trim-end")}
           aria-label="Trim droit — glisser pour changer la durée"
@@ -326,7 +367,7 @@ export default function StudioTimeline({
   ];
 
   return (
-    <div className="relative shrink-0 border-t border-line bg-surface/60" style={{ height: Math.min(totalPx, compact ? 210 : 360) }}>
+    <div className="relative shrink-0 border-t border-line bg-surface/60" style={{ height: compact ? Math.min(totalPx, 320) : Math.min(totalPx, 360) }}>
       {/* Outils : zoom + aimantation */}
       <div className={`absolute z-40 flex items-center gap-1 rounded-full border border-line bg-surface/95 px-1 py-0.5 shadow ${compact ? "bottom-1 right-1" : "right-3 top-1"}`}>
         <button type="button" onClick={() => setSnapOn((v) => !v)} className={`inline-flex h-6 cursor-pointer items-center gap-1 rounded-full px-2 text-[10px] font-medium ${snapOn ? "bg-accent/15 text-accent" : "text-muted hover:text-ink"}`} aria-pressed={snapOn} title="Aimantation (maintenir Alt pour la suspendre)">
@@ -343,7 +384,12 @@ export default function StudioTimeline({
         </button>
       </div>
 
-      <div className="relative h-full overflow-x-auto overflow-y-auto" onWheel={onWheel}>
+      <div
+        className={`relative h-full overflow-x-auto ${compact ? "overflow-y-hidden overscroll-contain" : "overflow-y-auto"}`}
+        style={compact ? { touchAction: "pan-x" } : undefined}
+        onWheel={onWheel}
+        data-timeline-scroll
+      >
         <div className="flex min-w-max" style={{ height: totalPx }}>
           {/* Colonne des labels de pistes */}
           <div className={`sticky left-0 z-30 shrink-0 border-r border-line bg-surface ${compact ? "w-9" : "w-28"}`}>
