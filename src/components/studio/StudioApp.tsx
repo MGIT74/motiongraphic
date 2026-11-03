@@ -340,7 +340,12 @@ export default function StudioApp({
       label: template.name,
       timing: "fit",
     });
-    commit(appendElement(project, scene.id, element), "add-element");
+    let next = appendElement(project, scene.id, element);
+    // Élément ajouté après les autres : la scène s'allonge pour qu'il reste visible.
+    if (start + element.duration > scene.duration) {
+      next = updateScene(next, scene.id, { duration: start + element.duration });
+    }
+    commit(next, "add-element");
     setSelectedElementId(element.id);
     seek(offsets[sceneIndexAt] + start + 0.2);
   };

@@ -12,6 +12,7 @@ import { ElasticText01Frame } from "@/components/animations/ElasticText01";
 import { ShapeMorph01Frame } from "@/components/animations/ShapeMorph01";
 import { StaggeredCards01Frame } from "@/components/animations/StaggeredCards01";
 import { LogoReveal01Frame } from "@/components/animations/LogoReveal01";
+import { NotificationStack01Frame } from "@/components/animations/NotificationStack01";
 import MinimalSaaSUIShowcase01 from "@/components/animations/MinimalSaaSUIShowcase01";
 import type { ComponentType } from "react";
 
@@ -24,6 +25,7 @@ const DEMO_FRAMES: Record<ComponentKey, ComponentType<AnimationComponentProps>> 
 // Auto-anime (interactions utilisateur) - synchronisation timeline en Phase 2.
   "minimal-saas-ui-01": MinimalSaaSUIShowcase01,
   "logo-reveal-01": LogoReveal01Frame,
+  "notification-stack-01": NotificationStack01Frame,
 };
 
 /**

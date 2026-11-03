@@ -287,6 +287,89 @@ export function buildLogoReveal(
   return tl;
 }
 
+/* ------------------------------------------------------------------ */
+/* Notification Stack — notification-stack-01                          */
+/* ------------------------------------------------------------------ */
+
+export function buildNotificationStack(
+  root: HTMLElement,
+  config: AnimationConfig,
+  opts: BuilderOptions = {}
+): gsap.core.Timeline | void {
+  const { duration } = config;
+  const loop = opts.loop ?? true;
+
+  const stack = root.querySelector<HTMLElement>("[data-notif-stack]");
+  const frame = root.querySelector<HTMLElement>("[data-notif-root]") ?? root;
+  const cards = Array.from(root.querySelectorAll<HTMLElement>("[data-notif-card]"));
+  if (!stack || !cards.length) return;
+
+  const n = cards.length;
+  const step = Math.min(2, Math.max(0.9, (duration * 0.8) / n));
+  const t0 = 0.15;
+
+  // Position de la pile (en % de sa hauteur, donc indépendante de la taille du cadre) :
+  // les cartes 0..i sont centrées ; la dernière reste au-dessus de 85 % du cadre.
+  const H = stack.offsetHeight || 1;
+  const frameH = frame.clientHeight || H;
+  const naturalTop = frameH / 2 - H / 2;
+  const top0 = cards[0].offsetTop;
+  const yFor = (i: number) => {
+    const bottom = cards[i].offsetTop + cards[i].offsetHeight;
+    let y = H / 2 - (top0 + bottom) / 2;
+    y = Math.min(y, frameH * 0.85 - naturalTop - bottom);
+    return (y / H) * 100;
+  };
+
+  const tl = gsap.timeline(tlOptions(loop, 0.8));
+  // Premier placement (seul tween de la pile rendu à la construction).
+  tl.fromTo(stack, { yPercent: yFor(0) }, { yPercent: yFor(0), duration: 0.01 }, 0);
+
+  cards.forEach((card, i) => {
+    const at = t0 + i * step;
+    if (i > 0) {
+      tl.fromTo(
+        stack,
+        { yPercent: yFor(i - 1) },
+        { yPercent: yFor(i), duration: 0.65, ease: "power3.inOut", immediateRender: false },
+        at - 0.05
+      );
+    }
+    tl.fromTo(
+      card,
+      { opacity: 0, yPercent: 35, scale: 0.92, filter: "blur(12px)" },
+      { opacity: 1, yPercent: 0, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "power3.out" },
+      at
+    );
+    const icon = card.querySelector("[data-notif-icon]");
+    const app = card.querySelector("[data-notif-app]");
+    const time = card.querySelector("[data-notif-time]");
+    const words = card.querySelectorAll("[data-notif-word]");
+    if (icon) tl.from(icon, { opacity: 0, scale: 0.6, duration: 0.4, ease: "back.out(2)" }, at + 0.12);
+    if (app) tl.fromTo(app, { opacity: 0, x: -10, filter: "blur(6px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.35, ease: "power2.out" }, at + 0.18);
+    if (time) tl.from(time, { opacity: 0, duration: 0.4 }, at + 0.32);
+    if (words.length) {
+      tl.fromTo(
+        words,
+        { opacity: 0, yPercent: 35, filter: "blur(6px)" },
+        { opacity: 1, yPercent: 0, filter: "blur(0px)", duration: 0.32, ease: "power2.out", stagger: Math.min(0.06, 0.9 / words.length) },
+        at + 0.3
+      );
+    }
+  });
+
+  // Début de la sortie : sert au timing « fit / hold » du Studio.
+  const lastAt = t0 + (n - 1) * step;
+  tl.addLabel("out", lastAt + 1.3 + Math.max(0.5, duration * 0.08));
+  tl.fromTo(
+    stack,
+    { yPercent: yFor(n - 1), opacity: 1, filter: "blur(0px)" },
+    { yPercent: yFor(n - 1) - 6, opacity: 0, filter: "blur(10px)", duration: 0.55, ease: "power2.in", immediateRender: false },
+    "out"
+  );
+  return tl;
+}
+
 /** Registre des builders, par clé de template. */
 export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
   "kinetic-type-01": buildKineticType,
@@ -295,4 +378,5 @@ export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
   "shape-morph-01": buildShapeMorph,
   "staggered-cards-01": buildStaggeredCards,
   "logo-reveal-01": buildLogoReveal,
+  "notification-stack-01": buildNotificationStack,
 };

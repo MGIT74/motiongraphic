@@ -23,6 +23,8 @@ const CONFIG = (overrides: Partial<AnimationConfig> = {}): AnimationConfig => ({
   ...overrides,
 });
 
+import { NOTIFICATION_DEFAULT_TEXT } from "./notifications";
+
 export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
   "kinetic-type-01": {
     key: "kinetic-type-01",
@@ -70,6 +72,21 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     description: "Interface SaaS minimaliste interactive : lecteur audio, volume, analytics, recherche et actions.",
     technologies: ["React", "TypeScript", "CSS", "SVG"],
     defaultConfig: CONFIG({ text: "Minimal SaaS UI", primaryColor: "#171923", accentColor: "#F45A83", backgroundColor: "#F7F8FA", duration: 5, speed: 1 }),
+  },
+  "notification-stack-01": {
+    key: "notification-stack-01",
+    name: "Notification Stack",
+    description:
+      "Des notifications de téléphone arrivent une à une en cartes de verre dépoli : flou → net, texte révélé mot par mot, la pile remonte. Une ligne par notification : App | Titre | Message | Heure.",
+    technologies: ["React", "GSAP", "CSS"],
+    defaultConfig: CONFIG({
+      text: NOTIFICATION_DEFAULT_TEXT,
+      primaryColor: "#1C1C1E",
+      accentColor: "#0A84FF",
+      backgroundColor: "#EDEDF0",
+      duration: 6,
+      fontFamily: "manrope",
+    }),
   },
   "logo-reveal-01": {
     key: "logo-reveal-01",

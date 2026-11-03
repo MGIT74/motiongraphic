@@ -5,7 +5,8 @@ export type ComponentKey =
   | "shape-morph-01"
   | "staggered-cards-01"
   | "logo-reveal-01"
-  | "minimal-saas-ui-01";
+  | "minimal-saas-ui-01"
+  | "notification-stack-01";
 
 export interface AnimationConfig {
   /** Texte principal affiché par l'animation */
