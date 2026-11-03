@@ -308,13 +308,13 @@ export function buildNotificationStackPremium(
   cards.forEach((card, index) => {
     const at = index * 0.42 * scale;
     tl.fromTo(card, { ...offset, scale: 0.92, opacity: 0, rotationX: -8, filter: "blur(8px)" },
-      { xPercent: 0, yPercent: 0, scale: 1, opacity: 1, rotationX: 0, filter: "blur(0px)", duration: 0.7 * scale, ease: "power3.out", immediateRender: false }, at);
+      { xPercent: 0, yPercent: 0, scale: 1, opacity: 1, rotationX: 0, filter: "blur(0px)", duration: 0.7 * scale, ease: "power3.out" }, at);
     const icon = card.querySelector("[data-premium-icon]");
     const content = card.querySelector("[data-premium-content]");
     const glow = card.querySelector("[data-premium-glow]");
-    if (icon) tl.fromTo(icon, { scale: 0.7, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45 * scale, ease: "back.out(1.6)", immediateRender: false }, at + 0.18 * scale);
-    if (content) tl.fromTo(content, { xPercent: 5, opacity: 0 }, { xPercent: 0, opacity: 1, duration: 0.45 * scale, ease: "power2.out", immediateRender: false }, at + 0.23 * scale);
-    if (glow) tl.fromTo(glow, { opacity: 0.35 }, { opacity: 0, duration: 0.65 * scale, ease: "sine.out", immediateRender: false }, at + 0.25 * scale);
+    if (icon) tl.fromTo(icon, { scale: 0.7, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45 * scale, ease: "back.out(1.6)" }, at + 0.18 * scale);
+    if (content) tl.fromTo(content, { xPercent: 5, opacity: 0 }, { xPercent: 0, opacity: 1, duration: 0.45 * scale, ease: "power2.out" }, at + 0.23 * scale);
+    if (glow) tl.fromTo(glow, { opacity: 0.35 }, { opacity: 0, duration: 0.65 * scale, ease: "sine.out" }, at + 0.25 * scale);
   });
   tl.addLabel("out", cards.length * 0.42 * scale + Math.max(0.65, config.duration * 0.22));
   cards.slice().reverse().forEach((card, index) => {
