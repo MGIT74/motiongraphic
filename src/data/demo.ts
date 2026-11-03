@@ -19,6 +19,7 @@ const CATEGORY_IDS = {
 const ANIM_IDS = {
   kinetic: "00000000-0000-4000-8000-000000000011",
   reveal: "00000000-0000-4000-8000-000000000012",
+  letter: "00000000-0000-4000-8000-000000000018",
   elastic: "00000000-0000-4000-8000-000000000013",
   morph: "00000000-0000-4000-8000-000000000014",
   cards: "00000000-0000-4000-8000-000000000015",
@@ -68,6 +69,7 @@ interface DemoTemplateInput {
 }
 
 const TEMPLATES: DemoTemplateInput[] = [
+  { id: ANIM_IDS.letter, title: "Letter Reveal — Gradient", slug: "letter-reveal-01", description: "Apparition progressive des lettres avec flou et dégradé.", categoryId: "typographie", componentKey: "letter-reveal-01", config: { text: "CREATE\\nMOTION", primaryColor: "#FFFFFF", accentColor: "#E879F9", backgroundColor: "#1C1533", duration: 3.8, speed: 1 }, duration: 3.8 },
   {
     id: ANIM_IDS.kinetic,
     title: "Kinetic Typography",
