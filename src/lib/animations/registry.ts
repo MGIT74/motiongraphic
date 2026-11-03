@@ -37,7 +37,7 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     name: "Notification Stack 02 — Premium",
     description: "Notifications minimalistes en cascade, rebond subtil, profondeur, micro-interactions et sortie douce.",
     technologies: ["React", "GSAP", "CSS"],
-    defaultConfig: CONFIG({ text: "Payment received\\nNew milestone\\nYou’re all set", primaryColor: "#202937", accentColor: "#6B8EFC", backgroundColor: "#F1F3F7", duration: 4.5, entranceDirection: "bottom" }),
+    defaultConfig: CONFIG({ text: "Payment received | Your invoice has been paid | now\nNew milestone | Your project is moving forward | 2m\nYou’re all set | Everything is ready to launch | 5m", primaryColor: "#202937", accentColor: "#6B8EFC", backgroundColor: "#F1F3F7", duration: 4.5, entranceDirection: "bottom" }),
   },
   "text-reveal-01": {
     key: "text-reveal-01",
