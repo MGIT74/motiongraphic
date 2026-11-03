@@ -43,6 +43,9 @@ export const STUDIO_TEMPLATES: Record<string, StudioTemplateMeta> = {
     studioCategory: "text-motion",
     timelineDuration: 4,
   }),
+  "letter-reveal-01": extendMeta(getComponentMeta("letter-reveal-01"), {
+    elementKind: "text", studioCategory: "text-motion", timelineDuration: 4,
+  }),
   "text-reveal-01": extendMeta(getComponentMeta("text-reveal-01"), {
     elementKind: "text",
     studioCategory: "text-motion",
