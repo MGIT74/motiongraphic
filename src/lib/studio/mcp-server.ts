@@ -1024,7 +1024,7 @@ export const MCP_PROJECT_TOOLS = [
   },
   {
     name: "capture_screenshot",
-    description: "Capture d'écran d'une page web publique (ex. la page d'accueil ou le tableau de bord public d'une app SaaS), rangée comme image dans le projet. Idéal avec add_media_element frame=browser.",
+    description: "Capture d'écran d'une page web publique (ex. la page d'accueil ou le tableau de bord public d'une app SaaS ; une ancre #section fait défiler jusqu'à la section), rangée comme image dans le projet. Bandeaux cookies et bulles de chat masqués par défaut. Idéal avec add_media_element frame=browser (ou phone avec width=390, height=844).",
     inputSchema: {
       type: "object",
       required: ["project_id", "url"],
@@ -1034,6 +1034,7 @@ export const MCP_PROJECT_TOOLS = [
         width: { type: "number", description: "Largeur de la fenêtre (320 à 2560, défaut 1440)." },
         height: { type: "number", description: "Hauteur de la fenêtre (320 à 2560, défaut 900)." },
         full_page: { type: "boolean", description: "true = page entière (défilement compris)." },
+        clean: { type: "boolean", description: "Masquer les bandeaux cookies et les bulles de chat (défaut true ; rien n'est cliqué ni accepté)." },
         name: { type: "string" },
       },
     },
@@ -1048,6 +1049,7 @@ export const MCP_PROJECT_TOOLS = [
           width: optNumber(input, "width"),
           height: optNumber(input, "height"),
           fullPage: input.full_page === true,
+          clean: input.clean !== false,
           name: typeof input.name === "string" ? input.name : undefined,
         })
       );

@@ -264,6 +264,46 @@ export async function importFromUrl(opts: { userId: string; projectId: string; u
 }
 
 /** Capture d'écran d'une page web publique (PNG), rangée comme média image. */
+/**
+ * Exécuté dans la page avant la capture : masque (sans cliquer, donc sans
+ * consentement donné ni navigation) les bandeaux cookies / RGPD et les bulles
+ * de chat flottantes, qui gâchent une capture d'écran de démonstration.
+ */
+const HIDE_OVERLAYS_SCRIPT = `(() => {
+  const hide = (el) => el && el.style && el.style.setProperty("display", "none", "important");
+  const known = [
+    "#onetrust-banner-sdk", "#onetrust-consent-sdk", "#CybotCookiebotDialog", "#cookiebanner", "#cookie-banner",
+    "#cookie-notice", "#cookie-law-info-bar", ".cc-window", ".cc-banner", ".cky-consent-container", "#axeptio_overlay",
+    "#tarteaucitronRoot", "#didomi-host", ".qc-cmp2-container", "#usercentrics-root", "#iubenda-cs-banner",
+    "#intercom-container", ".intercom-lightweight-app", "#crisp-chatbox", "#hubspot-messages-iframe-container",
+    "#tidio-chat", "#fc_frame", ".tawk-min-container", "iframe[title*='chat' i]"
+  ];
+  known.forEach((sel) => { try { document.querySelectorAll(sel).forEach(hide); } catch (e) {} });
+  const consent = /cookie|consentement|consent|rgpd|gdpr|vie priv[ée]e|confidentialit[ée]|privacy/i;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  document.querySelectorAll("body *").forEach((el) => {
+    const cs = getComputedStyle(el);
+    if (cs.position !== "fixed" && cs.position !== "sticky") return;
+    if (cs.display === "none" || cs.visibility === "hidden") return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return;
+    const text = (el.innerText || "").slice(0, 2000);
+    // Bandeau / fenêtre de consentement (pas une barre de navigation : texte court sur la vie privée).
+    if (consent.test(text) && text.length < 1500 && !(r.top <= 1 && r.height < 120 && el.querySelectorAll("a").length > 4)) {
+      hide(el);
+      return;
+    }
+    // Bulle flottante (chat, support) collée à un coin bas.
+    const small = r.width <= 140 && r.height <= 140;
+    const bottom = vh - r.bottom <= 60;
+    const corner = r.left <= 60 || vw - r.right <= 60;
+    if (small && bottom && corner) hide(el);
+  });
+  // Défilement bloqué par certaines fenêtres modales de consentement.
+  document.documentElement.style.overflow = "";
+  document.body.style.overflow = "";
+})()`;
+
 export async function captureScreenshot(opts: {
   userId: string;
   projectId: string;
@@ -272,6 +312,8 @@ export async function captureScreenshot(opts: {
   height?: number;
   fullPage?: boolean;
   name?: string;
+  /** Masque les bandeaux cookies et les bulles de chat (défaut : oui). */
+  clean?: boolean;
 }): Promise<MediaAsset> {
   const target = await assertPublicUrl(opts.url);
   const width = Math.max(320, Math.min(2560, Math.round(opts.width ?? 1440)));
@@ -289,7 +331,12 @@ export async function captureScreenshot(opts: {
     await page.goto(target.toString(), { waitUntil: "networkidle", timeout: 45_000 }).catch(async () => {
       await page.waitForLoadState("load", { timeout: 15_000 });
     });
-    await page.waitForTimeout(800);
+    // Les bandeaux de consentement apparaissent souvent après un court délai.
+    await page.waitForTimeout(opts.clean === false ? 800 : 1500);
+    if (opts.clean !== false) {
+      await page.evaluate(HIDE_OVERLAYS_SCRIPT).catch(() => undefined);
+      await page.waitForTimeout(250);
+    }
     const png = await page.screenshot({ type: "png", fullPage: opts.fullPage === true });
     const assetId = randomUUID();
     return await withTempDir(async (dir) => {
