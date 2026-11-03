@@ -57,7 +57,7 @@ dans la PR (« touche aussi : … »).
 
 ## 3. En cours
 
-- (aucune tâche en cours — ajouter une ligne : `- [IA] branche — objectif`)
+- [ChatGPT] `feat/two-typography-custom-templates` — Letter Reveal + Typewriter en brouillons via migration 0008 ; code prêt, attente revue/tests SQL et application manuelle.
 
 ## 4. Repères techniques
 
