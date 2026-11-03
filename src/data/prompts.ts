@@ -105,6 +105,10 @@ const PROMPTS = {
         "Le mot est divisé en sous-calques du texte (une lettre par index) ; chaque lettre entre de bas en haut avec un masque (alpha inverted) décalé de 2 frames, puis un point violet apparaît en pop, puis sortie inversée vers le haut pour boucler.",
     }),
   },
+  "letter-reveal-01": {
+    web: webPrompt("letter-reveal-01", { visuel: "Lettres centrées en dégradé blanc-rose sur fond violet sombre, apparition progressive avec flou.", easing: "Chaque lettre monte de 95 % à 0 et passe de blur(12px) à blur(0px) avec stagger et power3.out.", boucle: "Tenue, sortie vers le haut avec flou, puis répétition." }),
+    after_effects: jsxPrompt("letter-reveal-01", { compo: "MGSI_LetterReveal, 1920×1080, 30 fps, 6 s, fond violet sombre.", comportement: "Créer un calque par lettre, révéler en montée avec flou et opacité décalés, tenir puis sortir vers le haut." }),
+  },
   "text-reveal-01": {
     web: webPrompt("text-reveal-01", {
       visuel:
