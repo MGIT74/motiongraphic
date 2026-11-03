@@ -289,8 +289,32 @@ export function buildLogoReveal(
   return tl;
 }
 
+/* Letter Reveal — native GSAP timeline, seekable for Studio/MP4. */
+export function buildLetterReveal(
+  root: HTMLElement,
+  config: AnimationConfig,
+  opts: BuilderOptions = {}
+): gsap.core.Timeline | void {
+  const letters = root.querySelectorAll<HTMLElement>("[data-letter-reveal]");
+  if (!letters.length) return;
+  const duration = Math.max(1, config.duration);
+  const each = Math.min(0.065, duration * 0.012);
+  const tl = gsap.timeline(tlOptions(opts.loop ?? true, 0.55));
+  tl.fromTo(letters,
+    { yPercent: 95, opacity: 0, filter: "blur(12px)" },
+    { yPercent: 0, opacity: 1, filter: "blur(0px)", duration: Math.max(0.35, duration * 0.2),
+      stagger: each, ease: "power3.out", immediateRender: false }
+  );
+  tl.addLabel("out", `+=${Math.max(0.4, duration * 0.25)}`);
+  tl.to(letters, { yPercent: -40, opacity: 0, filter: "blur(10px)",
+    duration: Math.max(0.3, duration * 0.13), stagger: { each: each * 0.5, from: "end" },
+    ease: "power2.in" }, "out");
+  return tl;
+}
+
 /** Registre des builders, par clé de template. */
 export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
+  "letter-reveal-01": buildLetterReveal,
   "kinetic-type-01": buildKineticType,
   "text-reveal-01": buildTextReveal,
   "elastic-text-01": buildElasticText,
