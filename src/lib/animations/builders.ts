@@ -297,10 +297,18 @@ export function buildNotificationStackPremium(
   if (!cards.length) return;
   const tl = gsap.timeline(tlOptions(opts.loop ?? true, 0.65));
   const scale = Math.max(0.5, config.duration / 4.5);
+  const direction = config.entranceDirection ?? "bottom";
+  const offsets = {
+    top: { xPercent: 0, yPercent: -32 },
+    bottom: { xPercent: 0, yPercent: 32 },
+    left: { xPercent: -32, yPercent: 0 },
+    right: { xPercent: 32, yPercent: 0 },
+  } as const;
+  const offset = offsets[direction] ?? offsets.bottom;
   cards.forEach((card, index) => {
     const at = index * 0.42 * scale;
-    tl.fromTo(card, { yPercent: 32, scale: 0.92, opacity: 0, rotationX: -8, filter: "blur(8px)" },
-      { yPercent: 0, scale: 1, opacity: 1, rotationX: 0, filter: "blur(0px)", duration: 0.7 * scale, ease: "power3.out", immediateRender: false }, at);
+    tl.fromTo(card, { ...offset, scale: 0.92, opacity: 0, rotationX: -8, filter: "blur(8px)" },
+      { xPercent: 0, yPercent: 0, scale: 1, opacity: 1, rotationX: 0, filter: "blur(0px)", duration: 0.7 * scale, ease: "power3.out", immediateRender: false }, at);
     const icon = card.querySelector("[data-premium-icon]");
     const content = card.querySelector("[data-premium-content]");
     const glow = card.querySelector("[data-premium-glow]");
