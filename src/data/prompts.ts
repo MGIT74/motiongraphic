@@ -196,6 +196,17 @@ const PROMPTS = {
       comportement: "Animer l'apparition des cartes, le tracé du graphique, la recherche et le bouton avec des interpolations douces.",
     }),
   },
+  "chat-conversation-reveal-01": {
+    web: webPrompt("chat-conversation-reveal-01", {
+      visuel: "Interface de chat originale avec deux bulles, en-tête et barre de saisie.",
+      easing: "Typewriter GSAP déterministe pour question et réponse, entrées fluides, label out.",
+      boucle: "Recommencer après une pause.",
+    }),
+    after_effects: jsxPrompt("chat-conversation-reveal-01", {
+      compo: "Composition 1920x1080, 30 fps, conversation en deux bulles.",
+      comportement: "Révélation des bulles et saisie progressive du texte.",
+    }),
+  },
 } as const satisfies Record<ComponentKey, { web: string; after_effects: string }>;
 
 export const DEMO_PROMPTS = PROMPTS;
