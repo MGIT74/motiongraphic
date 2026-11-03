@@ -19,6 +19,7 @@ const CATEGORY_IDS = {
 const ANIM_IDS = {
   kinetic: "00000000-0000-4000-8000-000000000011",
   reveal: "00000000-0000-4000-8000-000000000012",
+  typewriter: "00000000-0000-4000-8000-000000000019",
   elastic: "00000000-0000-4000-8000-000000000013",
   morph: "00000000-0000-4000-8000-000000000014",
   cards: "00000000-0000-4000-8000-000000000015",
@@ -68,6 +69,7 @@ interface DemoTemplateInput {
 }
 
 const TEMPLATES: DemoTemplateInput[] = [
+  { id: ANIM_IDS.typewriter, title: "Typewriter — Minimal", slug: "typewriter-01", description: "Texte révélé caractère par caractère avec curseur animé.", categoryId: "typographie", componentKey: "typewriter-01", config: { text: "YOUR NEXT IDEA", primaryColor: "#F5F5F7", accentColor: "#72F1B8", backgroundColor: "#0E1016", duration: 4, speed: 1 }, duration: 4 },
   {
     id: ANIM_IDS.kinetic,
     title: "Kinetic Typography",
