@@ -51,23 +51,48 @@ let queue: Promise<void> = Promise.resolve();
 
 let browserPromise: Promise<Browser> | null = null;
 
-async function chromiumExecutable(): Promise<{ executablePath: string; args: string[] }> {
+async function chromiumExecutable(): Promise<{ executablePath: string; args: string[]; libDir?: string }> {
   const fromEnv = process.env.CHROMIUM_PATH;
   if (fromEnv && existsSync(fromEnv)) return { executablePath: fromEnv, args: ["--no-sandbox"] };
   for (const candidate of ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]) {
     if (existsSync(candidate)) return { executablePath: candidate, args: ["--no-sandbox"] };
   }
-  // Chromium autonome livré par npm : aucune installation système. Ses bibliothèques
-  // (libnss3, libnspr4…) ne sont extraites que si le paquet croit tourner sur un
-  // environnement « Amazon Linux 2023 » : on le lui indique le temps du chargement,
-  // puis il ajoute /tmp/al2023/lib à LD_LIBRARY_PATH (hérité par Chromium).
-  const simulated = !process.env.AWS_LAMBDA_JS_RUNTIME && !process.env.AWS_EXECUTION_ENV;
-  if (simulated) process.env.AWS_LAMBDA_JS_RUNTIME = "nodejs20.x";
+  // Chromium autonome livré par npm : aucune installation système.
+  const sparticuz = (await import("@sparticuz/chromium")).default;
+  const executablePath = await sparticuz.executablePath();
+  // Ses bibliothèques (libnss3, libnspr4…) ne sont extraites par le paquet que sur
+  // AWS Lambda — et jamais si /tmp/chromium existe déjà. On les extrait nous-mêmes.
+  const libDir = await ensureBundledLibs();
+  return { executablePath, args: sparticuz.args, libDir };
+}
+
+/** Extrait al2023.tar.br (bibliothèques du Chromium autonome) dans /tmp/al2023/lib. */
+async function ensureBundledLibs(): Promise<string | undefined> {
+  const target = path.join(os.tmpdir(), "al2023");
+  const libDir = path.join(target, "lib");
+  if (existsSync(path.join(libDir, "libnspr4.so"))) return libDir;
   try {
-    const sparticuz = (await import("@sparticuz/chromium")).default;
-    return { executablePath: await sparticuz.executablePath(), args: sparticuz.args };
-  } finally {
-    if (simulated) delete process.env.AWS_LAMBDA_JS_RUNTIME;
+    const { createRequire } = await import("node:module");
+    const entry = createRequire(path.join(process.cwd(), "package.json")).resolve("@sparticuz/chromium");
+    // build/index.js → ../bin/al2023.tar.br
+    let dir = path.dirname(entry);
+    while (!existsSync(path.join(dir, "bin", "al2023.tar.br")) && dir !== path.dirname(dir)) dir = path.dirname(dir);
+    const archive = path.join(dir, "bin", "al2023.tar.br");
+    if (!existsSync(archive)) return undefined;
+    const { brotliDecompressSync } = await import("node:zlib");
+    const tarball = brotliDecompressSync(await readFile(archive));
+    await mkdir(target, { recursive: true });
+    await new Promise<void>((resolve, reject) => {
+      const tar = spawn("tar", ["-x", "-C", target], { stdio: ["pipe", "ignore", "pipe"] });
+      let err = "";
+      tar.stderr.on("data", (d) => (err += String(d)));
+      tar.on("error", reject);
+      tar.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`tar (${code}) : ${err}`))));
+      tar.stdin.end(tarball);
+    });
+    return existsSync(libDir) ? libDir : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -78,8 +103,11 @@ async function getBrowser(): Promise<Browser> {
   }
   browserPromise = (async () => {
     const { chromium } = await import("playwright-core");
-    const { executablePath, args } = await chromiumExecutable();
-    const browser = await chromium.launch({ executablePath, args, headless: true });
+    const { executablePath, args, libDir } = await chromiumExecutable();
+    const env: Record<string, string> = { ...(process.env as Record<string, string>) };
+    if (libDir) env.LD_LIBRARY_PATH = [libDir, process.env.LD_LIBRARY_PATH].filter(Boolean).join(":");
+    env.FONTCONFIG_PATH ??= path.join(os.tmpdir(), "fonts");
+    const browser = await chromium.launch({ executablePath, args, headless: true, env });
     browser.on("disconnected", () => {
       browserPromise = null;
     });
