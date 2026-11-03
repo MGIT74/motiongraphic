@@ -289,8 +289,45 @@ export function buildLogoReveal(
   return tl;
 }
 
+/** Deterministic, scrubbable chat typewriter sequence. */
+export function buildChatConversationReveal(root: HTMLElement, config: AnimationConfig, opts: BuilderOptions = {}): gsap.core.Timeline | void {
+  const stage = root.querySelector<HTMLElement>("[data-chat-stage]");
+  if (!stage) return;
+  const header = root.querySelector<HTMLElement>("[data-chat-header]");
+  const question = root.querySelector<HTMLElement>("[data-chat-question]");
+  const answer = root.querySelector<HTMLElement>("[data-chat-answer]");
+  const input = root.querySelector<HTMLElement>("[data-chat-input]");
+  const k = Math.max(0.5, config.duration / 5.8);
+  const tl = gsap.timeline(tlOptions(opts.loop ?? true, 0.6));
+  if (header) tl.fromTo(header, { opacity: 0, yPercent: -25 }, { opacity: 1, yPercent: 0, duration: 0.45 * k }, 0);
+  if (question) tl.fromTo(question, { opacity: 0, yPercent: 18, scale: 0.94 }, { opacity: 1, yPercent: 0, scale: 1, duration: 0.4 * k, ease: "power3.out" }, 0.45 * k);
+  if (answer) tl.fromTo(answer, { opacity: 0, yPercent: 20, scale: 0.94 }, { opacity: 1, yPercent: 0, scale: 1, duration: 0.4 * k, ease: "power3.out" }, 2.25 * k);
+  if (input) tl.fromTo(input, { opacity: 0, yPercent: 15 }, { opacity: 0.7, yPercent: 0, duration: 0.45 * k }, 4.05 * k);
+  const type = (selector: string, caretSelector: string, at: number, length: number) => {
+    const el = root.querySelector<HTMLElement>(selector);
+    const caret = root.querySelector<HTMLElement>(caretSelector);
+    if (!el) return;
+    const full = el.getAttribute("data-full-text") ?? "";
+    const node = el.firstChild;
+    const state = { n: 0 };
+    tl.fromTo(state, { n: 0 }, { n: full.length, duration: length * k, ease: "none", onUpdate: () => {
+      if (node) node.textContent = full.slice(0, Math.floor(state.n));
+    } }, at * k);
+    if (caret) {
+      tl.fromTo(caret, { opacity: 0 }, { opacity: 1, duration: 0.06 * k }, at * k);
+      tl.to(caret, { opacity: 0, duration: 0.12 * k }, (at + length + 0.1) * k);
+    }
+  };
+  type("[data-chat-question-text]", "[data-chat-question-caret]", 0.85, 1.15);
+  type("[data-chat-answer-text]", "[data-chat-answer-caret]", 2.65, 1.2);
+  tl.addLabel("out", 5.05 * k);
+  tl.to(stage, { opacity: 0, yPercent: -5, duration: 0.45 * k, ease: "power2.in" }, "out");
+  return tl;
+}
+
 /** Registre des builders, par clé de template. */
 export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
+  "chat-conversation-reveal-01": buildChatConversationReveal,
   "kinetic-type-01": buildKineticType,
   "text-reveal-01": buildTextReveal,
   "elastic-text-01": buildElasticText,
