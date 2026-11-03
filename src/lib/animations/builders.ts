@@ -312,7 +312,8 @@ export function buildDashboardReveal(
 }
 
 /** Registre des builders, par clé de template. */
-export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {\n  "dashboard-reveal-01": buildDashboardReveal,
+export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
+  "dashboard-reveal-01": buildDashboardReveal,
   "kinetic-type-01": buildKineticType,
   "text-reveal-01": buildTextReveal,
   "elastic-text-01": buildElasticText,
