@@ -29,7 +29,7 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     name: "AI Input Morph 01",
     description: "Barre de saisie transformée en compositeur IA, apparition séquentielle des actions et sortie fluide.",
     technologies: ["React", "GSAP", "SVG"],
-    defaultConfig: CONFIG({ text: "What will you create?\\nDescribe your next idea...\\nGenerate", primaryColor: "#F8FAFC", accentColor: "#7268F4", backgroundColor: "#0C1020", duration: 4.6 }),
+    defaultConfig: CONFIG({ text: "What will you create?\nDescribe your next idea...\nGenerate", primaryColor: "#F8FAFC", accentColor: "#7268F4", backgroundColor: "#0C1020", duration: 4.6 }),
   },
   "kinetic-type-01": {
     key: "kinetic-type-01",
