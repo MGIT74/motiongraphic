@@ -2,7 +2,7 @@
 
 import { ArrowDownToLine, ArrowUpToLine, Check, ChevronDown, ChevronUp, Layers, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
-import type { ElementTiming, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
+import type { ElementTiming, MediaOptions, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
 import { getStudioTemplate, templatesForKind } from "@/lib/studio/template-registry";
 import LoopingDemoFrame from "@/components/studio/LoopingDemoFrame";
 import type { ComponentKey } from "@/types/animation";
@@ -49,11 +49,13 @@ export default function StudioRightPanel({
       ) : (
         <>
           <ElementProperties selection={selection} onPatchElement={onPatchElement} onDeleteElement={onDeleteElement} onMoveLayer={onMoveLayer} />
-          <CompatibleStyles
-            element={selection.element}
-            project={project}
-            onChange={onChangeTemplate}
-          />
+          {selection.element.kind === "media" ? null : (
+            <CompatibleStyles
+              element={selection.element}
+              project={project}
+              onChange={onChangeTemplate}
+            />
+          )}
         </>
       )}
     </aside>
@@ -104,7 +106,11 @@ function ElementProperties({
       </p>
 
       <div className="grid grid-cols-2 gap-2.5">
-        <div className="col-span-2">
+        {element.kind === "media" && element.media ? (
+          <MediaOptionsFields media={element.media} onChange={(media) => onPatchElement(element.id, { media })} labelCls={labelCls} inputCls={inputCls} />
+        ) : null}
+
+        <div className={element.kind === "media" ? "hidden" : "col-span-2"}>
           <label htmlFor="pr-text" className={labelCls}>
             <Type className="mr-1 inline-block h-3 w-3" aria-hidden="true" /> Texte
           </label>
@@ -138,7 +144,7 @@ function ElementProperties({
           />
         </div>
 
-        <div>
+        <div className={element.kind === "media" ? "hidden" : undefined}>
           <label htmlFor="pr-speed" className={labelCls}>Vitesse</label>
           <input
             id="pr-speed"
@@ -202,7 +208,7 @@ function ElementProperties({
           />
         </div>
 
-        <div className="col-span-2">
+        <div className={element.kind === "media" ? "hidden" : "col-span-2"}>
           <p className={labelCls}>
             <Palette className="mr-1 inline-block h-3 w-3" aria-hidden="true" /> Couleurs
           </p>
@@ -231,7 +237,7 @@ function ElementProperties({
           </div>
         </div>
 
-        <div className="col-span-2">
+        <div className={element.kind === "media" ? "hidden" : "col-span-2"}>
           <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-line bg-background px-2.5 py-2">
             <span className="text-[11px] font-medium text-ink">Fond transparent (calque superposable)</span>
             <input
@@ -264,7 +270,7 @@ function ElementProperties({
           </select>
         </div>
 
-        <div className="col-span-2">
+        <div className={element.kind === "media" ? "hidden" : "col-span-2"}>
           <label htmlFor="pr-font" className={labelCls}>Police</label>
           <select
             id="pr-font"
@@ -308,6 +314,59 @@ function ElementProperties({
         ) : null}
       </div>
     </section>
+  );
+}
+
+const MEDIA_LABELS = {
+  fit: { cover: "Remplir le cadre", contain: "Image entière" },
+  frame: { none: "Aucun", browser: "Fenêtre de navigateur", phone: "Téléphone" },
+  motion: { none: "Aucun", "zoom-in": "Zoom avant lent", "zoom-out": "Zoom arrière lent", "pan-left": "Panoramique gauche", "pan-right": "Panoramique droite" },
+  enter: { none: "Aucune", fade: "Fondu", rise: "Montée", scale: "Agrandissement" },
+} as const;
+
+function MediaOptionsFields({
+  media,
+  onChange,
+  labelCls,
+  inputCls,
+}: {
+  media: MediaOptions;
+  onChange: (media: MediaOptions) => void;
+  labelCls: string;
+  inputCls: string;
+}) {
+  return (
+    <>
+      {(Object.keys(MEDIA_LABELS) as (keyof typeof MEDIA_LABELS)[]).map((key) => (
+        <div key={key} className="col-span-2">
+          <label htmlFor={`pr-media-${key}`} className={labelCls}>
+            {{ fit: "Cadrage", frame: "Habillage", motion: "Mouvement", enter: "Entrée / sortie" }[key]}
+          </label>
+          <select
+            id={`pr-media-${key}`}
+            value={media[key]}
+            onChange={(e) => onChange({ ...media, [key]: e.target.value } as MediaOptions)}
+            className={inputCls}
+          >
+            {Object.entries(MEDIA_LABELS[key]).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
+      ))}
+      <div className="col-span-2">
+        <label htmlFor="pr-media-trim" className={labelCls}>Vidéo : démarrer à (s)</label>
+        <input
+          id="pr-media-trim"
+          type="number"
+          min={0}
+          step={0.5}
+          value={media.trimStart}
+          onChange={(e) => onChange({ ...media, trimStart: Math.max(0, Number(e.target.value) || 0) })}
+          className={inputCls}
+        />
+      </div>
+    </>
   );
 }
 

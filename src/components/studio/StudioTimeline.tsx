@@ -148,7 +148,7 @@ export default function StudioTimeline({
               >
                 <lane.icon className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
                 <span className="text-[11px] font-medium text-ink/80">{lane.label}</span>
-                {lane.id !== "motion" ? (
+                {lane.id === "media" ? (
                   <span className="ml-auto rounded-full border border-line px-1.5 py-[1px] text-[9px] text-muted">P3</span>
                 ) : null}
               </div>
@@ -255,14 +255,26 @@ export default function StudioTimeline({
               ))}
             </div>
 
-            {/* Piste Audio — attente Phase 3 */}
-            <div
-              className="text-muted/40"
-              style={{ position: "absolute", top: audioTop, height: 56, left: 0, right: 0 }}
-            >
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[9px]">
-                Audio — Phase 3
-              </span>
+            {/* Piste Audio : musique du projet */}
+            <div className="text-muted/40" style={{ position: "absolute", top: audioTop, height: 56, left: 0, right: 0 }}>
+              {project.audio ? (() => {
+                const audio = project.audio;
+                const asset = project.media.find((m) => m.id === audio.assetId);
+                const length = Math.max(0.5, Math.min((asset?.duration ?? duration) - audio.trimStart, duration - audio.start));
+                return (
+                  <span
+                    className="absolute flex items-center gap-1.5 overflow-hidden rounded-lg border-2 border-emerald-500/40 bg-emerald-500/10 px-2 text-[10px] font-semibold text-emerald-200"
+                    style={{ left: audio.start * pxPerSec, width: length * pxPerSec, top: 6, height: 44 }}
+                    title={asset?.name ?? "Musique"}
+                  >
+                    ♪ <span className="truncate">{asset?.name ?? "Musique"}</span>
+                  </span>
+                );
+              })() : (
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[9px]">
+                  Musique : onglet Médias
+                </span>
+              )}
             </div>
 
             {/* Playhead */}

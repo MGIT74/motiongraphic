@@ -3,6 +3,7 @@
 import type { StudioProject } from "@/lib/studio/project-model";
 import { roundToFrame, sceneIndexAtTime, sceneOffsets } from "@/lib/studio/project-model";
 import ControlledAnimation from "./ControlledAnimation";
+import MediaLayer from "./MediaLayer";
 import type { ComponentKey } from "@/types/animation";
 
 /**
@@ -53,13 +54,17 @@ export default function StageLayers({
                 : undefined
             }
           >
-            <ControlledAnimation
-              templateKey={element.templateKey as ComponentKey}
-              config={element.config}
-              localTime={localTime}
-              elementDuration={element.duration}
-              timing={element.timing}
-            />
+            {element.kind === "media" ? (
+              <MediaLayer element={element} asset={project.media.find((m) => m.id === element.media?.assetId)} localTime={localTime} />
+            ) : (
+              <ControlledAnimation
+                templateKey={element.templateKey as ComponentKey}
+                config={element.config}
+                localTime={localTime}
+                elementDuration={element.duration}
+                timing={element.timing}
+              />
+            )}
             {isSelected ? (
               <span className="pointer-events-none absolute inset-4 z-10 rounded-2xl border-2 border-accent/60" aria-hidden="true" />
             ) : null}

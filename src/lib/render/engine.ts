@@ -10,6 +10,7 @@ import { renderStageSize } from "./stage-size";
 import { adminSupabase, loadStoredProject } from "./server-projects";
 import { signRenderToken } from "./token";
 import { projectDuration } from "@/lib/studio/project-model";
+import { downloadMedia } from "@/lib/media/server";
 
 /**
  * Moteur de rendu vidéo (serveur) :
@@ -104,7 +105,7 @@ async function ensureBundledLibs(): Promise<string | undefined> {
   }
 }
 
-async function getBrowser(): Promise<Browser> {
+export async function getBrowser(): Promise<Browser> {
   if (browserPromise) {
     const browser = await browserPromise.catch(() => null);
     if (browser?.isConnected()) return browser;
@@ -184,7 +185,7 @@ export async function previewFrame(projectId: string, time: number, width = 960)
 /* Rendu MP4                                                           */
 /* ------------------------------------------------------------------ */
 
-async function ffmpegPath(): Promise<string> {
+export async function ffmpegPath(): Promise<string> {
   if (process.env.FFMPEG_PATH && existsSync(process.env.FFMPEG_PATH)) return process.env.FFMPEG_PATH;
   const mod = (await import("ffmpeg-static")) as unknown as { default?: string } | string;
   const resolved = typeof mod === "string" ? mod : mod.default;
@@ -249,13 +250,18 @@ async function runRender(job: RenderJob) {
   try {
     stage = await openStage(job.projectId);
     const { page } = stage;
+    const audioArgs = await prepareAudio(stage.stored.project, dir, job.id);
     const ffmpeg = spawn(
       await ffmpegPath(),
       [
         "-y", "-loglevel", "error",
         "-f", "image2pipe", "-framerate", "30", "-c:v", "mjpeg", "-i", "-",
+        ...audioArgs.inputs,
+        "-filter_complex", `[0:v]scale=${job.width}:${job.height}:flags=lanczos,setsar=1[v]${audioArgs.filter}`,
+        "-map", "[v]", ...audioArgs.map,
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-        "-vf", `scale=${job.width}:${job.height}:flags=lanczos,setsar=1`,
+        ...audioArgs.codec,
+        "-t", String(job.frames / 30),
         "-movflags", "+faststart", out,
       ],
       { stdio: ["pipe", "ignore", "pipe"] }
@@ -323,6 +329,40 @@ async function uploadToStorage(job: RenderJob, file: string): Promise<string | u
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
+}
+
+/**
+ * Piste musicale : téléchargée depuis le stockage puis mixée par ffmpeg
+ * (décalage dans le fichier, début dans la vidéo, volume, fondus).
+ */
+async function prepareAudio(project: import("@/lib/studio/project-model").StudioProject, dir: string, jobId: string) {
+  const none = { inputs: [] as string[], filter: "", map: [] as string[], codec: [] as string[] };
+  const audio = project.audio;
+  const asset = audio ? project.media.find((m) => m.id === audio.assetId && m.kind === "audio") : undefined;
+  if (!audio || !asset) return none;
+  const file = path.join(dir, `${jobId}-audio`);
+  try {
+    await downloadMedia(asset.storagePath, file);
+  } catch {
+    return none; // musique indisponible : la vidéo est rendue sans son
+  }
+  const total = projectDuration(project);
+  const span = Math.max(0.1, total - audio.start);
+  const available = asset.duration ? Math.max(0.1, asset.duration - audio.trimStart) : span;
+  const len = Math.min(span, available);
+  const fadeOut = Math.min(audio.fadeOut, len);
+  const delayMs = Math.round(audio.start * 1000);
+  const filter =
+    `;[1:a]atrim=0:${len.toFixed(3)},asetpts=N/SR/TB` +
+    (audio.fadeIn > 0 ? `,afade=t=in:st=0:d=${audio.fadeIn.toFixed(3)}` : "") +
+    (fadeOut > 0 ? `,afade=t=out:st=${Math.max(0, len - fadeOut).toFixed(3)}:d=${fadeOut.toFixed(3)}` : "") +
+    `,volume=${audio.volume.toFixed(3)},adelay=${delayMs}|${delayMs},apad[a]`;
+  return {
+    inputs: ["-ss", audio.trimStart.toFixed(3), "-i", file],
+    filter,
+    map: ["-map", "[a]"],
+    codec: ["-c:a", "aac", "-b:a", "192k"],
+  };
 }
 
 /** État d'un rendu + lien de téléchargement (signé) quand il est terminé. */

@@ -105,3 +105,13 @@ Outils MCP ajoutés : `update_scene`, `delete_scene`, `delete_element`, `set_for
 MCP : `preview_frame` (image JPEG d'un instant), `render_project`, `get_render`. Studio : bouton « Exporter MP4 ».
 Variables optionnelles : `RENDER_SECRET` (sinon `MCP_ACCESS_TOKEN`), `RENDER_BASE_URL` (URL que le navigateur interne utilise pour joindre l'app ; sinon l'origine de la requête), `CHROMIUM_PATH`, `FFMPEG_PATH`.
 Mesuré : 15 s de vidéo 1080p rendues en ~57 s (4 cœurs).
+
+## Médias (images, vidéos, musique)
+
+- Modèle : `project.media[]` (bibliothèque : `MediaAsset` avec `storagePath` dans le bucket privé `studio-media`), éléments `kind = "media"` (`templateKey = "media"`, `element.media` : `fit`, `frame` none/browser/phone, `motion` zoom/pan, `enter`, `trimStart`), `project.audio` (musique : volume, début, décalage, fondus).
+- Import depuis le Studio : `POST /api/studio/media/upload-url` (URL d'envoi signée) → envoi direct navigateur → Supabase Storage → `POST /api/studio/media/finalize` (mesure ffmpeg, vidéo → MP4 H.264 sans son ≤ 2 min / 1920 px / 30 i/s, audio → AAC). Lecture : `POST /api/studio/media/urls` (URL signées, fichiers de l'utilisateur uniquement).
+- Calque : `MediaLayer` (entrée/sortie/mouvement calculés depuis le temps local → MP4 identique au Studio) ; un nouveau média se place au-dessus des médias, sous les animations.
+- Rendu : la page `/render` reçoit des URL signées ; chaque image attend le positionnement des vidéos (`seeked`) et le chargement des images ; la musique est mixée par ffmpeg (`atrim`, fondus, `volume`, `adelay`).
+- MCP : `list_media`, `import_media_url`, `capture_screenshot` (Chromium du serveur), `add_media_element`, `set_audio` ; `update_element` accepte `fit`, `frame`, `motion`, `enter`, `trim_start`.
+- Sécurité : import par URL et capture refusent les réseaux privés/locaux (résolution DNS, redirections revérifiées, requêtes de page filtrées) — `MEDIA_ALLOW_PRIVATE_HOSTS=1` réservé aux tests locaux, **jamais en production**.
+- Mesuré : 11 s avec capture + vidéo + musique rendues en ~93 s (local).

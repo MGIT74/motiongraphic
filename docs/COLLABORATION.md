@@ -44,6 +44,7 @@ toute modification.**
 | Studio (éditeur, timeline, calques, marque) | `src/components/studio/`, `src/lib/studio/` (sauf `mcp-server.ts`) | Claude |
 | Serveur MCP | `src/lib/studio/mcp-server.ts`, `src/app/api/mcp/` | Claude |
 | Rendu vidéo MP4 | `src/lib/render/`, `src/app/render/`, `src/app/api/studio/render/` | Claude |
+| Médias du Studio | `src/lib/media/`, `src/app/api/studio/media/` | Claude |
 | Site public (accueil, galerie, fiches, catégories) | `src/app/page.tsx`, `src/app/explore/`, `src/app/templates/`, `src/components/gallery/`, `src/components/layout/`, `src/components/templates/` | ChatGPT |
 | Favoris (UI) | nouveaux composants + `src/lib/data.ts` | ChatGPT |
 | Sécurité Supabase (RLS, migrations) | `supabase/migrations/` | ChatGPT (revue par Claude) |

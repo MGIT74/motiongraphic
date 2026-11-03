@@ -8,9 +8,20 @@ import { registerCustomStudioTemplates } from "./template-registry";
 import { isSafeColor } from "@/lib/animations/config";
 import { BRAND_FONTS, isBrandFont } from "@/lib/brand/fonts";
 import {
+  addMediaAsset,
   applyBrand,
   brandedConfig,
   ELEMENT_TIMINGS,
+  insertMediaElement,
+  makeMediaElement,
+  MEDIA_ENTERS,
+  MEDIA_FITS,
+  MEDIA_FRAMES,
+  MEDIA_MOTIONS,
+  sanitizeAudio,
+  sanitizeMediaOptions,
+  setProjectAudio,
+  type MediaAsset,
   formatOf,
   makeDefaultProject,
   makeElement,
@@ -279,6 +290,49 @@ function optTiming(input: McpInput): ElementTiming | undefined {
   return ELEMENT_TIMINGS.includes(input.timing as ElementTiming) ? (input.timing as ElementTiming) : undefined;
 }
 
+const MEDIA_PROPERTIES = {
+  fit: { type: "string", enum: MEDIA_FITS, description: "cover = remplit le cadre ; contain = image entière." },
+  frame: { type: "string", enum: MEDIA_FRAMES, description: "Habillage : aucun, fenêtre de navigateur (idéal pour une capture d'écran d'app web) ou téléphone." },
+  motion: { type: "string", enum: MEDIA_MOTIONS, description: "Mouvement lent pendant l'élément." },
+  enter: { type: "string", enum: MEDIA_ENTERS, description: "Entrée (et sortie si timing = fit)." },
+  trim_start: { type: "number", description: "Vidéo : instant de départ dans le fichier (s)." },
+} as const;
+
+/** Applique les réglages média passés à l'outil. */
+function applyMediaOptions(current: import("./project-model").MediaOptions, input: McpInput) {
+  return sanitizeMediaOptions({
+    ...current,
+    ...(input.fit !== undefined ? { fit: input.fit } : {}),
+    ...(input.frame !== undefined ? { frame: input.frame } : {}),
+    ...(input.motion !== undefined ? { motion: input.motion } : {}),
+    ...(input.enter !== undefined ? { enter: input.enter } : {}),
+    ...(input.trim_start !== undefined ? { trimStart: input.trim_start } : {}),
+  }) ?? current;
+}
+
+/** Résumé d'un média pour les réponses MCP. */
+function assetSummary(asset: MediaAsset) {
+  return {
+    asset_id: asset.id,
+    kind: asset.kind,
+    name: asset.name,
+    width: asset.width ?? null,
+    height: asset.height ?? null,
+    duration: asset.duration ?? null,
+    size_mb: asset.sizeBytes ? Math.round((asset.sizeBytes / 1048576) * 10) / 10 : null,
+  };
+}
+
+/** Enregistre un nouveau média dans la bibliothèque du projet. */
+async function storeAsset(input: McpInput, make: (userId: string, projectId: string) => Promise<MediaAsset>) {
+  const { project, projectId, userId } = await needProject(input);
+  const asset = await make(userId, projectId);
+  // Recharge le projet (l'import peut durer) puis ajoute l'asset avec le verrou de version.
+  const fresh = (await loadProjectRow(projectId, userId)) ?? project;
+  await persistProject(requireValid(addMediaAsset(fresh, asset)), userId, fresh);
+  return JSON.stringify({ ok: true, ...assetSummary(asset), studio_url: studioUrl(projectId), hint: "Placez-le avec add_media_element (images/vidéos) ou set_audio (musique)." });
+}
+
 /** Scène ciblée par scene_id OU scene_index. */
 function needScene(input: McpInput, project: StudioProject): number {
   if (typeof input.scene_id === "string") {
@@ -476,6 +530,7 @@ export const MCP_PROJECT_TOOLS = [
         scale: { type: "number" },
         text: { type: "string" },
         ...STYLE_PROPERTIES,
+        ...MEDIA_PROPERTIES,
         layer: {
           description: "Ordre du calque : 'up', 'down', 'front', 'back' ou index (0 = fond).",
           oneOf: [{ type: "string", enum: ["up", "down", "front", "back"] }, { type: "number" }],
@@ -502,6 +557,7 @@ export const MCP_PROJECT_TOOLS = [
         if (typeof input.label === "string") patched.label = input.label.slice(0, 60);
         if (typeof input.text === "string") patched.config = { ...patched.config, text: input.text.slice(0, 120) };
         patched.config = applyStyle(patched.config, input);
+        if (patched.media) patched.media = applyMediaOptions(patched.media, input);
         const timing = optTiming(input);
         if (timing) patched.timing = timing;
         return patched;
@@ -797,6 +853,150 @@ export const MCP_PROJECT_TOOLS = [
         storage_error: job.storageError ?? null,
         error: job.error ?? null,
       });
+    },
+  },
+  {
+    name: "list_media",
+    description: "Liste les médias importés dans le projet (images, vidéos, audio) avec leurs dimensions et durées.",
+    inputSchema: { type: "object", required: ["project_id"], properties: { project_id: { type: "string" } } },
+    run: async (input: McpInput) => {
+      const { project } = await needProject(input);
+      return JSON.stringify({
+        media: project.media.map(assetSummary),
+        audio: project.audio ? { ...project.audio } : null,
+      });
+    },
+  },
+  {
+    name: "import_media_url",
+    description: "Importe une image, une vidéo (convertie en MP4, 2 min max) ou un fichier audio depuis une URL publique http(s), dans la bibliothèque du projet.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id", "url"],
+      properties: { project_id: { type: "string" }, url: { type: "string" }, name: { type: "string" } },
+    },
+    run: async (input: McpInput) => {
+      const url = typeof input.url === "string" ? input.url : "";
+      const { importFromUrl } = await import("@/lib/media/server");
+      return storeAsset(input, (userId, projectId) =>
+        importFromUrl({ userId, projectId, url, name: typeof input.name === "string" ? input.name : undefined })
+      );
+    },
+  },
+  {
+    name: "capture_screenshot",
+    description: "Capture d'écran d'une page web publique (ex. la page d'accueil ou le tableau de bord public d'une app SaaS), rangée comme image dans le projet. Idéal avec add_media_element frame=browser.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id", "url"],
+      properties: {
+        project_id: { type: "string" },
+        url: { type: "string" },
+        width: { type: "number", description: "Largeur de la fenêtre (320 à 2560, défaut 1440)." },
+        height: { type: "number", description: "Hauteur de la fenêtre (320 à 2560, défaut 900)." },
+        full_page: { type: "boolean", description: "true = page entière (défilement compris)." },
+        name: { type: "string" },
+      },
+    },
+    run: async (input: McpInput) => {
+      const url = typeof input.url === "string" ? input.url : "";
+      const { captureScreenshot } = await import("@/lib/media/server");
+      return storeAsset(input, (userId, projectId) =>
+        captureScreenshot({
+          userId,
+          projectId,
+          url,
+          width: optNumber(input, "width"),
+          height: optNumber(input, "height"),
+          fullPage: input.full_page === true,
+          name: typeof input.name === "string" ? input.name : undefined,
+        })
+      );
+    },
+  },
+  {
+    name: "add_media_element",
+    description: "Place une image ou une vidéo de la bibliothèque dans une scène, avec habillage (navigateur, téléphone), mouvement lent et entrée. Par défaut au-dessus des autres médias mais sous les animations (layer = back), qui restent lisibles par-dessus.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id", "asset_id"],
+      properties: {
+        project_id: { type: "string" },
+        asset_id: { type: "string" },
+        scene_index: { type: "number" },
+        start: { type: "number" },
+        duration: { type: "number" },
+        x: { type: "number" },
+        y: { type: "number" },
+        scale: { type: "number" },
+        timing: STYLE_PROPERTIES.timing,
+        layer: { type: "string", enum: ["back", "front"], description: "back (défaut) = au-dessus des médias, sous les animations ; front = tout au premier plan." },
+        ...MEDIA_PROPERTIES,
+      },
+    },
+    run: async (input: McpInput) => {
+      const { project, projectId, userId } = await needProject(input);
+      const assetId = needString(input, "asset_id", "asset_id");
+      const asset = project.media.find((m) => m.id === assetId);
+      if (!asset) throw new McpToolError(`Média introuvable dans le projet : ${assetId} (voir list_media).`);
+      if (asset.kind === "audio") throw new McpToolError("C'est un fichier audio : utilisez set_audio.");
+      const sceneIdx = needIndex(input, project);
+      const scene = project.scenes[sceneIdx];
+      const base = makeMediaElement(asset, {
+        start: optNumber(input, "start") ?? 0,
+        duration: optNumber(input, "duration") ?? scene.duration,
+        x: optNumber(input, "x"),
+        y: optNumber(input, "y"),
+        scale: optNumber(input, "scale"),
+        timing: optTiming(input),
+        frame: asset.kind === "image" ? "browser" : "none",
+      });
+      const element = { ...base, media: applyMediaOptions(base.media!, input) };
+      const front = input.layer === "front";
+      const next = insertMediaElement(project, scene.id, element, front);
+      await persistProject(requireValid(next), userId, project);
+      return JSON.stringify({ ok: true, element_id: element.id, scene_index: sceneIdx, layer: front ? "front" : "back", studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "set_audio",
+    description: "Définit la musique de la vidéo (fichier audio de la bibliothèque) : volume 0-1, début dans la vidéo, décalage dans le fichier, fondus. asset_id = null retire la musique.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id"],
+      properties: {
+        project_id: { type: "string" },
+        asset_id: { type: ["string", "null"] },
+        volume: { type: "number" },
+        start: { type: "number", description: "Début de la musique dans la vidéo (s)." },
+        trim_start: { type: "number", description: "Instant de départ dans le fichier audio (s)." },
+        fade_in: { type: "number" },
+        fade_out: { type: "number" },
+      },
+    },
+    run: async (input: McpInput) => {
+      const { project, projectId, userId } = await needProject(input);
+      if (input.asset_id === null) {
+        await persistProject(requireValid(setProjectAudio(project, null)), userId, project);
+        return JSON.stringify({ ok: true, audio: null });
+      }
+      const assetId = typeof input.asset_id === "string" ? input.asset_id : project.audio?.assetId;
+      const asset = project.media.find((m) => m.id === assetId && m.kind === "audio");
+      if (!asset) throw new McpToolError("Fichier audio introuvable dans le projet (voir list_media).");
+      const current = project.audio?.assetId === asset.id ? project.audio : undefined;
+      const audio = sanitizeAudio({
+        volume: 0.8, start: 0, trimStart: 0, fadeIn: 0.5, fadeOut: 1.5,
+        ...current,
+        assetId: asset.id,
+        ...(input.volume !== undefined ? { volume: input.volume } : {}),
+        ...(input.start !== undefined ? { start: input.start } : {}),
+        ...(input.trim_start !== undefined ? { trimStart: input.trim_start } : {}),
+        ...(input.fade_in !== undefined ? { fadeIn: input.fade_in } : {}),
+        ...(input.fade_out !== undefined ? { fadeOut: input.fade_out } : {}),
+      });
+      if (!audio) throw new McpToolError("Réglages audio invalides.");
+      await persistProject(requireValid(setProjectAudio(project, audio)), userId, project);
+      return JSON.stringify({ ok: true, audio, studio_url: studioUrl(projectId) });
     },
   },
   {

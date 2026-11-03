@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@/app/studio-fonts.css";
 import StageLayers from "@/components/studio/StageLayers";
+import { MediaRuntimeContext, pendingMediaWaits } from "@/components/studio/MediaLayer";
 import { projectDuration, type StudioProject } from "@/lib/studio/project-model";
 import { registerCustomStudioTemplates } from "@/lib/studio/template-registry";
 import type { StudioCustomTemplateInput } from "@/lib/render/server-projects";
@@ -30,9 +31,11 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
 export default function RenderStage({
   project,
   customTemplates,
+  mediaUrls = {},
 }: {
   project: StudioProject;
   customTemplates: StudioCustomTemplateInput[];
+  mediaUrls?: Record<string, string>;
 }) {
   // Enregistrement des templates custom AVANT le premier rendu de la scène.
   const [registered] = useState(() => {
@@ -49,6 +52,9 @@ export default function RenderStage({
     waiters.current = [];
     void (async () => {
       await nextFrame();
+      await nextFrame();
+      // Médias : attendre que chaque vidéo soit positionnée et chaque image chargée.
+      while (pendingMediaWaits.size > 0) await Promise.all(Array.from(pendingMediaWaits));
       await nextFrame();
       pending.forEach((resolve) => resolve());
     })();
@@ -94,7 +100,9 @@ export default function RenderStage({
       style={{ width: size.width, height: size.height, background: "#000" }}
       data-render-stage
     >
-      {registered ? <StageLayers project={project} time={time} /> : null}
+      <MediaRuntimeContext.Provider value={{ urls: mediaUrls, deterministic: true, playing: false }}>
+        {registered ? <StageLayers project={project} time={time} /> : null}
+      </MediaRuntimeContext.Provider>
     </div>
   );
 }

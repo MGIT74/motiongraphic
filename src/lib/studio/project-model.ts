@@ -57,7 +57,64 @@ export const PROJECT_SCHEMA_VERSION = 1;
 export const STUDIO_FPS = 30;
 export const FRAME_SECONDS = 1 / STUDIO_FPS;
 
-export type ElementKind = "text" | "shape" | "cards" | "logo";
+export type ElementKind = "text" | "shape" | "cards" | "logo" | "media";
+
+/** Clé de « template » des éléments média (image/vidéo importée) : pas d'animation GSAP. */
+export const MEDIA_TEMPLATE_KEY = "media";
+
+/* ------------------------------------------------------------------ */
+/* Médias (images, vidéos, audio) importés dans le projet               */
+/* ------------------------------------------------------------------ */
+
+export type MediaKind = "image" | "video" | "audio";
+
+export interface MediaAsset {
+  id: string;
+  kind: MediaKind;
+  name: string;
+  /** Chemin dans le bucket privé « studio-media » (jamais une URL publique). */
+  storagePath: string;
+  mime: string;
+  width?: number;
+  height?: number;
+  /** Durée en secondes (vidéo, audio). */
+  duration?: number;
+  sizeBytes?: number;
+  createdAt: string;
+}
+
+/** Réglages d'un élément média (image ou vidéo) dans une scène. */
+export interface MediaOptions {
+  assetId: string;
+  /** cover = remplit le cadre, contain = image entière. */
+  fit: "cover" | "contain";
+  /** Habillage : aucun, fenêtre de navigateur ou téléphone. */
+  frame: "none" | "browser" | "phone";
+  /** Mouvement lent pendant l'élément (effet « Ken Burns »). */
+  motion: "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right";
+  /** Entrée / sortie. */
+  enter: "none" | "fade" | "rise" | "scale";
+  /** Vidéo : décalage de lecture dans le fichier (s). */
+  trimStart: number;
+}
+
+export const MEDIA_FITS: MediaOptions["fit"][] = ["cover", "contain"];
+export const MEDIA_FRAMES: MediaOptions["frame"][] = ["none", "browser", "phone"];
+export const MEDIA_MOTIONS: MediaOptions["motion"][] = ["none", "zoom-in", "zoom-out", "pan-left", "pan-right"];
+export const MEDIA_ENTERS: MediaOptions["enter"][] = ["none", "fade", "rise", "scale"];
+
+/** Piste musicale du projet. */
+export interface ProjectAudio {
+  assetId: string;
+  /** Volume 0..1. */
+  volume: number;
+  /** Début de la musique dans la vidéo (s). */
+  start: number;
+  /** Décalage de lecture dans le fichier audio (s). */
+  trimStart: number;
+  fadeIn: number;
+  fadeOut: number;
+}
 
 export interface StudioElement {
   id: string;
@@ -74,6 +131,8 @@ export interface StudioElement {
   x: number; // 0-100 (% du centre)
   y: number;
   scale: number; // 0.1-3
+  /** Élément média (kind = "media") : image/vidéo importée et son habillage. */
+  media?: MediaOptions;
   /**
    * Adaptation de l'animation à la durée de l'élément :
    * - "natural" (défaut historique) : l'animation joue à sa vitesse, coupée à la fin ;
@@ -131,8 +190,10 @@ export interface StudioProject {
   scenes: StudioScene[];
   /** Kit de marque (couleurs, police, logo) — optionnel. */
   brand?: BrandKit;
-  /** Phase 3 : médias importés (rushs, images, logos) — découpés virtuellement. */
-  media: unknown[];
+  /** Bibliothèque de médias importés (images, vidéos, audio) du projet. */
+  media: MediaAsset[];
+  /** Musique de la vidéo (optionnelle). */
+  audio?: ProjectAudio;
   createdAt: string;
   updatedAt: string;
 }
@@ -285,9 +346,16 @@ export function validateProject(input: unknown): StudioProject | null {
       for (const elRaw of (Array.isArray(s.elements) ? s.elements : []) as unknown[]) {
         const e = (typeof elRaw === "object" && elRaw !== null ? elRaw : {}) as Record<string, unknown>;
         if (typeof e.id !== "string") return null;
-        if (typeof e.templateKey !== "string" || !(isComponentKey(e.templateKey) || isStudioTemplateKey(e.templateKey))) return null;
         const kind = e.kind as ElementKind;
-        if (kind !== "text" && kind !== "shape" && kind !== "cards" && kind !== "logo") return null;
+        const isMedia = kind === "media";
+        if (isMedia) {
+          if (e.templateKey !== MEDIA_TEMPLATE_KEY) return null;
+        } else if (typeof e.templateKey !== "string" || !(isComponentKey(e.templateKey) || isStudioTemplateKey(e.templateKey))) {
+          return null;
+        }
+        if (kind !== "text" && kind !== "shape" && kind !== "cards" && kind !== "logo" && kind !== "media") return null;
+        const media = isMedia ? sanitizeMediaOptions(e.media) : null;
+        if (isMedia && !media) return null;
         elements.push({
           id: e.id,
           label: typeof e.label === "string" ? e.label.slice(0, 60) : e.templateKey,
@@ -300,6 +368,7 @@ export function validateProject(input: unknown): StudioProject | null {
           y: clampNumber(Number(e.y), 0, 100),
           scale: clampNumber(Number(e.scale), 0.2, 3),
           ...(ELEMENT_TIMINGS.includes(e.timing as ElementTiming) ? { timing: e.timing as ElementTiming } : {}),
+          ...(media ? { media } : {}),
         });
       }
       scenes.push({
@@ -319,7 +388,8 @@ export function validateProject(input: unknown): StudioProject | null {
       ...snapFormat(Number(raw.width), Number(raw.height)),
       scenes,
       ...(sanitizeBrand(raw.brand) ? { brand: sanitizeBrand(raw.brand) as BrandKit } : {}),
-      media: Array.isArray(raw.media) ? raw.media : [],
+      media: sanitizeMediaList(raw.media),
+      ...(sanitizeAudio(raw.audio) ? { audio: sanitizeAudio(raw.audio) as ProjectAudio } : {}),
       createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
       updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
     };
@@ -329,6 +399,128 @@ export function validateProject(input: unknown): StudioProject | null {
     void validationError;
     return null;
   }
+}
+
+const MEDIA_PATH_RE = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+){1,6}$/;
+const MEDIA_MIME_RE = /^(image\/(png|jpeg|webp|gif|svg\+xml)|video\/(mp4|webm)|audio\/(mpeg|mp4|aac|wav|x-wav|ogg|webm))$/;
+
+function finiteOr(v: unknown, fallback: number, min: number, max: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+}
+
+export function sanitizeMediaAsset(input: unknown): MediaAsset | null {
+  if (typeof input !== "object" || input === null) return null;
+  const a = input as Record<string, unknown>;
+  if (typeof a.id !== "string" || !/^[A-Za-z0-9-]{8,64}$/.test(a.id)) return null;
+  if (a.kind !== "image" && a.kind !== "video" && a.kind !== "audio") return null;
+  if (typeof a.storagePath !== "string" || !MEDIA_PATH_RE.test(a.storagePath) || a.storagePath.includes("..")) return null;
+  if (typeof a.mime !== "string" || !MEDIA_MIME_RE.test(a.mime)) return null;
+  return {
+    id: a.id,
+    kind: a.kind,
+    name: typeof a.name === "string" ? a.name.slice(0, 120) : a.kind,
+    storagePath: a.storagePath,
+    mime: a.mime,
+    ...(a.width !== undefined ? { width: Math.round(finiteOr(a.width, 0, 0, 10000)) } : {}),
+    ...(a.height !== undefined ? { height: Math.round(finiteOr(a.height, 0, 0, 10000)) } : {}),
+    ...(a.duration !== undefined ? { duration: finiteOr(a.duration, 0, 0, 3600) } : {}),
+    ...(a.sizeBytes !== undefined ? { sizeBytes: Math.round(finiteOr(a.sizeBytes, 0, 0, 5e9)) } : {}),
+    createdAt: typeof a.createdAt === "string" ? a.createdAt : new Date().toISOString(),
+  };
+}
+
+function sanitizeMediaList(input: unknown): MediaAsset[] {
+  if (!Array.isArray(input)) return [];
+  return input.map(sanitizeMediaAsset).filter((a): a is MediaAsset => a !== null).slice(0, 200);
+}
+
+export function sanitizeMediaOptions(input: unknown): MediaOptions | null {
+  if (typeof input !== "object" || input === null) return null;
+  const m = input as Record<string, unknown>;
+  if (typeof m.assetId !== "string" || !/^[A-Za-z0-9-]{8,64}$/.test(m.assetId)) return null;
+  const pick = <T extends string>(v: unknown, list: T[], fallback: T): T => (list.includes(v as T) ? (v as T) : fallback);
+  return {
+    assetId: m.assetId,
+    fit: pick(m.fit, MEDIA_FITS, "cover"),
+    frame: pick(m.frame, MEDIA_FRAMES, "none"),
+    motion: pick(m.motion, MEDIA_MOTIONS, "none"),
+    enter: pick(m.enter, MEDIA_ENTERS, "fade"),
+    trimStart: finiteOr(m.trimStart, 0, 0, 3600),
+  };
+}
+
+export function sanitizeAudio(input: unknown): ProjectAudio | null {
+  if (typeof input !== "object" || input === null) return null;
+  const a = input as Record<string, unknown>;
+  if (typeof a.assetId !== "string" || !/^[A-Za-z0-9-]{8,64}$/.test(a.assetId)) return null;
+  return {
+    assetId: a.assetId,
+    volume: finiteOr(a.volume, 0.8, 0, 1),
+    start: finiteOr(a.start, 0, 0, 600),
+    trimStart: finiteOr(a.trimStart, 0, 0, 3600),
+    fadeIn: finiteOr(a.fadeIn, 0.5, 0, 10),
+    fadeOut: finiteOr(a.fadeOut, 1.5, 0, 10),
+  };
+}
+
+/** Crée un élément média (image/vidéo) au premier plan d'une scène. */
+export function makeMediaElement(
+  asset: MediaAsset,
+  opts: Partial<MediaOptions> & { start?: number; duration?: number; x?: number; y?: number; scale?: number; label?: string; timing?: ElementTiming } = {}
+): StudioElement {
+  const media = sanitizeMediaOptions({ fit: "cover", frame: "none", motion: "none", enter: "fade", trimStart: 0, ...opts, assetId: asset.id }) as MediaOptions;
+  const defaultDuration = asset.kind === "video" && asset.duration ? Math.min(asset.duration - media.trimStart, 20) : 4;
+  return {
+    ...makeElement(MEDIA_TEMPLATE_KEY, "media", { text: "", primaryColor: "#FFFFFF", accentColor: "#0A84FF", backgroundColor: "transparent", duration: 4, speed: 1 }, {
+      start: opts.start,
+      duration: opts.duration ?? Math.max(1, defaultDuration),
+      x: opts.x,
+      y: opts.y,
+      scale: opts.scale,
+      label: opts.label ?? asset.name.slice(0, 60),
+      timing: opts.timing ?? "fit",
+    }),
+    media,
+  };
+}
+
+/**
+ * Insère un élément média au-dessus des médias déjà présents dans la scène,
+ * mais sous les animations (titres, cartes…) qui restent lisibles par-dessus.
+ */
+export function insertMediaElement(project: StudioProject, sceneId: string, element: StudioElement, front = false): StudioProject {
+  return {
+    ...project,
+    updatedAt: new Date().toISOString(),
+    scenes: project.scenes.map((scene) => {
+      if (scene.id !== sceneId) return scene;
+      const elements = [...scene.elements];
+      let index = elements.length;
+      if (!front) {
+        let lastMedia = -1;
+        elements.forEach((el, i) => {
+          if (el.kind === "media") lastMedia = i;
+        });
+        index = lastMedia + 1;
+      }
+      elements.splice(index, 0, element);
+      return { ...scene, elements };
+    }),
+  };
+}
+
+/** Ajoute un média à la bibliothèque du projet. */
+export function addMediaAsset(project: StudioProject, asset: MediaAsset): StudioProject {
+  return { ...project, updatedAt: new Date().toISOString(), media: [...project.media.filter((m) => m.id !== asset.id), asset] };
+}
+
+/** Définit (ou retire avec null) la musique du projet. */
+export function setProjectAudio(project: StudioProject, audio: ProjectAudio | null): StudioProject {
+  const next: StudioProject = { ...project, updatedAt: new Date().toISOString() };
+  if (audio) next.audio = audio;
+  else delete next.audio;
+  return next;
 }
 
 /** Ramène des dimensions quelconques au format proposé le plus proche. */
