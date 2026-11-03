@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Film, Layers3, Palette, Plus, Trash2, Upload, Wand2, X } from "lucide-react";
+import { Film, Image as ImageIcon, Layers3, Palette, Plus, Trash2, Upload, Wand2, X } from "lucide-react";
+import MediaPanel from "./MediaPanel";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
 import { LOGO_MAX_CHARS } from "@/lib/animations/config";
-import type { BrandKit, StudioProject } from "@/lib/studio/project-model";
+import type { BrandKit, MediaAsset, ProjectAudio, StudioProject } from "@/lib/studio/project-model";
 import { STUDIO_CATEGORIES, STUDIO_TEMPLATES } from "@/lib/studio/template-registry";
 
 /**
@@ -23,6 +24,10 @@ export default function StudioLeftPanel({
   onUpdateSceneBackground,
   onUpdateBrand,
   onApplyBrand,
+  mediaUrls = {},
+  onAddAsset,
+  onAddMediaToScene,
+  onSetAudio,
 }: {
   project: StudioProject;
   currentSceneIndex: number;
@@ -35,12 +40,17 @@ export default function StudioLeftPanel({
   onUpdateSceneBackground?: (index: number, background: string) => void;
   onUpdateBrand?: (brand: BrandKit) => void;
   onApplyBrand?: (brand: BrandKit) => void;
+  mediaUrls?: Record<string, string>;
+  onAddAsset?: (asset: MediaAsset) => void;
+  onAddMediaToScene?: (asset: MediaAsset) => void;
+  onSetAudio?: (audio: ProjectAudio | null) => void;
 }) {
-  const [tab, setTab] = useState<"scenes" | "library" | "brand">("scenes");
+  const [tab, setTab] = useState<"scenes" | "library" | "media" | "brand">("scenes");
 
   const tabs = [
     { id: "scenes" as const, label: "Scènes", icon: Layers3 },
     { id: "library" as const, label: "Templates", icon: Film },
+    { id: "media" as const, label: "Médias", icon: ImageIcon },
     { id: "brand" as const, label: "Marque", icon: Palette },
   ];
 
@@ -52,7 +62,7 @@ export default function StudioLeftPanel({
             key={tb.id}
             type="button"
             onClick={() => setTab(tb.id)}
-            className={`inline-flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`inline-flex h-8 flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg text-[11px] font-medium transition-colors ${
               tab === tb.id ? "bg-elevated text-ink" : "text-muted hover:text-ink"
             }`}
           >
@@ -167,6 +177,14 @@ export default function StudioLeftPanel({
               );
             })}
           </div>
+        ) : tab === "media" ? (
+          <MediaPanel
+            project={project}
+            urls={mediaUrls}
+            onAddAsset={(a) => onAddAsset?.(a)}
+            onAddToScene={(a) => onAddMediaToScene?.(a)}
+            onSetAudio={(a) => onSetAudio?.(a)}
+          />
         ) : (
           <BrandPanel project={project} onUpdateBrand={onUpdateBrand} onApplyBrand={onApplyBrand} />
         )}

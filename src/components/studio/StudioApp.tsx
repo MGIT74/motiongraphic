@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import "@/app/studio-fonts.css";
-import type { BrandKit, ProjectFormat, StudioElement } from "@/lib/studio/project-model";
+import type { BrandKit, MediaAsset, ProjectAudio, ProjectFormat, StudioElement } from "@/lib/studio/project-model";
 import type { StudioProject } from "@/lib/studio/project-model";
 import {
+  addMediaAsset,
   appendElement,
   applyBrand,
   brandedConfig,
+  insertMediaElement,
+  makeMediaElement,
+  setProjectAudio,
   formatOf,
   moveElementLayer,
   setProjectFormat,
@@ -39,6 +43,8 @@ import StudioCanvas from "./StudioCanvas";
 import StudioRightPanel from "./StudioRightPanel";
 import StudioTimeline from "./StudioTimeline";
 import ExportButton from "./ExportButton";
+import AudioTrack from "./AudioTrack";
+import { MediaRuntimeContext } from "./MediaLayer";
 
 /**
  * MotionGraphic Studio V1 Bêta — orchestrateur.
@@ -163,6 +169,29 @@ export default function StudioApp({
   const { time, playing, duration, sceneIndex, seek, setPlaying } = clock;
 
   const selection = computeSelection(project, selectedElementId);
+
+  /* ------------------------------- médias -------------------------------- */
+  // URL de lecture signées des médias du projet (renouvelées quand la liste change).
+  const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
+  const mediaKey = project.media.map((m) => m.id).join("|");
+  useEffect(() => {
+    const missing = project.media.filter((m) => !mediaUrls[m.id]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch("/api/studio/media/urls", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ assets: missing.map((m) => ({ id: m.id, storagePath: m.storagePath })) }),
+      }).catch(() => null);
+      const body = (await res?.json().catch(() => null)) as { urls?: Record<string, string> } | null;
+      if (!cancelled && body?.urls) setMediaUrls((prev) => ({ ...prev, ...body.urls }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaKey]);
 
   /* ------------------------------ autosave ------------------------------ */
   // Local + cloud (Supabase RLS si configuré), sans écraser une version distante
@@ -313,6 +342,20 @@ export default function StudioApp({
     if (selectedElementId === elementId) setSelectedElementId(null);
   };
 
+  const addAsset = (asset: MediaAsset) => commit(addMediaAsset(projectRef.current, asset), "add-media");
+
+  const addMediaToScene = (asset: MediaAsset) => {
+    if (asset.kind === "audio") return;
+    const scene = project.scenes[sceneIndex];
+    if (!scene) return;
+    // Au-dessus des autres médias, sous les animations (qui restent lisibles par-dessus).
+    const element = makeMediaElement(asset, { start: 0, duration: scene.duration, frame: asset.kind === "image" ? "browser" : "none" });
+    commit(insertMediaElement(project, scene.id, element), "add-media-element");
+    setSelectedElementId(element.id);
+  };
+
+  const setAudio = (audio: ProjectAudio | null) => commit(setProjectAudio(project, audio), "audio", "audio");
+
   const moveLayer = (elementId: string, target: "up" | "down" | "front" | "back") => {
     const located = computeSelection(project, elementId);
     if (!located) return;
@@ -385,6 +428,8 @@ export default function StudioApp({
         }
       />
 
+      <MediaRuntimeContext.Provider value={{ urls: mediaUrls, deterministic: false, playing }}>
+      <AudioTrack audio={project.audio} url={project.audio ? mediaUrls[project.audio.assetId] : undefined} time={time} playing={playing} projectDuration={duration} />
       <div className="flex min-h-0 flex-1">
         <StudioLeftPanel
           project={project}
@@ -398,6 +443,10 @@ export default function StudioApp({
           onUpdateSceneBackground={updateSceneBackground}
           onUpdateBrand={updateBrand}
           onApplyBrand={applyBrandToProject}
+          mediaUrls={mediaUrls}
+          onAddAsset={addAsset}
+          onAddMediaToScene={addMediaToScene}
+          onSetAudio={setAudio}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -437,6 +486,7 @@ export default function StudioApp({
           onMoveLayer={moveLayer}
         />
       </div>
+      </MediaRuntimeContext.Provider>
     </div>
   );
 }
