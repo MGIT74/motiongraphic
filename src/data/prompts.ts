@@ -105,6 +105,10 @@ const PROMPTS = {
         "Le mot est divisé en sous-calques du texte (une lettre par index) ; chaque lettre entre de bas en haut avec un masque (alpha inverted) décalé de 2 frames, puis un point violet apparaît en pop, puis sortie inversée vers le haut pour boucler.",
     }),
   },
+  "notification-stack-premium-02": {
+    web: webPrompt("notification-stack-premium-02", { visuel: "Trois notifications blanches arrondies sur fond gris clair, ombres douces et icônes accent.", easing: "GSAP fromTo: cascade avec profondeur, léger rebond, micro-interactions et sortie en remontée.", boucle: "Entrée successive, pause, disparition inversée." }),
+    after_effects: jsxPrompt("notification-stack-premium-02", { compo: "MGSI_NotificationStackPremium, 1920×1080, 30 fps, 6 s.", comportement: "Trois cartes de notification apparaissent successivement avec échelle, translation, opacité et flou." }),
+  },
   "text-reveal-01": {
     web: webPrompt("text-reveal-01", {
       visuel:
