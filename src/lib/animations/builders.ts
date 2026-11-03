@@ -296,25 +296,23 @@ export function buildTypewriter(
   opts: BuilderOptions = {}
 ): gsap.core.Timeline | void {
   const characters = root.querySelectorAll<HTMLElement>("[data-type-char]");
-  const cursor = root.querySelector<HTMLElement>("[data-type-cursor]");
+  const cursors = Array.from(root.querySelectorAll<HTMLElement>("[data-type-cursor]"));
   if (!characters.length) return;
   const tl = gsap.timeline(tlOptions(opts.loop ?? true, 0.7));
   const duration = Math.max(1, config.duration);
   const typingDuration = Math.max(0.45, duration * 0.58);
   const step = typingDuration / Math.max(1, characters.length);
-  // Explicit states avoid CSS animations and permit exact frame-by-frame seeking.
   tl.fromTo(characters, { opacity: 0 }, {
     opacity: 1, duration: 0.001, stagger: step, ease: "none",
   }, 0);
-  if (cursor) {
-    tl.fromTo(cursor, { opacity: 1 }, {
-      opacity: 0.25, duration: 0.22, repeat: Math.max(0, Math.floor(typingDuration / 0.44) * 2 - 1),
-      yoyo: true, ease: "steps(1)",
-    }, 0);
-  }
+  // One cursor per glyph, positioned after that glyph; seeking is deterministic.
+  cursors.forEach((cursor, i) => {
+    tl.set(cursor, { opacity: 1 }, i * step + 0.001);
+    if (i < cursors.length - 1) tl.set(cursor, { opacity: 0 }, (i + 1) * step + 0.001);
+  });
   tl.addLabel("out", typingDuration + Math.max(0.5, duration * 0.22));
   tl.to(characters, { opacity: 0, duration: 0.3, stagger: { each: Math.min(0.018, step * 0.5), from: "end" }, ease: "none" }, "out");
-  if (cursor) tl.to(cursor, { opacity: 0, duration: 0.2 }, "out");
+  tl.to(cursors, { opacity: 0, duration: 0.2 }, "out");
   return tl;
 }
 
