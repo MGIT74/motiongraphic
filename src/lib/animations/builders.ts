@@ -303,7 +303,7 @@ export function buildLetterReveal(
   tl.fromTo(letters,
     { yPercent: 95, opacity: 0, filter: "blur(12px)" },
     { yPercent: 0, opacity: 1, filter: "blur(0px)", duration: Math.max(0.35, duration * 0.2),
-      stagger: each, ease: "power3.out", immediateRender: false }
+      stagger: each, ease: "power3.out" }
   );
   tl.addLabel("out", `+=${Math.max(0.4, duration * 0.25)}`);
   tl.to(letters, { yPercent: -40, opacity: 0, filter: "blur(10px)",
