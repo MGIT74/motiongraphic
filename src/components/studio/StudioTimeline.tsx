@@ -298,7 +298,7 @@ export default function StudioTimeline({
           className="absolute right-4 z-10 inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-red-300 opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-70"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => onDeleteElement(element.id)}
-          title="Supprimer l'élément (Suppr)"
+          title="Supprimer l'élément"
         >
           <Trash2 className="pointer-events-none h-3 w-3" aria-hidden="true" />
         </span>
