@@ -56,7 +56,7 @@ dans la PR (« touche aussi : … »).
 
 ## 3. En cours
 
-- (aucune tâche en cours — ajouter une ligne : `- [IA] branche — objectif`)
+- [ChatGPT] `audit/rls-security-review` — audit RLS, fonctions privilégiées et droits Supabase (tâche 1).
 
 ## 4. Repères techniques
 
