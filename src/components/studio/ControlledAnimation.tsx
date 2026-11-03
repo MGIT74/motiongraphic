@@ -43,6 +43,7 @@ export default function ControlledAnimation({
   localTime,
   elementDuration,
   timing,
+  preview = false,
 }: {
   templateKey: ComponentKey;
   config: AnimationConfig;
@@ -51,6 +52,8 @@ export default function ControlledAnimation({
   /** Durée de l'élément dans la timeline (requis pour le timing « fit »). */
   elementDuration?: number;
   timing?: ElementTiming;
+  /** Vignette (bibliothèque) : pas un calque du projet. */
+  preview?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
@@ -126,7 +129,7 @@ export default function ControlledAnimation({
       ref={rootRef}
       className="absolute inset-0 h-full w-full overflow-hidden"
       style={{ backgroundColor: config.backgroundColor, fontFamily: fontCss(config.fontFamily) }}
-      data-mgsi-element
+      data-mgsi-element={preview ? undefined : ""}
     >
       <Frame config={config} />
     </div>
