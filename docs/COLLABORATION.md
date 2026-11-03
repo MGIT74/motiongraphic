@@ -56,7 +56,7 @@ dans la PR (« touche aussi : … »).
 
 ## 3. En cours
 
-- (aucune tâche en cours — ajouter une ligne : `- [IA] branche — objectif`)
+- [ChatGPT] `audit/rls-security-review` — audit RLS terminé, rapport et migration 0007 proposés ; PR en attente de revue et CI.
 
 ## 4. Repères techniques
 
