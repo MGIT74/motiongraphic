@@ -1,6 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { sanitizeCustomTemplate, validateCustomTemplate, type CustomTemplate } from "./custom-model";
+import { sanitizeCustomTemplate, fromCustomTemplateRow, validateCustomTemplate, type CustomTemplate } from "./custom-model";
 import type { AnimationConfig } from "@/types/animation";
 
 /**
@@ -140,7 +140,7 @@ export async function listCustomTemplates(): Promise<CustomTemplate[]> {
   const { data, error } = await client.from("custom_templates").select(CUSTOM_SELECT);
   if (error) throw new CustomStoreError(`Supabase (custom_templates) : ${error.message}`);
   return ((data ?? []) as unknown as CustomTemplateRow[])
-    .map(fromRow)
+    .map(fromCustomTemplateRow)
     .filter((t): t is CustomTemplate => t !== null);
 }
 
