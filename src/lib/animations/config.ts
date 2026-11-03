@@ -45,7 +45,7 @@ export function sanitizeConfig(input: unknown, fallback: AnimationConfig): Anima
     const n = typeof v === "number" ? v : Number(v);
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
   };
-  const text = typeof raw.text === "string" ? raw.text.slice(0, 120) : fallback.text;
+  const text = typeof raw.text === "string" ? raw.text.slice(0, 800) : fallback.text;
   return {
     text,
     primaryColor: isSafeColor(raw.primaryColor) ? (raw.primaryColor as string) : fallback.primaryColor,
@@ -55,6 +55,7 @@ export function sanitizeConfig(input: unknown, fallback: AnimationConfig): Anima
       : fallback.backgroundColor,
     duration: clamp(raw.duration, 1, 30, fallback.duration),
     speed: clamp(raw.speed, 0.25, 3, fallback.speed),
+    ...(["top", "bottom", "left", "right"].includes(String(raw.entranceDirection)) ? { entranceDirection: raw.entranceDirection as AnimationConfig["entranceDirection"] } : fallback.entranceDirection ? { entranceDirection: fallback.entranceDirection } : {}),
     ...(isBrandFont(raw.fontFamily) ? { fontFamily: raw.fontFamily as string } : fallback.fontFamily ? { fontFamily: fallback.fontFamily } : {}),
     ...(isSafeLogoUrl(raw.logoUrl) ? { logoUrl: raw.logoUrl as string } : {}),
   };
