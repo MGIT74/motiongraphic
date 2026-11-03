@@ -139,7 +139,7 @@ export function validateCustomTemplate(
   return { ok: errors.length === 0, errors };
 }
 
-export const RESERVED_SLUGS: string[] = [
+export const RESERVED_SLUGS: string[] = [\n  "dashboard-reveal-01",
   "kinetic-type-01",
   "text-reveal-01",
   "elastic-text-01",
