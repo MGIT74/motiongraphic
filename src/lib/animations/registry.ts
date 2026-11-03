@@ -23,7 +23,8 @@ const CONFIG = (overrides: Partial<AnimationConfig> = {}): AnimationConfig => ({
   ...overrides,
 });
 
-export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {\n  "dashboard-reveal-01": {\n    key: "dashboard-reveal-01",\n    name: "Dashboard Reveal 01",\n    description: "Tableau de bord SaaS premium : KPI en cascade, barres de performance animées et sortie fluide.",\n    technologies: ["React", "GSAP", "SVG"],\n    defaultConfig: CONFIG({ text: "Overview\\nRevenue | €48.2K | +12.8%\\nCustomers | 2,840 | +8.4%\\nConversion | 4.82% | +2.1%", primaryColor: "#F6F7FF", accentColor: "#8B7CFF", backgroundColor: "#0C1020", duration: 4.5 }),\n  },
+export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
+  "dashboard-reveal-01": {\n    key: "dashboard-reveal-01",\n    name: "Dashboard Reveal 01",\n    description: "Tableau de bord SaaS premium : KPI en cascade, barres de performance animées et sortie fluide.",\n    technologies: ["React", "GSAP", "SVG"],\n    defaultConfig: CONFIG({ text: "Overview\\nRevenue | €48.2K | +12.8%\\nCustomers | 2,840 | +8.4%\\nConversion | 4.82% | +2.1%", primaryColor: "#F6F7FF", accentColor: "#8B7CFF", backgroundColor: "#0C1020", duration: 4.5 }),\n  },
   "kinetic-type-01": {
     key: "kinetic-type-01",
     name: "Kinetic Typography",
