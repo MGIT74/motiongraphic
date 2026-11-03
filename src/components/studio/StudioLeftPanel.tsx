@@ -1,11 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Film, Image as ImageIcon, Layers3, Palette, Plus, Trash2, Upload, Wand2, X } from "lucide-react";
+import { Copy, Film, Image as ImageIcon, Layers3, Palette, Plus, Trash2, Upload, Wand2, X } from "lucide-react";
 import MediaPanel from "./MediaPanel";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
 import { LOGO_MAX_CHARS } from "@/lib/animations/config";
-import type { BrandKit, MediaAsset, ProjectAudio, StudioProject } from "@/lib/studio/project-model";
+import type { BrandKit, MediaAsset, ProjectAudio, SceneTransition, StudioProject } from "@/lib/studio/project-model";
+import { SCENE_TRANSITIONS } from "@/lib/studio/project-model";
+
+const TRANSITION_LABELS: Record<string, string> = {
+  none: "Coupe franche",
+  fade: "Fondu",
+  "slide-left": "Glissement ←",
+  "slide-up": "Glissement ↑",
+  wipe: "Volet",
+  zoom: "Zoom",
+};
 import { STUDIO_CATEGORIES, STUDIO_TEMPLATES } from "@/lib/studio/template-registry";
 
 /**
@@ -28,6 +38,8 @@ export default function StudioLeftPanel({
   onAddAsset,
   onAddMediaToScene,
   onSetAudio,
+  onUpdateSceneTransition,
+  onDuplicateScene,
 }: {
   project: StudioProject;
   currentSceneIndex: number;
@@ -44,6 +56,8 @@ export default function StudioLeftPanel({
   onAddAsset?: (asset: MediaAsset) => void;
   onAddMediaToScene?: (asset: MediaAsset) => void;
   onSetAudio?: (audio: ProjectAudio | null) => void;
+  onUpdateSceneTransition?: (index: number, transition: SceneTransition | null) => void;
+  onDuplicateScene?: (index: number) => void;
 }) {
   const [tab, setTab] = useState<"scenes" | "library" | "media" | "brand">("scenes");
 
@@ -120,6 +134,17 @@ export default function StudioLeftPanel({
                       title="Fond de la scène (sous les calques)"
                     />
                   ) : null}
+                  {onDuplicateScene ? (
+                    <button
+                      type="button"
+                      onClick={() => onDuplicateScene(i)}
+                      className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-line text-muted transition-colors hover:border-accent/50 hover:text-ink"
+                      aria-label={`Dupliquer la scène ${scene.name}`}
+                      title="Dupliquer la scène"
+                    >
+                      <Copy className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => onDeleteScene(i)}
@@ -130,6 +155,44 @@ export default function StudioLeftPanel({
                     <Trash2 className="h-3 w-3" aria-hidden="true" />
                   </button>
                 </div>
+                {i > 0 && onUpdateSceneTransition ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <select
+                      value={scene.transition?.type ?? "none"}
+                      onChange={(e) =>
+                        onUpdateSceneTransition(
+                          i,
+                          e.target.value === "none"
+                            ? null
+                            : { type: e.target.value as SceneTransition["type"], duration: scene.transition?.duration ?? 0.6 }
+                        )
+                      }
+                      className="h-7 min-w-0 flex-1 cursor-pointer rounded-md border border-line bg-background px-1.5 text-[11px] text-ink focus:border-accent/60 focus:outline-none"
+                      aria-label={`Transition d'entrée de la scène ${scene.name}`}
+                    >
+                      {SCENE_TRANSITIONS.map((t) => (
+                        <option key={t} value={t}>
+                          {TRANSITION_LABELS[t]}
+                        </option>
+                      ))}
+                    </select>
+                    {scene.transition ? (
+                      <input
+                        type="number"
+                        min={0.2}
+                        max={2}
+                        step={0.1}
+                        value={scene.transition.duration}
+                        onChange={(e) =>
+                          onUpdateSceneTransition(i, { type: scene.transition!.type, duration: Math.max(0.2, Math.min(2, Number(e.target.value) || 0.6)) })
+                        }
+                        className="h-7 w-16 rounded-md border border-line bg-background px-2 text-xs text-ink focus:border-accent/60 focus:outline-none"
+                        aria-label={`Durée de la transition de la scène ${scene.name}`}
+                        title="Durée de la transition (s)"
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ))}
             <button

@@ -33,6 +33,10 @@ import {
   sanitizeBrand,
   setProjectFormat,
   updateScene,
+  duplicateProject,
+  duplicateScene,
+  SCENE_TRANSITIONS,
+  type SceneTransition,
   type ElementKind,
   type ElementTiming,
   type ProjectFormat,
@@ -333,6 +337,24 @@ async function storeAsset(input: McpInput, make: (userId: string, projectId: str
   return JSON.stringify({ ok: true, ...assetSummary(asset), studio_url: studioUrl(projectId), hint: "Placez-le avec add_media_element (images/vidéos) ou set_audio (musique)." });
 }
 
+const TRANSITION_PROPERTIES = {
+  transition: {
+    type: "string",
+    enum: SCENE_TRANSITIONS,
+    description: "Transition d'entrée depuis la scène précédente : none (coupe), fade, slide-left, slide-up, wipe, zoom.",
+  },
+  transition_duration: { type: "number", description: "Durée de la transition (0,2 à 2 s, défaut 0,6)." },
+} as const;
+
+/** Transition demandée (undefined = inchangée, null = aucune). */
+function optTransition(input: McpInput, current?: SceneTransition): SceneTransition | null | undefined {
+  if (input.transition === undefined && input.transition_duration === undefined) return undefined;
+  const type = (input.transition ?? current?.type ?? "fade") as SceneTransition["type"];
+  if (!SCENE_TRANSITIONS.includes(type)) throw new McpToolError(`transition invalide : ${SCENE_TRANSITIONS.join(", ")}.`);
+  if (type === "none") return null;
+  return { type, duration: optNumber(input, "transition_duration") ?? current?.duration ?? 0.6 };
+}
+
 /** Scène ciblée par scene_id OU scene_index. */
 function needScene(input: McpInput, project: StudioProject): number {
   if (typeof input.scene_id === "string") {
@@ -427,8 +449,87 @@ export const MCP_PROJECT_TOOLS = [
     },
   },
   {
+    name: "list_projects",
+    description: "Liste les projets Studio (du plus récent au plus ancien) : id, nom, format, nombre de scènes, durée, dernière modification et lien studio_url.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "Filtre sur le nom (sans casse)." },
+        limit: { type: "number", description: "Nombre maximum (1 à 50, défaut 20)." },
+      },
+    },
+    run: async (input: McpInput) => {
+      const conf = mcpConfigCheck();
+      if (!conf.ok) throw new McpToolError(conf.reason);
+      const userId = process.env.MCP_USER_ID as string;
+      const client = await adminClient();
+      const { data, error } = await client
+        .from("studio_projects")
+        .select("id, name, width, height, data, updated_at")
+        .eq("user_id", userId);
+      if (error) throw new McpToolError(mapDbError(error), error.code === "PGRST205" ? hintMigration() : undefined);
+      const search = typeof input.search === "string" ? input.search.trim().toLowerCase() : "";
+      const limit = Math.max(1, Math.min(50, Math.trunc(optNumber(input, "limit") ?? 20)));
+      const rows = ((data ?? []) as (ProjectRow & { width: number; height: number })[])
+        .filter((r) => !search || (r.name ?? "").toLowerCase().includes(search))
+        .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))
+        .slice(0, limit);
+      return JSON.stringify({
+        count: rows.length,
+        projects: rows.map((r) => {
+          const scenes = Array.isArray((r.data as { scenes?: unknown[] } | null)?.scenes)
+            ? ((r.data as { scenes: { duration?: number }[] }).scenes)
+            : [];
+          return {
+            project_id: r.id,
+            name: r.name,
+            format: formatOf({ width: r.width, height: r.height }),
+            scene_count: scenes.length,
+            duration: Math.round(scenes.reduce((sum, sc) => sum + (Number(sc.duration) || 0), 0) * 10) / 10,
+            updated_at: r.updated_at,
+            studio_url: studioUrl(r.id),
+          };
+        }),
+      });
+    },
+  },
+  {
+    name: "duplicate_project",
+    description: "Duplique un projet complet (scènes, calques, médias, musique, marque) sous un nouveau nom — utile pour décliner une vidéo (autre format, autre langue) sans toucher à l'original.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id"],
+      properties: {
+        project_id: { type: "string" },
+        name: { type: "string", description: "Nom de la copie (défaut : « <nom> (copie) »)." },
+        format: { type: "string", enum: Object.keys(PROJECT_FORMATS), description: "Format de la copie (optionnel)." },
+      },
+    },
+    run: async (input: McpInput) => {
+      const { project, userId } = await needProject(input);
+      let copy = duplicateProject(project, typeof input.name === "string" && input.name.trim() ? input.name.trim() : undefined);
+      if ((Object.keys(PROJECT_FORMATS) as ProjectFormat[]).includes(input.format as ProjectFormat)) {
+        copy = setProjectFormat(copy, input.format as ProjectFormat);
+      }
+      copy = requireValid(copy);
+      const client = await adminClient();
+      const { error } = await client.from("studio_projects").insert({
+        id: copy.id,
+        user_id: userId,
+        name: copy.name,
+        schema_version: copy.schemaVersion,
+        fps: copy.fps,
+        width: copy.width,
+        height: copy.height,
+        data: JSON.parse(serializeProject(copy)),
+      });
+      if (error) throw new McpToolError(mapDbError(error), error.code === "PGRST205" ? hintMigration() : undefined);
+      return JSON.stringify({ project_id: copy.id, name: copy.name, format: formatOf(copy), studio_url: studioUrl(copy.id) });
+    },
+  },
+  {
     name: "create_scene",
-    description: "Ajoute une scène à la fin d'un projet.",
+    description: "Ajoute une scène à la fin d'un projet (nom, durée, fond, transition d'entrée depuis la scène précédente).",
     inputSchema: {
       type: "object",
       required: ["project_id"],
@@ -436,6 +537,8 @@ export const MCP_PROJECT_TOOLS = [
         project_id: { type: "string" },
         name: { type: "string" },
         duration: { type: "number" },
+        background: { type: "string", description: "#RRGGBB" },
+        ...TRANSITION_PROPERTIES,
       },
     },
     run: async (input: McpInput) => {
@@ -447,7 +550,10 @@ export const MCP_PROJECT_TOOLS = [
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
       const name = typeof input.name === "string" ? input.name.trim().slice(0, 80) || "Scène" : `Scène ${project.scenes.length + 1}`;
       const duration = roundToFrame(Math.max(1, Math.min(600, optNumber(input, "duration") ?? 5)));
-      const next = { ...project, scenes: [...project.scenes, makeScene(name, duration)] };
+      const scene = makeScene(name, duration, [], { background: isSafeColor(input.background) ? (input.background as string) : undefined });
+      const transition = optTransition(input);
+      if (transition) scene.transition = transition;
+      const next = { ...project, scenes: [...project.scenes, scene] };
       await persistProject(requireValid(next), userId, project);
       return JSON.stringify({ project_id: projectId, scene_count: next.scenes.length, scenes: next.scenes.map((s) => ({ id: s.id, name: s.name })) });
     },
@@ -677,7 +783,7 @@ export const MCP_PROJECT_TOOLS = [
   },
   {
     name: "update_scene",
-    description: "Modifie une scène (scene_id ou scene_index) : nom, durée (s), couleur de fond sous les calques.",
+    description: "Modifie une scène (scene_id ou scene_index) : nom, durée (s), couleur de fond sous les calques, transition d'entrée (sans effet sur la 1re scène).",
     inputSchema: {
       type: "object",
       required: ["project_id"],
@@ -688,6 +794,7 @@ export const MCP_PROJECT_TOOLS = [
         name: { type: "string" },
         duration: { type: "number" },
         background: { type: "string", description: "#RRGGBB" },
+        ...TRANSITION_PROPERTIES,
       },
     },
     run: async (input: McpInput) => {
@@ -697,10 +804,42 @@ export const MCP_PROJECT_TOOLS = [
         name: typeof input.name === "string" ? input.name : undefined,
         duration: optNumber(input, "duration"),
         background: typeof input.background === "string" ? input.background : undefined,
+        transition: optTransition(input, project.scenes[idx].transition),
       });
       await persistProject(requireValid(next), userId, project);
       const scene = next.scenes[idx];
-      return JSON.stringify({ ok: true, scene: { id: scene.id, name: scene.name, duration: scene.duration, background: scene.background ?? "#000000" }, studio_url: studioUrl(projectId) });
+      return JSON.stringify({ ok: true, scene: { id: scene.id, name: scene.name, duration: scene.duration, background: scene.background ?? "#000000", transition: scene.transition ?? null }, studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "duplicate_scene",
+    description: "Duplique une scène (scene_id ou scene_index) avec tous ses calques, juste après l'originale. Renvoie la nouvelle scène et les nouveaux element_id.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id"],
+      properties: {
+        project_id: { type: "string" },
+        scene_id: { type: "string" },
+        scene_index: { type: "number" },
+        name: { type: "string", description: "Nom de la copie (optionnel)." },
+      },
+    },
+    run: async (input: McpInput) => {
+      const { project, projectId, userId } = await needProject(input);
+      const idx = needScene(input, project);
+      const result = duplicateScene(project, project.scenes[idx].id);
+      if (!result) throw new McpToolError("Scène introuvable.");
+      let next = result.project;
+      if (typeof input.name === "string" && input.name.trim()) next = updateScene(next, result.scene.id, { name: input.name });
+      await persistProject(requireValid(next), userId, project);
+      const scene = next.scenes[idx + 1];
+      return JSON.stringify({
+        ok: true,
+        scene_index: idx + 1,
+        scene: { id: scene.id, name: scene.name, duration: scene.duration },
+        elements: scene.elements.map((el) => ({ element_id: el.id, label: el.label, template_key: el.templateKey })),
+        studio_url: studioUrl(projectId),
+      });
     },
   },
   {

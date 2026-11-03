@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import "@/app/studio-fonts.css";
-import type { BrandKit, MediaAsset, ProjectAudio, ProjectFormat, StudioElement } from "@/lib/studio/project-model";
+import type { BrandKit, MediaAsset, ProjectAudio, ProjectFormat, SceneTransition, StudioElement } from "@/lib/studio/project-model";
 import type { StudioProject } from "@/lib/studio/project-model";
 import {
   addMediaAsset,
   appendElement,
+  duplicateElement,
+  duplicateProject,
+  duplicateScene,
+  FRAME_SECONDS,
   applyBrand,
   brandedConfig,
   insertMediaElement,
@@ -26,8 +30,9 @@ import {
   updateElement,
 } from "@/lib/studio/project-model";
 import { getStudioTemplate, registerCustomStudioTemplates } from "@/lib/studio/template-registry";
-import { loadLatestOrDefault, saveProject } from "@/lib/studio/persistence";
+import { deleteProject as deleteLocalProject, loadLatestOrDefault, loadProject as loadLocalProject, saveProject } from "@/lib/studio/persistence";
 import {
+  deleteCloudProject,
   fetchCloudVersion,
   loadCloudProject,
   loadLatestCloudProject,
@@ -43,6 +48,7 @@ import StudioCanvas from "./StudioCanvas";
 import StudioRightPanel from "./StudioRightPanel";
 import StudioTimeline from "./StudioTimeline";
 import ExportButton from "./ExportButton";
+import ProjectsMenu from "./ProjectsMenu";
 import AudioTrack from "./AudioTrack";
 import { MediaRuntimeContext } from "./MediaLayer";
 
@@ -250,6 +256,11 @@ export default function StudioApp({
   };
 
   /* --------------------------- raccourcis clavier ---------------------------- */
+  // Les actions changent à chaque rendu : le raccourci appelle toujours la dernière version.
+  const shortcutsRef = useRef<{ deleteElement: (id: string) => void; duplicateElement: (id: string) => void }>({
+    deleteElement: () => {},
+    duplicateElement: () => {},
+  });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -263,11 +274,25 @@ export default function StudioApp({
       } else if (e.key === " ") {
         e.preventDefault();
         setPlaying(!playing);
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedElementId) {
+        e.preventDefault();
+        shortcutsRef.current.deleteElement(selectedElementId);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d" && selectedElementId) {
+        e.preventDefault();
+        shortcutsRef.current.duplicateElement(selectedElementId);
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        // Image par image (Maj : 1 seconde).
+        e.preventDefault();
+        const step = (e.shiftKey ? 1 : FRAME_SECONDS) * (e.key === "ArrowLeft" ? -1 : 1);
+        setPlaying(false);
+        seek(Math.max(0, Math.min(duration - FRAME_SECONDS, time + step)));
+      } else if (e.key === "Escape") {
+        setSelectedElementId(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo, playing, setPlaying]);
+  }, [undo, redo, playing, setPlaying, selectedElementId, seek, time, duration]);
 
   /* ------------------------------ navigation ------------------------------ */
   const offsets = sceneOffsets(project);
@@ -370,6 +395,82 @@ export default function StudioApp({
   const updateSceneBackground = (index: number, background: string) =>
     commit(updateScene(project, project.scenes[index].id, { background }), "scene-background", `scene-bg:${project.scenes[index].id}`);
 
+  const updateSceneTransition = (index: number, transition: SceneTransition | null) =>
+    commit(
+      updateScene(project, project.scenes[index].id, { transition }),
+      "scene-transition",
+      `scene-tr:${project.scenes[index].id}`
+    );
+
+  const duplicateSceneAt = (index: number) => {
+    const result = duplicateScene(project, project.scenes[index].id);
+    if (!result) return;
+    commit(result.project, "duplicate-scene");
+    seek(sceneOffsets(result.project)[index + 1] + 0.001);
+  };
+
+  const duplicateElementById = (elementId: string) => {
+    const located = computeSelection(project, elementId);
+    if (!located) return;
+    const result = duplicateElement(project, located.scene.id, elementId);
+    if (!result) return;
+    commit(result.project, "duplicate-element");
+    setSelectedElementId(result.elementId);
+  };
+
+  useEffect(() => {
+    shortcutsRef.current = { deleteElement, duplicateElement: duplicateElementById };
+  });
+
+  /* ------------------------------- projets ------------------------------- */
+  const showProject = (next: StudioProject, remoteVersion?: string) => {
+    if (remoteVersion) {
+      applyRemote({ project: next, updatedAt: remoteVersion });
+    } else {
+      remoteVersionRef.current = undefined;
+      reset(next);
+    }
+    setSelectedElementId(null);
+    seek(0);
+    try {
+      window.history.replaceState(null, "", `/studio?project=${encodeURIComponent(next.id)}`);
+    } catch {
+      // Historique indisponible : sans conséquence.
+    }
+  };
+
+  const fetchProjectById = async (id: string): Promise<{ project: StudioProject; updatedAt?: string } | null> => {
+    const cloud = await loadCloudProject(id).catch(() => null);
+    if (cloud) return cloud;
+    const local = loadLocalProject(id);
+    return local ? { project: local } : null;
+  };
+
+  const openProjectById = async (id: string) => {
+    await saveNow(projectRef.current);
+    const found = await fetchProjectById(id);
+    if (!found) throw new Error("Projet introuvable.");
+    showProject(found.project, found.updatedAt);
+  };
+
+  const duplicateProjectById = async (id: string) => {
+    await saveNow(projectRef.current);
+    const found = id === projectRef.current.id ? { project: projectRef.current } : await fetchProjectById(id);
+    if (!found) throw new Error("Projet introuvable.");
+    const copy = duplicateProject(found.project);
+    saveProject(copy);
+    const cloud = await saveProjectToCloud(copy);
+    showProject(copy, cloud.state === "synced" ? cloud.updatedAt : undefined);
+  };
+
+  const deleteProjectById = async (id: string) => {
+    if (id === projectRef.current.id) return false;
+    deleteLocalProject(id);
+    // Cloud (si connecté) : un échec réaffiche simplement le projet dans la liste.
+    await deleteCloudProject(id).catch(() => false);
+    return true;
+  };
+
   const newProject = () => {
     const fresh = makeDefaultProject();
     remoteVersionRef.current = undefined;
@@ -417,6 +518,14 @@ export default function StudioApp({
         onChangeFormat={changeFormat}
         onReloadRemote={() => void reloadRemote()}
         onKeepLocal={() => void keepLocal()}
+        projectsSlot={
+          <ProjectsMenu
+            currentProjectId={project.id}
+            onOpen={openProjectById}
+            onDuplicate={duplicateProjectById}
+            onDelete={deleteProjectById}
+          />
+        }
         exportSlot={
           <ExportButton
             projectId={project.id}
@@ -447,6 +556,8 @@ export default function StudioApp({
           onAddAsset={addAsset}
           onAddMediaToScene={addMediaToScene}
           onSetAudio={setAudio}
+          onUpdateSceneTransition={updateSceneTransition}
+          onDuplicateScene={duplicateSceneAt}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
