@@ -54,8 +54,11 @@ let browserPromise: Promise<Browser> | null = null;
 async function chromiumExecutable(): Promise<{ executablePath: string; args: string[]; libDir?: string }> {
   const fromEnv = process.env.CHROMIUM_PATH;
   if (fromEnv && existsSync(fromEnv)) return { executablePath: fromEnv, args: ["--no-sandbox"] };
-  for (const candidate of ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]) {
-    if (existsSync(candidate)) return { executablePath: candidate, args: ["--no-sandbox"] };
+  // RENDER_USE_BUNDLED_CHROMIUM=1 force le Chromium autonome (tests).
+  if (process.env.RENDER_USE_BUNDLED_CHROMIUM !== "1") {
+    for (const candidate of ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]) {
+      if (existsSync(candidate)) return { executablePath: candidate, args: ["--no-sandbox"] };
+    }
   }
   // Chromium autonome livré par npm : aucune installation système.
   const sparticuz = (await import("@sparticuz/chromium")).default;
@@ -63,7 +66,10 @@ async function chromiumExecutable(): Promise<{ executablePath: string; args: str
   // Ses bibliothèques (libnss3, libnspr4…) ne sont extraites par le paquet que sur
   // AWS Lambda — et jamais si /tmp/chromium existe déjà. On les extrait nous-mêmes.
   const libDir = await ensureBundledLibs();
-  return { executablePath, args: sparticuz.args, libDir };
+  // Les options du paquet visent AWS Lambda : « --single-process » y fait tomber le
+  // navigateur dès qu'un contexte se ferme (2e rendu impossible). Sur un serveur, multi-processus.
+  const args = sparticuz.args.filter((arg) => arg !== "--single-process");
+  return { executablePath, args, libDir };
 }
 
 /** Extrait al2023.tar.br (bibliothèques du Chromium autonome) dans /tmp/al2023/lib. */
@@ -135,6 +141,8 @@ async function openStage(projectId: string, scale?: number) {
   const size = renderStageSize(stored.project);
   const browser = await getBrowser();
   const context = await browser.newContext({
+    // URL interne (notre propre site) : le Chromium autonome n'embarque pas les certificats racine.
+    ignoreHTTPSErrors: true,
     viewport: { width: Math.round(size.width), height: Math.round(size.height) },
     deviceScaleFactor: scale ?? size.deviceScaleFactor,
   });
