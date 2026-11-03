@@ -289,10 +289,37 @@ export function buildLogoReveal(
   return tl;
 }
 
+/** Premium notification stack — explicit fromTo states for deterministic Studio scrubbing. */
+export function buildNotificationStackPremium(
+  root: HTMLElement, config: AnimationConfig, opts: BuilderOptions = {}
+): gsap.core.Timeline | void {
+  const cards = Array.from(root.querySelectorAll<HTMLElement>("[data-premium-notification]"));
+  if (!cards.length) return;
+  const tl = gsap.timeline(tlOptions(opts.loop ?? true, 0.65));
+  const scale = Math.max(0.5, config.duration / 4.5);
+  cards.forEach((card, index) => {
+    const at = index * 0.42 * scale;
+    tl.fromTo(card, { yPercent: 32, scale: 0.92, opacity: 0, rotationX: -8, filter: "blur(8px)" },
+      { yPercent: 0, scale: 1, opacity: 1, rotationX: 0, filter: "blur(0px)", duration: 0.7 * scale, ease: "power3.out", immediateRender: false }, at);
+    const icon = card.querySelector("[data-premium-icon]");
+    const content = card.querySelector("[data-premium-content]");
+    const glow = card.querySelector("[data-premium-glow]");
+    if (icon) tl.fromTo(icon, { scale: 0.7, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45 * scale, ease: "back.out(1.6)", immediateRender: false }, at + 0.18 * scale);
+    if (content) tl.fromTo(content, { xPercent: 5, opacity: 0 }, { xPercent: 0, opacity: 1, duration: 0.45 * scale, ease: "power2.out", immediateRender: false }, at + 0.23 * scale);
+    if (glow) tl.fromTo(glow, { opacity: 0.35 }, { opacity: 0, duration: 0.65 * scale, ease: "sine.out", immediateRender: false }, at + 0.25 * scale);
+  });
+  tl.addLabel("out", cards.length * 0.42 * scale + Math.max(0.65, config.duration * 0.22));
+  cards.slice().reverse().forEach((card, index) => {
+    tl.to(card, { yPercent: -18, scale: 0.96, opacity: 0, filter: "blur(5px)", duration: 0.4 * scale, ease: "power2.in" }, "out+=" + (index * 0.12 * scale));
+  });
+  return tl;
+}
+
 /** Registre des builders, par clé de template. */
 export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
   "kinetic-type-01": buildKineticType,
   "text-reveal-01": buildTextReveal,
+  "notification-stack-premium-02": buildNotificationStackPremium,
   "elastic-text-01": buildElasticText,
   "shape-morph-01": buildShapeMorph,
   "staggered-cards-01": buildStaggeredCards,
