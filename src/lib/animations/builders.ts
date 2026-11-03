@@ -92,12 +92,14 @@ export function buildTextReveal(
     stagger: 0.12,
   });
   if (sweep) {
+    // Balayage lumineux : visible uniquement pendant son passage.
     tl.fromTo(
       sweep,
-      { xPercent: -140 },
-      { xPercent: 240, duration: 0.9, ease: "power2.inOut" },
+      { xPercent: -140, opacity: 0 },
+      { xPercent: 240, opacity: 1, duration: 0.9, ease: "power2.inOut" },
       "-=0.35"
     );
+    tl.to(sweep, { opacity: 0, duration: 0.2, ease: "none" }, ">-0.2");
   }
   // Début de la sortie : sert au timing « fit / hold » du Studio.
   tl.addLabel("out", `+=${Math.max(0.6, duration * 0.3)}`);

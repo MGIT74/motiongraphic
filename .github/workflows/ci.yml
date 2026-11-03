@@ -42,6 +42,20 @@ jobs:
           npx --yes wait-on@8 http://localhost:3000/studio --timeout 60000
           BASE_URL=http://localhost:3000 SHOTS_DIR=${{ runner.temp }} npm run test:e2e
 
+      - name: Contrôle des templates (navigateur)
+        run: |
+          TEMPLATE_CHECK=1 npm start -- -p 3001 &
+          npx --yes wait-on@8 http://localhost:3001/dev/template-check --timeout 60000
+          BASE_URL=http://localhost:3001 npm run test:templates
+
+      - name: Images des templates contrôlés
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: templates-controle
+          path: tests/templates/out/*.png
+          if-no-files-found: ignore
+
       - name: Captures d'écran
         if: always()
         uses: actions/upload-artifact@v4

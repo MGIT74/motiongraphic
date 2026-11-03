@@ -88,3 +88,22 @@ dans la PR (« touche aussi : … »).
 5. Galerie publique : migration numérotée (prochain numéro libre), idempotente, exécutée par le propriétaire.
 6. Pas de logos de marque réels ni de personnages protégés.
 7. Vérifier : bibliothèque (vignette + survol), ajout, lecture, curseur, formats 16:9 / 9:16 / 1:1, export MP4.
+
+### Contrôle automatique (CI : « Contrôle des templates »)
+
+La CI ouvre chaque template dans un navigateur avec le moteur du Studio (`/dev/template-check`, actif seulement avec
+`TEMPLATE_CHECK=1`) et bloque la PR en cas de : enregistrement incomplet, repère `out` manquant, contenu déjà visible
+au départ, élément qui clignote pendant l'entrée, template vide ou sans sortie, texte qui déborde en 16:9 / 9:16 / 1:1,
+fond `transparent` ignoré, erreur console, police écrasée (`fontFamily: config.fontFamily`), « \\n » littéral,
+symbole Unicode/émoji en guise d'icône. Le résumé s'affiche dans l'onglet de la CI ; les images à l'instant `out`
+sont jointes (« templates-controle »).
+
+En local : `TEMPLATE_CHECK=1 CONSTRUCTION_MODE=off npm start -- -p 3001 &` puis
+`BASE_URL=http://localhost:3001 npm run test:templates`.
+
+Exception voulue (ex. morphing continu sans entrée) : l'ajouter dans `tests/templates/exceptions.json` et la justifier
+dans la PR.
+
+**Règle : une PR de templates qui ne touche que la zone Templates (§ 2) et dont la CI est verte peut être fusionnée
+par son auteur sans revue de Claude.** Revue de Claude seulement pour les contrats partagés (§ 1.7), le Studio
+(hors la ligne `STUDIO_FRAMES`), le MCP, le rendu ou une table existante.
