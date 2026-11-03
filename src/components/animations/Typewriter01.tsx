@@ -15,9 +15,9 @@ export function Typewriter01Frame({ config }: AnimationComponentProps) {
         {lines.map((line, lineIndex) => (
           <div key={lineIndex} className="flex flex-wrap justify-center" style={{ minHeight: "1.35em" }}>
             {Array.from(line).map((character, charIndex) => (
-              <span data-type-char key={charIndex} style={{ whiteSpace: "pre" }}>{character}</span>
+              <span data-type-char key={charIndex} className="relative inline-block" style={{ whiteSpace: "pre" }}>{character}<span data-type-cursor aria-hidden="true" className="absolute" style={{ left: "100%", top: "0.16em", width: "0.09em", height: "0.9em", backgroundColor: config.accentColor, opacity: 0 }} /></span>
             ))}
-            <span data-type-cursor aria-hidden="true" style={{ display: "inline-block", width: "0.09em", height: "0.9em", backgroundColor: config.accentColor, marginLeft: "0.08em", verticalAlign: "baseline", alignSelf: "center" }} />
+
           </div>
         ))}
 
