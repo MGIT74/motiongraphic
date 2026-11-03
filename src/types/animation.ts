@@ -1,5 +1,5 @@
 export type ComponentKey =
-  | "kinetic-type-01"
+  | "dashboard-reveal-01"\n  | "kinetic-type-01"
   | "text-reveal-01"
   | "elastic-text-01"
   | "shape-morph-01"
