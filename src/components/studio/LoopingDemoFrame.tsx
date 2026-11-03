@@ -1,59 +1,34 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { AnimationComponentProps, ComponentKey } from "@/types/animation";
-import gsap from "gsap";
-import { useEffect, useRef } from "react";
-import { ANIMATION_BUILDERS } from "@/lib/animations/builders";
-import { baseEngineKeyOf } from "@/lib/studio/project-model";
-import { isStudioTemplateKey } from "@/lib/studio/template-registry";
-import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
-import { TextReveal01Frame } from "@/components/animations/TextReveal01";
-import { ElasticText01Frame } from "@/components/animations/ElasticText01";
-import { ShapeMorph01Frame } from "@/components/animations/ShapeMorph01";
-import { StaggeredCards01Frame } from "@/components/animations/StaggeredCards01";
-import { LogoReveal01Frame } from "@/components/animations/LogoReveal01";
-import MinimalSaaSUIShowcase01 from "@/components/animations/MinimalSaaSUIShowcase01";
-import type { ComponentType } from "react";
-
-const DEMO_FRAMES: Record<ComponentKey, ComponentType<AnimationComponentProps>> = {
-  "kinetic-type-01": KineticTypography01Frame,
-  "text-reveal-01": TextReveal01Frame,
-  "elastic-text-01": ElasticText01Frame,
-  "shape-morph-01": ShapeMorph01Frame,
-  "staggered-cards-01": StaggeredCards01Frame,
-// Auto-anime (interactions utilisateur) - synchronisation timeline en Phase 2.
-  "minimal-saas-ui-01": MinimalSaaSUIShowcase01,
-  "logo-reveal-01": LogoReveal01Frame,
-};
+import ControlledAnimation from "./ControlledAnimation";
 
 /**
- * Aperçu miniature en boucle d'un template (bibliothèque du Studio).
- * Construit la timeline avec `loop: true` et la laisse jouer — montée
- * uniquement dans le panneau des styles compatibles (3-6 instances max).
+ * Aperçu en boucle d'un template (panneau « styles compatibles » du Studio).
+ *
+ * Utilise le moteur du Studio (ControlledAnimation) piloté par
+ * requestAnimationFrame : un template enregistré dans ControlledAnimation est
+ * automatiquement disponible ici (aucune seconde liste à tenir à jour).
  */
 export default function LoopingDemoFrame({ templateKey, config }: AnimationComponentProps & { templateKey: ComponentKey }) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [time, setTime] = useState(0);
+  const loop = Math.max(1, config.duration) + 1.2;
 
   useEffect(() => {
-    const root = rootRef.current;
-    const engineKey = isStudioTemplateKey(templateKey) ? baseEngineKeyOf(templateKey) : templateKey;
-    const builder = ANIMATION_BUILDERS[engineKey] ?? ANIMATION_BUILDERS[templateKey];
-    if (!root || !builder) return;
-
-    const ctx = gsap.context(() => {
-      builder(root, config, { loop: true });
-    }, root);
-
-    return () => ctx.revert();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateKey, config.text, config.primaryColor, config.accentColor, config.backgroundColor, config.duration]);
-
-  const Frame = DEMO_FRAMES[templateKey] ?? DEMO_FRAMES[(baseEngineKeyOf(templateKey)) as ComponentKey];
-  if (!Frame) return null;
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      setTime(((now - t0) / 1000) % loop);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [loop]);
 
   return (
-    <div className="relative overflow-hidden" style={{ backgroundColor: config.backgroundColor }}>
-      <Frame config={config} />
+    <div className="absolute inset-0 overflow-hidden" style={{ backgroundColor: config.backgroundColor, containerType: "size" }}>
+      <ControlledAnimation templateKey={templateKey} config={config} localTime={time} elementDuration={loop} timing="natural" preview />
     </div>
   );
 }

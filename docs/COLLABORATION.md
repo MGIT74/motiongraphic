@@ -49,7 +49,7 @@ toute modification.**
 | Favoris (UI) | nouveaux composants + `src/lib/data.ts` | ChatGPT |
 | Sécurité Supabase (RLS, migrations) | `supabase/migrations/` | ChatGPT (revue par Claude) |
 | Administration / Template Lab | `src/app/admin/`, `src/components/admin/`, `src/lib/templates/` | à attribuer |
-| Templates d'animation | `src/components/animations/`, `src/lib/animations/` | **gelé** jusqu'à la stabilisation |
+| Templates d'animation | `src/components/animations/`, `src/lib/animations/`, registres (voir § 5) | ChatGPT (revue par Claude) |
 | Documentation | `README.md`, `docs/` | tous (petites PR) |
 
 Une modification hors de sa zone est possible si elle est minime et signalée
@@ -69,3 +69,20 @@ dans la PR (« touche aussi : … »).
 - Architecture du Studio, du rendu et du MCP : `docs/studio-architecture.md`.
 - Hébergement : xCloud (site Node.js, branche `main`, port 3001). Le
   déploiement se fait depuis le tableau de bord xCloud après fusion sur `main`.
+
+## 5. Ajouter un template d'animation (checklist)
+
+1. `src/components/animations/<Nom>01.tsx` : export `<Nom>01Frame` (DOM pur) + export par défaut avec `useAnimationEngine`.
+2. Builder GSAP dans `src/lib/animations/builders.ts`, ajouté à `ANIMATION_BUILDERS` :
+   DOM initial = état final ; `fromTo()` avec valeurs explicites (pas de `from()` vers `filter: none`) ;
+   label `"out"` au début de la sortie (modes fit / hold du Studio) ; aucun `setTimeout` ni animation CSS
+   (le rendu MP4 avance image par image).
+3. Tailles en unités de conteneur (`cqmin`, ou `var(--u)` = `min(1cqh, 1.333cqw)` pour le 9:16).
+4. Enregistrer la clé : `src/types/animation.ts` (`ComponentKey`), `src/lib/animations/registry.ts`,
+   `src/lib/studio/template-registry.ts` (catégorie + `timelineDuration`),
+   **une seule ligne** dans `STUDIO_FRAMES` de `src/components/studio/ControlledAnimation.tsx`
+   (vignettes de la bibliothèque, styles compatibles, aperçu et MP4 l'utilisent tous),
+   `AnimationPlayer.tsx`, `src/data/demo.ts`, `src/data/prompts.ts`, `RESERVED_SLUGS` (`custom-model.ts`).
+5. Galerie publique : migration numérotée (prochain numéro libre), idempotente, exécutée par le propriétaire.
+6. Pas de logos de marque réels ni de personnages protégés.
+7. Vérifier : bibliothèque (vignette + survol), ajout, lecture, curseur, formats 16:9 / 9:16 / 1:1, export MP4.
