@@ -68,6 +68,7 @@ interface DemoTemplateInput {
 }
 
 const TEMPLATES: DemoTemplateInput[] = [
+  { id: "00000000-0000-4000-8000-000000000020", title: "Notification Stack 02 — Premium", slug: "notification-stack-premium-02", description: "Notifications en cascade avec profondeur, rebond subtil et micro-interactions.", categoryId: "interface", componentKey: "notification-stack-premium-02", config: { text: "Payment received\\nNew milestone\\nYou’re all set", primaryColor: "#202937", accentColor: "#6B8EFC", backgroundColor: "#F1F3F7", duration: 4.5, speed: 1 }, duration: 4.5 },
   {
     id: ANIM_IDS.kinetic,
     title: "Kinetic Typography",
