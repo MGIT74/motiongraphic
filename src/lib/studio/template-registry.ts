@@ -43,6 +43,9 @@ export const STUDIO_TEMPLATES: Record<string, StudioTemplateMeta> = {
     studioCategory: "text-motion",
     timelineDuration: 4,
   }),
+  "notification-stack-premium-02": extendMeta(getComponentMeta("notification-stack-premium-02"), {
+    elementKind: "cards", studioCategory: "ui-motion", timelineDuration: 4.5,
+  }),
   "text-reveal-01": extendMeta(getComponentMeta("text-reveal-01"), {
     elementKind: "text",
     studioCategory: "text-motion",
