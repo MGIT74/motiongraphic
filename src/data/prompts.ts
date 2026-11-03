@@ -196,6 +196,17 @@ const PROMPTS = {
       comportement: "Animer l'apparition des cartes, le tracé du graphique, la recherche et le bouton avec des interpolations douces.",
     }),
   },
+  "ai-input-morph-01": {
+    web: webPrompt("ai-input-morph-01", {
+      visuel: "Interface IA originale : barre de saisie arrondie qui s'agrandit en compositeur, outils SVG, action colorée.",
+      easing: "Timeline GSAP pilotable, entrée progressive fromTo, tenue, puis sortie douce.",
+      boucle: "Répéter après une pause sans animations CSS.",
+    }),
+    after_effects: jsxPrompt("ai-input-morph-01", {
+      compo: "Composition 1920x1080, 30 fps, interface de saisie IA minimaliste.",
+      comportement: "Expansion de la barre, révélation du texte et des outils, sortie en fondu.",
+    }),
+  },
 } as const satisfies Record<ComponentKey, { web: string; after_effects: string }>;
 
 export const DEMO_PROMPTS = PROMPTS;
