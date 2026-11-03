@@ -23,9 +23,12 @@ export function AIInputMorph01Frame({ config }: AnimationComponentProps) {
           borderRadius: "3.5cqmin", padding: "3cqmin",
           background: "color-mix(in srgb, currentColor 7%, transparent)",
           boxShadow: "0 2cqmin 7cqmin rgba(0,0,0,.14)",
-          display: "flex", flexDirection: "column", gap: "3cqmin",
+          display: "flex", flexDirection: "column", gap: "3cqmin", position: "relative",
         }}>
-          <div data-input-text style={{ fontSize: "clamp(10px, 2.6cqmin, 32px)", lineHeight: 1.4, overflowWrap: "anywhere" }}>{prompt}</div>
+          <div data-input-text data-full-text={prompt} style={{ fontSize: "clamp(10px, 2.6cqmin, 32px)", lineHeight: 1.4, overflowWrap: "anywhere" }}>{prompt}<span data-input-caret aria-hidden="true" style={{ display: "inline-block", width: "0.16em", height: "1em", marginLeft: "0.15em", verticalAlign: "-0.13em", backgroundColor: accent }} /></div>
+          <div data-input-pointer aria-hidden="true" style={{ position: "absolute", zIndex: 5, right: "8cqmin", bottom: "0.8cqmin", width: "4cqmin", height: "5cqmin", pointerEvents: "none", filter: "drop-shadow(0 2px 2px rgba(0,0,0,.4))" }}>
+            <svg viewBox="0 0 24 30" width="100%" height="100%" fill="#ffffff" stroke="#111827" strokeWidth="1.6" strokeLinejoin="round"><path d="M3 2v23l6-6 4.5 9 4-2-4.5-9H22Z"/></svg>
+          </div>
           <div data-input-tools style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "2cqmin" }}>
             <div style={{ display: "flex", gap: "1.3cqmin" }}>
               <span data-input-tool style={{ display: "grid", placeItems: "center", width: "5.6cqmin", height: "5.6cqmin", borderRadius: "50%", border: "1px solid currentColor" }}>
