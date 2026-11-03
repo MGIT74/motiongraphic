@@ -19,6 +19,7 @@ export default function StudioCanvas({
   selectedElementId,
   onSelectElement,
   onDropTemplate,
+  compact = false,
 }: {
   project: StudioProject;
   time: number;
@@ -28,6 +29,7 @@ export default function StudioCanvas({
   onSelectElement: (elementId: string | null) => void;
   /** Template déposé depuis la bibliothèque (ajouté à l'instant courant). */
   onDropTemplate?: (templateKey: string) => void;
+  compact?: boolean;
 }) {
   const [dropping, setDropping] = useState(false);
   const accepts = (e: DragEvent) => !!onDropTemplate && Array.from(e.dataTransfer.types).includes(TEMPLATE_DRAG_TYPE);
@@ -38,7 +40,7 @@ export default function StudioCanvas({
   return (
     <div className="relative flex-1 overflow-hidden bg-surface/30">
       {/* Zone disponible (container queries) : le cadre y tient entièrement, quel que soit le format. */}
-      <div className="absolute inset-6 flex items-center justify-center" style={{ containerType: "size" }}>
+      <div className={`absolute ${compact ? "inset-2" : "inset-6"} flex items-center justify-center`} style={{ containerType: "size" }}>
         <div
           className="relative overflow-hidden rounded-2xl border border-line shadow-[0_40px_120px_-60px_rgba(10,132,255,0.35)]"
           style={{

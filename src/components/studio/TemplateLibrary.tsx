@@ -26,7 +26,10 @@ export default function TemplateLibrary({
   return (
     <div className="flex flex-col gap-4">
       <p className="px-1 text-[11px] leading-relaxed text-muted">
-        Survolez pour voir l&apos;animation. Cliquez pour l&apos;ajouter à la suite, ou glissez-la sur la timeline ou l&apos;aperçu.
+        <span className="lg:hidden">Touchez un template pour l&apos;ajouter à la scène, à la suite des autres éléments.</span>
+        <span className="hidden lg:inline">
+          Survolez pour voir l&apos;animation. Cliquez pour l&apos;ajouter à la suite, ou glissez-la sur la timeline ou l&apos;aperçu.
+        </span>
       </p>
       {STUDIO_CATEGORIES.map((category) => {
         const templates = Object.entries(STUDIO_TEMPLATES).filter(([, t]) => t.studioCategory === category.id);

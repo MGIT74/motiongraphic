@@ -37,6 +37,7 @@ export default function StudioTopBar({
   onKeepLocal,
   exportSlot,
   projectsSlot,
+  compact = false,
 }: {
   projectName: string;
   onRename: (name: string) => void;
@@ -60,13 +61,15 @@ export default function StudioTopBar({
   exportSlot?: React.ReactNode;
   /** Menu « Projets » (ouvrir / dupliquer / supprimer). */
   projectsSlot?: React.ReactNode;
+  /** Écran étroit (< 1024 px) : barre resserrée, l'essentiel seulement. */
+  compact?: boolean;
 }) {
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-surface/60 px-4">
-      <div className="flex items-center gap-4">
+    <div className={`flex shrink-0 items-center justify-between border-b border-line bg-surface/60 ${compact ? "h-12 gap-1.5 px-2" : "h-14 px-4"}`}>
+      <div className={`flex min-w-0 items-center ${compact ? "flex-1 gap-1.5" : "gap-4"}`}>
         <Link
           href="/"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-line text-muted transition-colors hover:text-ink"
+          className={`${compact ? "hidden" : "inline-flex"} h-9 w-9 items-center justify-center rounded-full border border-line text-muted transition-colors hover:text-ink`}
           aria-label="Retour au site"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -74,32 +77,34 @@ export default function StudioTopBar({
         <input
           value={projectName}
           onChange={(e) => onRename(e.target.value)}
-          className="w-56 rounded-lg border border-transparent bg-transparent px-2 text-sm font-semibold text-ink transition-colors hover:border-line focus:border-accent/60 focus:outline-none"
+          className={`${compact ? "w-0 min-w-0 flex-1 px-1 text-xs" : "w-56 px-2 text-sm"} rounded-lg border border-transparent bg-transparent font-semibold text-ink transition-colors hover:border-line focus:border-accent/60 focus:outline-none`}
           aria-label="Nom du projet"
           spellCheck={false}
         />
-        <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
-          Studio · Bêta
-        </span>
+        {compact ? null : (
+          <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
+            Studio · Bêta
+          </span>
+        )}
         {format && onChangeFormat ? (
           <select
             value={format}
             onChange={(e) => onChangeFormat(e.target.value as ProjectFormat)}
-            className="h-8 cursor-pointer rounded-lg border border-line bg-background px-2 text-xs text-ink focus:border-accent/60 focus:outline-none"
+            className={`${compact ? "h-8 w-14 shrink-0 px-1 text-[11px]" : "h-8 px-2 text-xs"} cursor-pointer rounded-lg border border-line bg-background text-ink focus:border-accent/60 focus:outline-none`}
             aria-label="Format de la vidéo"
           >
             {(Object.keys(PROJECT_FORMATS) as ProjectFormat[]).map((key) => (
-              <option key={key} value={key}>{PROJECT_FORMATS[key].label}</option>
+              <option key={key} value={key}>{compact ? key : PROJECT_FORMATS[key].label}</option>
             ))}
           </select>
         ) : null}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center ${compact ? "gap-1" : "gap-2"}`}>
         <button
           type="button"
           onClick={onTogglePlay}
-          className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent/85"
+          className={`inline-flex cursor-pointer items-center gap-2 rounded-full bg-accent font-semibold text-white transition-colors hover:bg-accent/85 ${compact ? "h-9 px-3 text-xs" : "h-10 px-4 text-sm"}`}
           aria-label={playing ? "Pause" : "Lecture"}
         >
           {playing ? (
@@ -111,7 +116,7 @@ export default function StudioTopBar({
             <Play className="h-4 w-4" aria-hidden="true" />
           )}
           <span className="font-mono text-xs">
-            {formatTimecode(time, fps)} / {formatTimecode(duration, fps)}
+            {compact ? formatTimecode(time, fps).slice(0, 5) : `${formatTimecode(time, fps)} / ${formatTimecode(duration, fps)}`}
           </span>
         </button>
 
@@ -119,7 +124,7 @@ export default function StudioTopBar({
           type="button"
           onClick={onUndo}
           disabled={!canUndo}
-          className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-line text-muted transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-muted"
+          className={`inline-flex ${compact ? "h-8 w-8" : "h-9 w-9"} cursor-pointer items-center justify-center rounded-full border border-line text-muted transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-muted`}
           aria-label="Annuler (Cmd+Z)"
         >
           <Undo2 className="h-4 w-4" aria-hidden="true" />
@@ -128,13 +133,13 @@ export default function StudioTopBar({
           type="button"
           onClick={onRedo}
           disabled={!canRedo}
-          className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-line text-muted transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-muted"
+          className={`${compact ? "hidden" : "inline-flex h-9 w-9"} cursor-pointer items-center justify-center rounded-full border border-line text-muted transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-muted`}
           aria-label="Rétablir (Cmd+Shift+Z)"
         >
           <Redo2 className="h-4 w-4" aria-hidden="true" />
         </button>
 
-        <span className="mx-1 hidden items-center gap-1.5 text-xs text-muted sm:flex" aria-live="polite">
+        <span className={`mx-1 items-center gap-1.5 text-xs text-muted ${compact ? "hidden" : "hidden sm:flex"}`} aria-live="polite">
           {saveState === "saving" ? (
             <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Sauvegarde…

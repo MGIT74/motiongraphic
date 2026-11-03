@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import "@/app/studio-fonts.css";
 import type { BrandKit, MediaAsset, ProjectAudio, ProjectFormat, SceneTransition, StudioElement } from "@/lib/studio/project-model";
 import type { StudioProject } from "@/lib/studio/project-model";
@@ -45,12 +44,13 @@ import {
 import { useProjectHistory } from "@/lib/studio/history";
 import { useStudioClock } from "@/lib/studio/clock";
 import StudioTopBar from "./StudioTopBar";
-import StudioLeftPanel from "./StudioLeftPanel";
+import StudioLeftPanel, { type LeftPanelTab } from "./StudioLeftPanel";
 import StudioCanvas from "./StudioCanvas";
 import StudioRightPanel from "./StudioRightPanel";
 import StudioTimeline from "./StudioTimeline";
 import ExportButton from "./ExportButton";
 import ProjectsMenu from "./ProjectsMenu";
+import { MOBILE_TABS, MobileNav, MobileSheet, useCompactStudio, type MobileSheetId } from "./MobileSheet";
 import { ToastProvider, useToasts } from "./Toasts";
 import AudioTrack from "./AudioTrack";
 import { MediaRuntimeContext } from "./MediaLayer";
@@ -130,6 +130,9 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
   const saveNowRef = useRef<(target: StudioProject) => Promise<void>>(async () => {});
 
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  // Disposition mobile (< 1024 px) : panneaux en bas, ouverts depuis la barre d'onglets.
+  const compact = useCompactStudio();
+  const [sheet, setSheet] = useState<MobileSheetId | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("saved");
   const [cloudState, setCloudState] = useState<CloudStateKind | null>(null);
 
@@ -374,7 +377,12 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       label: template.name,
       timing: "fit",
     });
-    commit(appendElement(project, scene.id, element), "add-element");
+    let next = appendElement(project, scene.id, element);
+    // Élément ajouté après les autres : la scène s'allonge pour qu'il reste visible.
+    if (start + element.duration > scene.duration) {
+      next = updateScene(next, scene.id, { duration: start + element.duration });
+    }
+    commit(next, "add-element");
     setSelectedElementId(element.id);
     seek(offsets[sceneIndexAt] + start + 0.2);
   };
@@ -536,25 +544,83 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
     setSaveState("idle");
   };
 
+  const leftPanel = (variant: "sidebar" | "sheet", forcedTab?: LeftPanelTab) => (
+    <StudioLeftPanel
+      project={project}
+      currentSceneIndex={sceneIndex}
+      onJumpToScene={jumpToScene}
+      onAddScene={addScene}
+      onDeleteScene={deleteScene}
+      onRenameScene={renameScene}
+      onUpdateSceneDuration={updateSceneDuration}
+      onAddElement={(templateKey) => {
+        addElement(sceneIndex, templateKey);
+        // Mobile : on referme le panneau pour voir le résultat.
+        if (variant === "sheet") setSheet(null);
+      }}
+      onUpdateSceneBackground={updateSceneBackground}
+      onUpdateBrand={updateBrand}
+      onApplyBrand={applyBrandToProject}
+      mediaUrls={mediaUrls}
+      onAddAsset={addAsset}
+      onAddMediaToScene={(asset) => {
+        addMediaToScene(asset);
+        if (variant === "sheet") setSheet(null);
+      }}
+      onSetAudio={setAudio}
+      onUpdateSceneTransition={updateSceneTransition}
+      onDuplicateScene={duplicateSceneAt}
+      variant={variant}
+      forcedTab={forcedTab}
+    />
+  );
+
+  const rightPanel = (variant: "sidebar" | "sheet") => (
+    <StudioRightPanel
+      project={project}
+      selection={selection}
+      time={time}
+      onChangeTemplate={changeElementTemplate}
+      onPatchElement={patchElement}
+      onDeleteElement={deleteElement}
+      onMoveLayer={moveLayer}
+      variant={variant}
+    />
+  );
+
+  const canvas = (
+    <StudioCanvas
+      project={project}
+      time={time}
+      playing={playing}
+      sceneIndex={sceneIndex}
+      selectedElementId={selectedElementId}
+      onSelectElement={setSelectedElementId}
+      onDropTemplate={(templateKey) => addElementAt(templateKey, time)}
+      compact={compact}
+    />
+  );
+
+  const timeline = (
+    <StudioTimeline
+      project={project}
+      time={time}
+      duration={duration}
+      sceneIndex={sceneIndex}
+      selectedElementId={selectedElementId}
+      onSelectElement={setSelectedElementId}
+      onSeek={seek}
+      onChangeTiming={(sceneId, elementId, timing, gesture) =>
+        commit(updateElement(project, sceneId, elementId, (el) => ({ ...el, ...timing })), "timing-element", `timing:${elementId}:${gesture}`)
+      }
+      onDeleteElement={deleteElement}
+      onDropTemplate={(templateKey, at) => addElementAt(templateKey, at)}
+      compact={compact}
+    />
+  );
+
   return (
-    <div className="flex h-svh flex-col overflow-hidden bg-background text-ink">
-      {/* Petits écrans : l'éditeur (3 panneaux + timeline) n'y est pas utilisable. */}
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background px-8 text-center md:hidden">
-        <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
-          Studio · Bêta
-        </span>
-        <p className="text-lg font-semibold text-ink">Le Studio s&apos;utilise sur un écran plus grand.</p>
-        <p className="max-w-xs text-sm leading-relaxed text-muted">
-          Ouvrez-le sur un ordinateur ou une tablette en mode paysage pour
-          éditer vos animations sur la timeline.
-        </p>
-        <Link
-          href="/"
-          className="mt-2 inline-flex h-10 items-center rounded-full border border-line px-5 text-sm font-medium text-ink transition-colors hover:border-accent/50"
-        >
-          Retour au site
-        </Link>
-      </div>
+    <div className="flex h-svh flex-col overflow-hidden bg-background text-ink" data-studio-layout={compact ? "compact" : "desktop"}>
       <StudioTopBar
         projectName={project.name}
         onRename={(name) => commit({ ...project, name }, "rename-project", `name:${name}`)}
@@ -574,17 +640,20 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
         onChangeFormat={changeFormat}
         onReloadRemote={() => void reloadRemote()}
         onKeepLocal={() => void keepLocal()}
+        compact={compact}
         projectsSlot={
           <ProjectsMenu
             currentProjectId={project.id}
             onOpen={openProjectById}
             onDuplicate={duplicateProjectById}
             onDelete={deleteProjectById}
+            compact={compact}
           />
         }
         exportSlot={
           <ExportButton
             projectId={project.id}
+            compact={compact}
             beforeExport={async () => {
               await saveNow(projectRef.current);
               return remoteVersionRef.current !== undefined;
@@ -595,63 +664,29 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
 
       <MediaRuntimeContext.Provider value={{ urls: mediaUrls, deterministic: false, playing }}>
       <AudioTrack audio={project.audio} url={project.audio ? mediaUrls[project.audio.assetId] : undefined} time={time} playing={playing} projectDuration={duration} />
-      <div className="flex min-h-0 flex-1">
-        <StudioLeftPanel
-          project={project}
-          currentSceneIndex={sceneIndex}
-          onJumpToScene={jumpToScene}
-          onAddScene={addScene}
-          onDeleteScene={deleteScene}
-          onRenameScene={renameScene}
-          onUpdateSceneDuration={updateSceneDuration}
-          onAddElement={(templateKey) => addElement(sceneIndex, templateKey)}
-          onUpdateSceneBackground={updateSceneBackground}
-          onUpdateBrand={updateBrand}
-          onApplyBrand={applyBrandToProject}
-          mediaUrls={mediaUrls}
-          onAddAsset={addAsset}
-          onAddMediaToScene={addMediaToScene}
-          onSetAudio={setAudio}
-          onUpdateSceneTransition={updateSceneTransition}
-          onDuplicateScene={duplicateSceneAt}
-        />
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <StudioCanvas
-            project={project}
-            time={time}
-            playing={playing}
-            sceneIndex={sceneIndex}
-            selectedElementId={selectedElementId}
-            onSelectElement={setSelectedElementId}
-            onDropTemplate={(templateKey) => addElementAt(templateKey, time)}
-          />
-          <StudioTimeline
-            project={project}
-            time={time}
-            duration={duration}
-            sceneIndex={sceneIndex}
-            selectedElementId={selectedElementId}
-            onSelectElement={setSelectedElementId}
-            onSeek={seek}
-            onChangeTiming={(sceneId, elementId, timing, gesture) =>
-              commit(updateElement(project, sceneId, elementId, (el) => ({ ...el, ...timing })), "timing-element", `timing:${elementId}:${gesture}`)
-            }
-            onDeleteElement={deleteElement}
-            onDropTemplate={(templateKey, at) => addElementAt(templateKey, at)}
-          />
+      {compact ? (
+        <>
+          <div className="flex min-h-0 flex-1 flex-col">
+            {canvas}
+            {timeline}
+          </div>
+          <MobileNav open={sheet} onOpen={setSheet} hasSelection={selection !== null} />
+          {sheet ? (
+            <MobileSheet title={MOBILE_TABS.find((t) => t.id === sheet)?.label ?? ""} onClose={() => setSheet(null)}>
+              {sheet === "properties" ? rightPanel("sheet") : leftPanel("sheet", sheet)}
+            </MobileSheet>
+          ) : null}
+        </>
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          {leftPanel("sidebar")}
+          <div className="flex min-w-0 flex-1 flex-col">
+            {canvas}
+            {timeline}
+          </div>
+          {rightPanel("sidebar")}
         </div>
-
-        <StudioRightPanel
-          project={project}
-          selection={selection}
-          time={time}
-          onChangeTemplate={changeElementTemplate}
-          onPatchElement={patchElement}
-          onDeleteElement={deleteElement}
-          onMoveLayer={moveLayer}
-        />
-      </div>
+      )}
       </MediaRuntimeContext.Provider>
     </div>
   );

@@ -75,9 +75,11 @@ ok(await p.locator('[role="button"][aria-label^="Élément"]').count() >= 1, "Pr
 // mobile
 const m = await b.newPage({ viewport: { width: 390, height: 844 } });
 await m.goto(BASE + "/studio", { waitUntil: "networkidle" }); await m.waitForTimeout(800);
-ok(await m.getByText("Le Studio s'utilise sur un écran plus grand.").isVisible(), "Message mobile affiché");
+ok(await m.locator('[data-studio-layout="compact"] [data-mobile-nav]').isVisible(), "Disposition mobile : barre d'onglets en bas");
+ok(await m.locator("[data-studio-canvas]").isVisible() && await m.locator('[role="slider"]').isVisible(), "Mobile : aperçu et timeline visibles");
+ok(await m.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "Mobile : aucune barre de défilement horizontale de la page");
 await m.screenshot({ path: (process.env.SHOTS_DIR || "/tmp") + "/apres-mobile.png" });
-ok(!(await p.getByText("Le Studio s'utilise sur un écran plus grand.").isVisible()), "Message masqué sur ordinateur");
+ok(await p.locator('[data-studio-layout="desktop"]').count() === 1 && await p.locator("[data-mobile-nav]").count() === 0, "Ordinateur : disposition à trois colonnes");
 const dup = errors.filter(x => x.includes("same key")); ok(dup.length === 0, `Plus d'erreur de clé en double (${dup.length})`);
 console.log("Autres erreurs console:", errors.filter(x=>!x.includes("same key")).slice(0,5));
 await b.close(); })().catch((e) => { console.error(e); process.exit(1); });
