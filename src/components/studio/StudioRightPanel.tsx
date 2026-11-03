@@ -25,9 +25,12 @@ export default function StudioRightPanel({
   onPatchElement,
   onDeleteElement,
   onMoveLayer,
+  variant = "sidebar",
 }: {
   project: StudioProject;
   selection: StudioSelection | null;
+  /** sidebar = colonne de droite (≥ 1024 px) ; sheet = panneau glissant mobile. */
+  variant?: "sidebar" | "sheet";
   time?: number;
   onChangeTemplate: (elementId: string, newTemplateKey: string) => void;
   onPatchElement: (elementId: string, patch: Partial<StudioElement>) => void;
@@ -35,7 +38,13 @@ export default function StudioRightPanel({
   onMoveLayer?: (elementId: string, target: "up" | "down" | "front" | "back") => void;
 }) {
   return (
-    <aside className="hidden w-72 shrink-0 flex-col overflow-y-auto border-l border-line bg-surface/40 lg:flex xl:w-80">
+    <aside
+      className={
+        variant === "sheet"
+          ? "flex w-full flex-col"
+          : "hidden w-72 shrink-0 flex-col overflow-y-auto border-l border-line bg-surface/40 lg:flex xl:w-80"
+      }
+    >
       {selection === null ? (
         <div className="flex flex-1 items-center justify-center p-6">
           <div className="flex flex-col items-center gap-2.5 text-center text-muted">

@@ -18,10 +18,12 @@ type ExportState =
 export default function ExportButton({
   projectId,
   beforeExport,
+  compact = false,
 }: {
   projectId: string;
   /** Sauvegarde cloud préalable (le rendu lit la version enregistrée). */
   beforeExport: () => Promise<boolean>;
+  compact?: boolean;
 }) {
   const [state, setState] = useState<ExportState>({ kind: "idle" });
   const toasts = useToasts();
@@ -89,7 +91,7 @@ export default function ExportButton({
     return (
       <span className={`${base} cursor-default border-accent/40 text-accent`} aria-live="polite">
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-        {state.renderId ? `Rendu ${state.progress} %` : "Préparation…"}
+        {state.renderId ? (compact ? `${state.progress} %` : `Rendu ${state.progress} %`) : compact ? "…" : "Préparation…"}
       </span>
     );
   }
@@ -97,7 +99,7 @@ export default function ExportButton({
     return (
       <span className="inline-flex items-center gap-1">
         <a href={state.url} className={`${base} border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20`} download>
-          <Download className="h-3.5 w-3.5" aria-hidden="true" /> Télécharger le MP4
+          <Download className="h-3.5 w-3.5" aria-hidden="true" /> {compact ? "MP4" : "Télécharger le MP4"}
         </a>
         <button type="button" onClick={() => setState({ kind: "idle" })} className={`${base} border-line text-muted hover:text-ink`} aria-label="Nouvel export">
           <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -107,13 +109,13 @@ export default function ExportButton({
   }
   return (
     <span className="inline-flex items-center gap-2">
-      {state.kind === "error" ? (
+      {state.kind === "error" && !compact ? (
         <span className="max-w-56 truncate text-[11px] text-red-300" title={state.message}>
           {friendlyError(state.message, "export").title}
         </span>
       ) : null}
-      <button type="button" onClick={() => void start()} className={`${base} border-line text-ink hover:border-accent/50`}>
-        <Film className="h-3.5 w-3.5" aria-hidden="true" /> Exporter MP4
+      <button type="button" onClick={() => void start()} className={`${base} border-line text-ink hover:border-accent/50`} aria-label="Exporter MP4">
+        <Film className="h-3.5 w-3.5" aria-hidden="true" /> {compact ? <span className="sr-only">Exporter MP4</span> : "Exporter MP4"}
       </button>
     </span>
   );

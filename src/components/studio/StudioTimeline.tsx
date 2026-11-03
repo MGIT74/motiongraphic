@@ -46,6 +46,7 @@ export default function StudioTimeline({
   onChangeTiming,
   onDeleteElement,
   onDropTemplate,
+  compact = false,
 }: {
   project: StudioProject;
   time: number;
@@ -60,6 +61,8 @@ export default function StudioTimeline({
   onDeleteElement: (elementId: string) => void;
   /** Template déposé depuis la bibliothèque à l'instant global `time`. */
   onDropTemplate?: (templateKey: string, time: number) => void;
+  /** Écran étroit : pistes plus basses, libellés en icônes, poignées plus larges (doigt). */
+  compact?: boolean;
 }) {
   const [pxPerSec, setPxPerSec] = useState(DEFAULT_ZOOM);
   const [snapOn, setSnapOn] = useState(true);
@@ -272,7 +275,7 @@ export default function StudioTimeline({
       >
         {/* Poignée de début */}
         <span
-          className="absolute inset-y-0 left-0 z-10 w-2.5 cursor-ew-resize bg-white/10 opacity-60 hover:bg-white/30 group-hover:opacity-100"
+          className={`absolute inset-y-0 left-0 z-10 ${compact ? "w-4" : "w-2.5"} cursor-ew-resize bg-white/10 opacity-60 hover:bg-white/30 group-hover:opacity-100`}
           onPointerDown={(event) => startElementDrag(event, element, "trim-start")}
           aria-label="Début — glisser pour changer le début"
           data-trim="start"
@@ -289,7 +292,7 @@ export default function StudioTimeline({
         ) : null}
         {/* Poignée de fin */}
         <span
-          className="absolute inset-y-0 right-0 z-10 w-2.5 cursor-ew-resize bg-white/10 opacity-60 hover:bg-white/30 group-hover:opacity-100"
+          className={`absolute inset-y-0 right-0 z-10 ${compact ? "w-4" : "w-2.5"} cursor-ew-resize bg-white/10 opacity-60 hover:bg-white/30 group-hover:opacity-100`}
           onPointerDown={(event) => startElementDrag(event, element, "trim-end")}
           aria-label="Trim droit — glisser pour changer la durée"
           data-trim="end"
@@ -323,9 +326,9 @@ export default function StudioTimeline({
   ];
 
   return (
-    <div className="relative shrink-0 border-t border-line bg-surface/60" style={{ height: Math.min(totalPx, 360) }}>
+    <div className="relative shrink-0 border-t border-line bg-surface/60" style={{ height: Math.min(totalPx, compact ? 210 : 360) }}>
       {/* Outils : zoom + aimantation */}
-      <div className="absolute right-3 top-1 z-40 flex items-center gap-1 rounded-full border border-line bg-surface/95 px-1 py-0.5 shadow">
+      <div className={`absolute z-40 flex items-center gap-1 rounded-full border border-line bg-surface/95 px-1 py-0.5 shadow ${compact ? "bottom-1 right-1" : "right-3 top-1"}`}>
         <button type="button" onClick={() => setSnapOn((v) => !v)} className={`inline-flex h-6 cursor-pointer items-center gap-1 rounded-full px-2 text-[10px] font-medium ${snapOn ? "bg-accent/15 text-accent" : "text-muted hover:text-ink"}`} aria-pressed={snapOn} title="Aimantation (maintenir Alt pour la suspendre)">
           <Magnet className="h-3 w-3" aria-hidden="true" /> Aimant
         </button>
@@ -343,14 +346,14 @@ export default function StudioTimeline({
       <div className="relative h-full overflow-x-auto overflow-y-auto" onWheel={onWheel}>
         <div className="flex min-w-max" style={{ height: totalPx }}>
           {/* Colonne des labels de pistes */}
-          <div className="sticky left-0 z-30 w-28 shrink-0 border-r border-line bg-surface">
-            <div className="flex h-8 items-center border-b border-line px-3 font-mono text-[10px] text-muted">
-              TL · {project.scenes.length} scènes
+          <div className={`sticky left-0 z-30 shrink-0 border-r border-line bg-surface ${compact ? "w-9" : "w-28"}`}>
+            <div className={`flex h-8 items-center border-b border-line font-mono text-[10px] text-muted ${compact ? "justify-center px-0" : "px-3"}`}>
+              {compact ? project.scenes.length : `TL · ${project.scenes.length} scènes`}
             </div>
             {lanes.map((lane) => (
-              <div key={lane.id} className="flex items-center gap-2 border-b border-line/50 px-3" style={{ height: lane.height }}>
+              <div key={lane.id} className={`flex items-center gap-2 border-b border-line/50 ${compact ? "justify-center px-0" : "px-3"}`} style={{ height: lane.height }} title={lane.label}>
                 <lane.icon className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
-                <span className="text-[11px] font-medium text-ink/80">{lane.label}</span>
+                <span className={compact ? "sr-only" : "text-[11px] font-medium text-ink/80"}>{lane.label}</span>
               </div>
             ))}
           </div>
@@ -366,7 +369,7 @@ export default function StudioTimeline({
           >
             {/* Règle temporelle */}
             <div
-              className="relative h-8 cursor-ew-resize border-b border-line"
+              className="relative h-8 cursor-ew-resize touch-none border-b border-line"
               onPointerDown={onPlayheadDown}
               role="slider"
               aria-label="Curseur temporel"

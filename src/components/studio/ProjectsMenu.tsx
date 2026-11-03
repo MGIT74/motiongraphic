@@ -17,11 +17,13 @@ export default function ProjectsMenu({
   onOpen,
   onDuplicate,
   onDelete,
+  compact = false,
 }: {
   currentProjectId: string;
   onOpen: (id: string) => Promise<void>;
   onDuplicate: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<boolean>;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<(CloudProjectSummary & { local?: boolean })[] | null>(null);
@@ -89,13 +91,13 @@ export default function ProjectsMenu({
         aria-expanded={open}
         aria-haspopup="dialog"
       >
-        <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" /> Projets
+        <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" /> {compact ? <span className="sr-only">Projets</span> : "Projets"}
       </button>
       {open ? (
         <div
           role="dialog"
           aria-label="Mes projets"
-          className="absolute right-0 top-11 z-[200] w-96 rounded-2xl border border-line bg-surface p-2 shadow-2xl"
+          className={`z-[200] rounded-2xl border border-line bg-surface p-2 shadow-2xl ${compact ? "fixed inset-x-2 top-14" : "absolute right-0 top-11 w-96"}`}
           data-projects-menu
         >
           <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted">

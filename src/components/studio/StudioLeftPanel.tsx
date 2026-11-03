@@ -18,6 +18,8 @@ const TRANSITION_LABELS: Record<string, string> = {
   zoom: "Zoom",
 };
 
+export type LeftPanelTab = "scenes" | "library" | "media" | "brand";
+
 /**
  * Panneau gauche du Studio : scènes + bibliothèque de templates + médias
  * (l'import de médias arrive en Phase 3 — indication honnête).
@@ -40,6 +42,8 @@ export default function StudioLeftPanel({
   onSetAudio,
   onUpdateSceneTransition,
   onDuplicateScene,
+  variant = "sidebar",
+  forcedTab,
 }: {
   project: StudioProject;
   currentSceneIndex: number;
@@ -58,8 +62,12 @@ export default function StudioLeftPanel({
   onSetAudio?: (audio: ProjectAudio | null) => void;
   onUpdateSceneTransition?: (index: number, transition: SceneTransition | null) => void;
   onDuplicateScene?: (index: number) => void;
+  /** sidebar = colonne de gauche ; sheet = panneau glissant mobile (onglet imposé, sans barre d'onglets). */
+  variant?: "sidebar" | "sheet";
+  forcedTab?: LeftPanelTab;
 }) {
-  const [tab, setTab] = useState<"scenes" | "library" | "media" | "brand">("scenes");
+  const [ownTab, setTab] = useState<LeftPanelTab>("scenes");
+  const tab = forcedTab ?? ownTab;
 
   const tabs = [
     { id: "scenes" as const, label: "Scènes", icon: Layers3 },
@@ -69,8 +77,8 @@ export default function StudioLeftPanel({
   ];
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-surface/40 lg:w-72">
-      <div className="flex border-b border-line p-2">
+    <aside className={variant === "sheet" ? "flex w-full flex-col" : "flex w-64 shrink-0 flex-col border-r border-line bg-surface/40 lg:w-72"}>
+      <div className={variant === "sheet" ? "hidden" : "flex border-b border-line p-2"}>
         {tabs.map((tb) => (
           <button
             key={tb.id}
@@ -86,7 +94,7 @@ export default function StudioLeftPanel({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className={variant === "sheet" ? "p-3" : "flex-1 overflow-y-auto p-3"}>
         {tab === "scenes" ? (
           <div className="flex flex-col gap-2">
             <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
