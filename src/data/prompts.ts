@@ -89,6 +89,17 @@ function jsxPrompt(
 }
 
 const PROMPTS = {
+  "dashboard-reveal-01": {
+    web: webPrompt("dashboard-reveal-01", {
+      visuel: "Dashboard SaaS sombre, trois KPI personnalisables et histogramme de douze barres, accent violet.",
+      easing: "Entrée du panneau power3.out, cartes stagger back.out, histogramme scaleY avec origine en bas.",
+      boucle: "Maintien du dashboard complet puis sortie fluide en fondu et translation.",
+    }),
+    after_effects: jsxPrompt("dashboard-reveal-01", {
+      compo: "Composition dashboard SaaS 1920×1080, trois cartes KPI et un histogramme de douze colonnes.",
+      comportement: "Animer les KPI en cascade, les barres depuis leur base, maintenir l'état puis sortir en fondu.",
+    }),
+  },
   "kinetic-type-01": {
     web: webPrompt("kinetic-type-01", {
       visuel:
