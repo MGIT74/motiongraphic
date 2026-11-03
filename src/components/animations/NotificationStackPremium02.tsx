@@ -11,14 +11,14 @@ const NOTIFICATIONS = [
 ];
 
 export function NotificationStackPremium02Frame({ config }: AnimationComponentProps) {
-  const labels = config.text.slice(0, 800).split("\n").map((s) => s.trim()).filter(Boolean);
+  const entries = config.text.slice(0, 800).split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 6).map((line, i) => { const [title, detail, time] = line.split("|").map((part) => part.trim()); return { title: title || NOTIFICATIONS[i % NOTIFICATIONS.length].title, detail: detail || NOTIFICATIONS[i % NOTIFICATIONS.length].detail, time: time || "now" }; });
   return (
     <div className="flex h-full w-full items-center justify-center overflow-hidden" style={{
       backgroundColor: config.backgroundColor, containerType: "size",
-      fontFamily: config.fontFamily || "inherit",
+
     }}>
       <div className="relative flex flex-col" style={{ width: "min(86cqw, 75cqh)", gap: "2cqmin", perspective: "100cqw" }}>
-        {NOTIFICATIONS.map((item, i) => (
+        {entries.map((item, i) => (
           <div key={i} data-premium-notification className="relative flex items-center" style={{
             gap: "3cqmin", padding: "3.5cqmin 4cqmin",
             background: "#FFFFFF", border: "1px solid rgba(30,40,55,.07)",
@@ -30,10 +30,10 @@ export function NotificationStackPremium02Frame({ config }: AnimationComponentPr
               width: "9cqmin", height: "9cqmin", borderRadius: "2.3cqmin",
               backgroundColor: config.accentColor, color: "#FFFFFF",
               fontSize: "5cqmin", fontWeight: 700,
-            }}>{item.icon}</div>
+            }}>{i % 3 === 0 ? <svg viewBox="0 0 24 24" width="55%" height="55%" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6" /></svg> : i % 3 === 1 ? <svg viewBox="0 0 24 24" width="55%" height="55%" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 17 17 5M8 5h9v9" /></svg> : <svg viewBox="0 0 24 24" width="55%" height="55%" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z" /></svg>}</div>
             <div data-premium-content className="min-w-0 flex-1">
               <div className="flex items-center justify-between" style={{ gap: "2cqmin" }}>
-                <span style={{ color: config.primaryColor, fontSize: "3.6cqmin", fontWeight: 720, lineHeight: 1.2 }}>{labels[i] || item.title}</span>
+                <span style={{ color: config.primaryColor, fontSize: "3.6cqmin", fontWeight: 720, lineHeight: 1.2 }}>{item.title}</span>
                 <span style={{ color: "#9CA3AF", fontSize: "2.4cqmin" }}>{item.time}</span>
               </div>
               <div style={{ color: "#6B7280", fontSize: "2.8cqmin", marginTop: ".7cqmin", lineHeight: 1.3 }}>{item.detail}</div>
