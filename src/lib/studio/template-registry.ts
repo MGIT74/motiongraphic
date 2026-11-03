@@ -37,7 +37,7 @@ export function extendMeta(base: ComponentMeta, overrides: Partial<StudioTemplat
   };
 }
 
-export const STUDIO_TEMPLATES: Record<string, StudioTemplateMeta> = {
+export const STUDIO_TEMPLATES: Record<string, StudioTemplateMeta> = {\n  "dashboard-reveal-01": extendMeta(getComponentMeta("dashboard-reveal-01"), {\n    elementKind: "cards", studioCategory: "data-motion", timelineDuration: 4.5,\n  }),
   "kinetic-type-01": extendMeta(getComponentMeta("kinetic-type-01"), {
     elementKind: "text",
     studioCategory: "text-motion",
