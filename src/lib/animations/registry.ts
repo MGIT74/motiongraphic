@@ -27,7 +27,7 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
   "chat-conversation-reveal-01": {
     key: "chat-conversation-reveal-01",
     name: "Chat Conversation Reveal 01",
-    description: "Conversation animée : saisie de la question, apparition de la réponse et champ de suivi.",
+    description: "Conversation animée : entrée rebond de la question, apparition de la réponse et champ de suivi.",
     technologies: ["React", "GSAP", "SVG"],
     defaultConfig: CONFIG({ text: "How can I simplify my workflow?\nStart with one clear idea, then bring it to life.", primaryColor: "#192033", accentColor: "#6D5EF7", backgroundColor: "#F7F8FC", duration: 5.8 }),
   },
