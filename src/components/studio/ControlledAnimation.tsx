@@ -135,3 +135,5 @@ export default function ControlledAnimation({
     </div>
   );
 }
+/** Liste des cadres DOM (contrôle automatique des templates, /dev/template-check). */
+export { STUDIO_FRAMES };

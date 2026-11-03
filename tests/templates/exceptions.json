@@ -1,0 +1,6 @@
+{
+  "_comment": "Exceptions justifiées au contrôle automatique (clé = template ou fichier .tsx ; valeurs = règles ignorées). Chaque ajout doit être expliqué dans la PR.",
+  "minimal-saas-ui-01": ["not-in-studio", "no-builder", "skip-dynamic"],
+  "MinimalSaaSUIShowcase01.tsx": ["unicode-icon"],
+  "shape-morph-01": ["no-out-label", "visible-at-start"]
+}
