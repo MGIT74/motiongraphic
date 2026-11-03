@@ -51,7 +51,7 @@ export function DashboardReveal01Frame({ config }: AnimationComponentProps) {
           </div>
         </div>
         <div data-dashboard-footer className="flex items-center justify-between" style={{ fontSize: "2cqmin", opacity: 0.6 }}>
-          <span>Live insights</span><span>● &nbsp; All systems operational</span>
+          <span>Live insights</span><span>All systems operational</span>
         </div>
       </div>
     </div>
