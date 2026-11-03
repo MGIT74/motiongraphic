@@ -287,8 +287,32 @@ export function buildLogoReveal(
   return tl;
 }
 
+/** Dashboard Reveal — deterministic, seekable KPI cards and bar chart. */
+export function buildDashboardReveal(
+  root: HTMLElement, config: AnimationConfig, opts: BuilderOptions = {}
+): gsap.core.Timeline | void {
+  const shell = root.querySelector<HTMLElement>("[data-dashboard-shell]");
+  if (!shell) return;
+  const header = root.querySelector<HTMLElement>("[data-dashboard-header]");
+  const stats = root.querySelectorAll<HTMLElement>("[data-dashboard-stat]");
+  const chart = root.querySelector<HTMLElement>("[data-dashboard-chart]");
+  const bars = root.querySelectorAll<HTMLElement>("[data-dashboard-bar]");
+  const footer = root.querySelector<HTMLElement>("[data-dashboard-footer]");
+  const scale = Math.max(0.45, config.duration / 4.5);
+  const tl = gsap.timeline(tlOptions(opts.loop ?? true, 0.7));
+  tl.fromTo(shell, { opacity: 0, yPercent: 7, scale: 0.97 }, { opacity: 1, yPercent: 0, scale: 1, duration: 0.55 * scale, ease: "power3.out" }, 0);
+  if (header) tl.fromTo(header, { opacity: 0, yPercent: -20 }, { opacity: 1, yPercent: 0, duration: 0.45 * scale, ease: "power2.out" }, 0.12 * scale);
+  tl.fromTo(stats, { opacity: 0, yPercent: 20, scale: 0.94 }, { opacity: 1, yPercent: 0, scale: 1, duration: 0.48 * scale, stagger: 0.16 * scale, ease: "back.out(1.3)" }, 0.28 * scale);
+  if (chart) tl.fromTo(chart, { opacity: 0, yPercent: 12 }, { opacity: 1, yPercent: 0, duration: 0.45 * scale, ease: "power2.out" }, 0.8 * scale);
+  tl.fromTo(bars, { scaleY: 0, opacity: 0 }, { scaleY: 1, opacity: 1, duration: 0.5 * scale, stagger: 0.055 * scale, ease: "power2.out" }, 0.98 * scale);
+  if (footer) tl.fromTo(footer, { opacity: 0 }, { opacity: 0.6, duration: 0.3 * scale }, 1.55 * scale);
+  tl.addLabel("out", 2.2 * scale + Math.max(0.5, config.duration * 0.18));
+  tl.to(shell, { opacity: 0, yPercent: -6, scale: 0.98, duration: 0.48 * scale, ease: "power2.in" }, "out");
+  return tl;
+}
+
 /** Registre des builders, par clé de template. */
-export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
+export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {\n  "dashboard-reveal-01": buildDashboardReveal,
   "kinetic-type-01": buildKineticType,
   "text-reveal-01": buildTextReveal,
   "elastic-text-01": buildElasticText,
