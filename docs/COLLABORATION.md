@@ -56,7 +56,7 @@ dans la PR (« touche aussi : … »).
 
 ## 3. En cours
 
-- [ChatGPT] `audit/rls-security-review` — audit RLS, fonctions privilégiées et droits Supabase (tâche 1).
+- [ChatGPT] `audit/rls-security-review` — audit RLS terminé, rapport et migration 0007 proposés ; PR en attente de revue et CI.
 
 ## 4. Repères techniques
 
