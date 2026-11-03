@@ -10,7 +10,7 @@ export function ChatConversationReveal01Frame({ config }: AnimationComponentProp
     <div className="absolute inset-0 flex items-center justify-center overflow-hidden" style={{ backgroundColor: config.backgroundColor, color: config.primaryColor, containerType: "size" }}>
       <div data-chat-stage style={{ width: "min(85cqw, 105cqmin)", display: "flex", flexDirection: "column", gap: "3cqmin" }}>
         <div data-chat-header style={{ display: "flex", alignItems: "center", gap: "2cqmin", fontSize: "3cqmin", fontWeight: 650 }}>
-          <span style={{ width: "5cqmin", height: "5cqmin", borderRadius: "1.4cqmin", background: config.accentColor, display: "grid", placeItems: "center", color: "#fff" }}>✦</span>
+          <span style={{ width: "5cqmin", height: "5cqmin", borderRadius: "1.4cqmin", background: config.accentColor, display: "grid", placeItems: "center", color: "#fff" }}><svg viewBox="0 0 24 24" width="60%" height="60%" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4Z"/></svg></span>
           Creative Assistant
           <span style={{ marginLeft: "auto", fontSize: "1.8cqmin", opacity: 0.5 }}>Online</span>
         </div>
@@ -24,7 +24,7 @@ export function ChatConversationReveal01Frame({ config }: AnimationComponentProp
         </div>
         <div data-chat-input style={{ border: "1px solid color-mix(in srgb, currentColor 25%, transparent)", borderRadius: "2.5cqmin", padding: "2.5cqmin 3cqmin", fontSize: "2.3cqmin", opacity: 0.7, display: "flex", justifyContent: "space-between" }}>
           <span>Ask a follow-up...</span>
-          <span style={{ color: config.accentColor }}>↗</span>
+          <span style={{ color: config.accentColor }}><svg viewBox="0 0 24 24" width="2.6cqmin" height="2.6cqmin" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 19 19 5M8 5h11v11"/></svg></span>
         </div>
       </div>
     </div>
