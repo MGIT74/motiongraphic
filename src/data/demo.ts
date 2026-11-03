@@ -77,7 +77,7 @@ const TEMPLATES: DemoTemplateInput[] = [
     categoryId: "interface",
     componentKey: "chat-conversation-reveal-01",
     config: {
-      text: "How can I simplify my workflow?\\nStart with one clear idea, then bring it to life.",
+      text: "How can I simplify my workflow?\nStart with one clear idea, then bring it to life.",
       primaryColor: "#192033",
       accentColor: "#6D5EF7",
       backgroundColor: "#F7F8FC",
