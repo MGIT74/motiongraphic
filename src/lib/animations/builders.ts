@@ -304,12 +304,12 @@ export function buildTypewriter(
   const step = typingDuration / Math.max(1, characters.length);
   // Explicit states avoid CSS animations and permit exact frame-by-frame seeking.
   tl.fromTo(characters, { opacity: 0 }, {
-    opacity: 1, duration: 0.001, stagger: step, ease: "none", immediateRender: false,
+    opacity: 1, duration: 0.001, stagger: step, ease: "none",
   }, 0);
   if (cursor) {
     tl.fromTo(cursor, { opacity: 1 }, {
       opacity: 0.25, duration: 0.22, repeat: Math.max(0, Math.floor(typingDuration / 0.44) * 2 - 1),
-      yoyo: true, ease: "steps(1)", immediateRender: false,
+      yoyo: true, ease: "steps(1)",
     }, 0);
   }
   tl.addLabel("out", typingDuration + Math.max(0.5, duration * 0.22));
