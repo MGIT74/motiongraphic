@@ -57,9 +57,18 @@ async function chromiumExecutable(): Promise<{ executablePath: string; args: str
   for (const candidate of ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]) {
     if (existsSync(candidate)) return { executablePath: candidate, args: ["--no-sandbox"] };
   }
-  // Chromium autonome livré par npm (bibliothèques incluses) : aucune installation système.
-  const sparticuz = (await import("@sparticuz/chromium")).default;
-  return { executablePath: await sparticuz.executablePath(), args: sparticuz.args };
+  // Chromium autonome livré par npm : aucune installation système. Ses bibliothèques
+  // (libnss3, libnspr4…) ne sont extraites que si le paquet croit tourner sur un
+  // environnement « Amazon Linux 2023 » : on le lui indique le temps du chargement,
+  // puis il ajoute /tmp/al2023/lib à LD_LIBRARY_PATH (hérité par Chromium).
+  const simulated = !process.env.AWS_LAMBDA_JS_RUNTIME && !process.env.AWS_EXECUTION_ENV;
+  if (simulated) process.env.AWS_LAMBDA_JS_RUNTIME = "nodejs20.x";
+  try {
+    const sparticuz = (await import("@sparticuz/chromium")).default;
+    return { executablePath: await sparticuz.executablePath(), args: sparticuz.args };
+  } finally {
+    if (simulated) delete process.env.AWS_LAMBDA_JS_RUNTIME;
+  }
 }
 
 async function getBrowser(): Promise<Browser> {
