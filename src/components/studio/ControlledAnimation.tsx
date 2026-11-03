@@ -98,7 +98,7 @@ export default function ControlledAnimation({
     };
     // Reconstruit aussi quand la police ou le logo changent (le DOM mesuré change).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [builder, templateKey, config.text, config.primaryColor, config.accentColor, config.backgroundColor, config.duration, config.fontFamily, config.logoUrl]);
+  }, [builder, templateKey, config.text, config.primaryColor, config.accentColor, config.backgroundColor, config.duration, config.fontFamily, config.logoUrl, config.entranceDirection]);
 
   useEffect(() => {
     const tl = timelineRef.current;
