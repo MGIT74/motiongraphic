@@ -289,8 +289,59 @@ export function buildLogoReveal(
   return tl;
 }
 
+/** Deterministic typewriter and pointer click, fully seekable by Studio. */
+export function buildAIInputMorph(root: HTMLElement, config: AnimationConfig, opts: BuilderOptions = {}): gsap.core.Timeline | void {
+  const stage = root.querySelector<HTMLElement>("[data-input-stage]");
+  if (!stage) return;
+  const heading = root.querySelector<HTMLElement>("[data-input-heading]");
+  const shell = root.querySelector<HTMLElement>("[data-input-shell]");
+  const prompt = root.querySelector<HTMLElement>("[data-input-text]");
+  const caret = root.querySelector<HTMLElement>("[data-input-caret]");
+  const pointer = root.querySelector<HTMLElement>("[data-input-pointer]");
+  const tools = root.querySelectorAll<HTMLElement>("[data-input-tool]");
+  const action = root.querySelector<HTMLElement>("[data-input-action]");
+  const caption = root.querySelector<HTMLElement>("[data-input-caption]");
+  const k = Math.max(0.5, config.duration / 4.6);
+  const tl = gsap.timeline(tlOptions(opts.loop ?? true, 0.65));
+  tl.fromTo(stage, { opacity: 0 }, { opacity: 1, duration: 0.2 * k }, 0);
+  if (heading) tl.fromTo(heading, { opacity: 0, yPercent: 24 }, { opacity: 1, yPercent: 0, duration: 0.5 * k, ease: "power3.out" }, 0.12 * k);
+  if (shell) tl.fromTo(shell, { opacity: 0, scaleX: 0.48, scaleY: 0.65, yPercent: 16 }, { opacity: 1, scaleX: 1, scaleY: 1, yPercent: 0, duration: 0.85 * k, ease: "power3.inOut" }, 0.35 * k);
+  if (prompt) {
+    const fullText = prompt.getAttribute("data-full-text") ?? "";
+    const textNode = prompt.firstChild;
+    const typing = { count: 0 };
+    tl.fromTo(prompt, { opacity: 0, yPercent: 15 }, { opacity: 1, yPercent: 0, duration: 0.25 * k }, 1.0 * k);
+    // Text is driven by a GSAP proxy, not timers: reverse/scrub/export stay in sync.
+    tl.fromTo(typing, { count: 0 }, {
+      count: fullText.length, duration: 1.2 * k, ease: "none",
+      onUpdate: () => { if (textNode) textNode.textContent = fullText.slice(0, Math.floor(typing.count)); },
+    }, 1.2 * k);
+  }
+  if (caret) {
+    tl.fromTo(caret, { opacity: 0 }, { opacity: 1, duration: 0.08 * k }, 1.15 * k);
+    tl.to(caret, { opacity: 0.2, duration: 0.12 * k, repeat: 5, yoyo: true }, 1.25 * k);
+    tl.to(caret, { opacity: 0, duration: 0.12 * k }, 2.55 * k);
+  }
+  tl.fromTo(tools, { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.32 * k, stagger: 0.12 * k, ease: "back.out(1.4)" }, 1.24 * k);
+  if (action) tl.fromTo(action, { opacity: 0, xPercent: 16 }, { opacity: 1, xPercent: 0, duration: 0.45 * k, ease: "power3.out" }, 1.45 * k);
+  if (caption) tl.fromTo(caption, { opacity: 0, yPercent: 12 }, { opacity: 0.65, yPercent: 0, duration: 0.35 * k }, 1.8 * k);
+  if (pointer) {
+    tl.fromTo(pointer, { opacity: 0, xPercent: 190, yPercent: 125 }, { opacity: 1, xPercent: 0, yPercent: 0, duration: 0.6 * k, ease: "power2.out" }, 2.65 * k);
+    tl.to(pointer, { scale: 0.82, duration: 0.12 * k, ease: "power2.in" }, 3.3 * k);
+    if (action) {
+      tl.to(action, { scale: 0.93, duration: 0.12 * k, ease: "power2.in" }, 3.3 * k);
+      tl.to(action, { scale: 1, duration: 0.17 * k, ease: "back.out(2)" }, 3.42 * k);
+    }
+    tl.to(pointer, { scale: 1, opacity: 0, duration: 0.18 * k }, 3.42 * k);
+  }
+  tl.addLabel("out", 3.75 * k);
+  tl.to(stage, { opacity: 0, scale: 0.96, yPercent: -7, duration: 0.5 * k, ease: "power2.in" }, "out");
+  return tl;
+}
+
 /** Registre des builders, par clé de template. */
 export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
+  "ai-input-morph-01": buildAIInputMorph,
   "kinetic-type-01": buildKineticType,
   "text-reveal-01": buildTextReveal,
   "elastic-text-01": buildElasticText,

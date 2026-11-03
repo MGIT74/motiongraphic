@@ -17,6 +17,7 @@ const CATEGORY_IDS = {
 } as const;
 
 const ANIM_IDS = {
+  inputMorph: "00000000-0000-4000-8000-000000000025",
   kinetic: "00000000-0000-4000-8000-000000000011",
   reveal: "00000000-0000-4000-8000-000000000012",
   elastic: "00000000-0000-4000-8000-000000000013",
@@ -68,6 +69,23 @@ interface DemoTemplateInput {
 }
 
 const TEMPLATES: DemoTemplateInput[] = [
+  {
+    id: ANIM_IDS.inputMorph,
+    title: "AI Input Morph 01",
+    slug: "ai-input-morph-01",
+    description: "Une barre de saisie IA se transforme en compositeur avec actions et sortie fluide.",
+    categoryId: "interface",
+    componentKey: "ai-input-morph-01",
+    config: {
+      text: "What will you create?\nDescribe your next idea...\nGenerate",
+      primaryColor: "#F8FAFC",
+      accentColor: "#7268F4",
+      backgroundColor: "#0C1020",
+      duration: 4.6,
+      speed: 1,
+    },
+    duration: 4.6,
+  },
   {
     id: ANIM_IDS.kinetic,
     title: "Kinetic Typography",
