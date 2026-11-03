@@ -24,6 +24,13 @@ const CONFIG = (overrides: Partial<AnimationConfig> = {}): AnimationConfig => ({
 });
 
 export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
+  "dashboard-reveal-01": {
+    key: "dashboard-reveal-01",
+    name: "Dashboard Reveal 01",
+    description: "Tableau de bord SaaS premium : KPI en cascade, barres de performance animées et sortie fluide.",
+    technologies: ["React", "GSAP", "SVG"],
+    defaultConfig: CONFIG({ text: "Overview\nRevenue | €48.2K | +12.8%\nCustomers | 2,840 | +8.4%\nConversion | 4.82% | +2.1%", primaryColor: "#F6F7FF", accentColor: "#8B7CFF", backgroundColor: "#0C1020", duration: 4.5 }),
+  },
   "kinetic-type-01": {
     key: "kinetic-type-01",
     name: "Kinetic Typography",

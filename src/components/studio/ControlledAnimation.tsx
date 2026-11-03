@@ -10,6 +10,7 @@ import { isStudioTemplateKey } from "@/lib/studio/template-registry";
 import { timelineTimeFor } from "@/lib/studio/timing";
 import type { ElementTiming } from "@/lib/studio/project-model";
 import { fontCss } from "@/lib/brand/fonts";
+import { DashboardReveal01Frame } from "@/components/animations/DashboardReveal01";
 import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
 import { TextReveal01Frame } from "@/components/animations/TextReveal01";
 import { ElasticText01Frame } from "@/components/animations/ElasticText01";
@@ -19,6 +20,7 @@ import { LogoReveal01Frame } from "@/components/animations/LogoReveal01";
 import MinimalSaaSUIShowcase01 from "@/components/animations/MinimalSaaSUIShowcase01";
 
 const STUDIO_FRAMES: Record<ComponentKey, ComponentType<AnimationComponentProps>> = {
+  "dashboard-reveal-01": DashboardReveal01Frame,
   "kinetic-type-01": KineticTypography01Frame,
   "text-reveal-01": TextReveal01Frame,
   "elastic-text-01": ElasticText01Frame,

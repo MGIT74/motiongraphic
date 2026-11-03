@@ -17,6 +17,7 @@ const CATEGORY_IDS = {
 } as const;
 
 const ANIM_IDS = {
+  dashboard: "00000000-0000-4000-8000-000000000018",
   kinetic: "00000000-0000-4000-8000-000000000011",
   reveal: "00000000-0000-4000-8000-000000000012",
   elastic: "00000000-0000-4000-8000-000000000013",
@@ -157,6 +158,23 @@ const TEMPLATES: DemoTemplateInput[] = [
       speed: 1,
     },
     duration: 4.2,
+  },
+  {
+    id: ANIM_IDS.dashboard,
+    title: "Dashboard Reveal 01",
+    slug: "dashboard-reveal-01",
+    description: "Dashboard SaaS animé : trois statistiques, histogramme en cascade et sortie premium.",
+    categoryId: "interface",
+    componentKey: "dashboard-reveal-01",
+    config: {
+      text: "Overview\nRevenue | €48.2K | +12.8%\nCustomers | 2,840 | +8.4%\nConversion | 4.82% | +2.1%",
+      primaryColor: "#F6F7FF",
+      accentColor: "#8B7CFF",
+      backgroundColor: "#0C1020",
+      duration: 4.5,
+      speed: 1,
+    },
+    duration: 4.5,
   },
   {
     id: ANIM_IDS.logo,
