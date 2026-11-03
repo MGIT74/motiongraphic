@@ -1,5 +1,8 @@
 "use client";
 
+import { friendlyError } from "@/lib/studio/errors";
+import { useToasts } from "./Toasts";
+
 import { useState } from "react";
 import { Film, Image as ImageIcon, Loader2, Music, Plus, Upload, X } from "lucide-react";
 import type { MediaAsset, ProjectAudio, StudioProject } from "@/lib/studio/project-model";
@@ -51,6 +54,7 @@ export default function MediaPanel({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const toasts = useToasts();
 
   const onFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -60,7 +64,9 @@ export default function MediaPanel({
       try {
         onAddAsset(await uploadMediaFile(project.id, file));
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        const f = friendlyError(e, "upload");
+        setError(`${file.name} : ${f.title}`);
+        toasts.error(e, "upload", () => void onFiles(singleFileList(file)));
       }
     }
     setBusy(null);
@@ -191,4 +197,11 @@ export default function MediaPanel({
       </div>
     </div>
   );
+}
+
+/** Liste de fichiers d'un seul élément (pour « Réessayer » un import). */
+function singleFileList(file: File): FileList {
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  return dt.files;
 }

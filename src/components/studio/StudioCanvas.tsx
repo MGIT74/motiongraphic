@@ -1,9 +1,10 @@
 "use client";
 
-import { type MouseEvent } from "react";
+import { useState, type DragEvent, type MouseEvent } from "react";
 import { MousePointerClick, Play } from "lucide-react";
 import type { StudioProject } from "@/lib/studio/project-model";
 import StageLayers, { activeElementCount } from "./StageLayers";
+import { TEMPLATE_DRAG_TYPE } from "./TemplateLibrary";
 
 /**
  * Canvas central : cadre au format du projet (16:9, 9:16 ou 1:1) montrant la
@@ -17,6 +18,7 @@ export default function StudioCanvas({
   sceneIndex,
   selectedElementId,
   onSelectElement,
+  onDropTemplate,
 }: {
   project: StudioProject;
   time: number;
@@ -24,7 +26,11 @@ export default function StudioCanvas({
   sceneIndex: number;
   selectedElementId: string | null;
   onSelectElement: (elementId: string | null) => void;
+  /** Template déposé depuis la bibliothèque (ajouté à l'instant courant). */
+  onDropTemplate?: (templateKey: string) => void;
 }) {
+  const [dropping, setDropping] = useState(false);
+  const accepts = (e: DragEvent) => !!onDropTemplate && Array.from(e.dataTransfer.types).includes(TEMPLATE_DRAG_TYPE);
   const scene = project.scenes[Math.min(sceneIndex, project.scenes.length - 1)];
   const ratio = project.width / project.height;
   const empty = activeElementCount(project, time) === 0;
@@ -47,6 +53,20 @@ export default function StudioCanvas({
           }}
           aria-label={`Aperçu — scène ${scene.name}`}
           data-studio-canvas
+          onDragOver={(e) => {
+            if (!accepts(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+            setDropping(true);
+          }}
+          onDragLeave={() => setDropping(false)}
+          onDrop={(e) => {
+            if (!accepts(e)) return;
+            e.preventDefault();
+            setDropping(false);
+            const key = e.dataTransfer.getData(TEMPLATE_DRAG_TYPE);
+            if (key) onDropTemplate?.(key);
+          }}
         >
           <StageLayers
             project={project}
@@ -55,6 +75,11 @@ export default function StudioCanvas({
             onSelectElement={(id) => onSelectElement(id)}
           />
           {empty ? <EmptyState playing={playing} /> : null}
+          {dropping ? (
+            <div className="pointer-events-none absolute inset-0 z-[101] flex items-center justify-center border-2 border-dashed border-emerald-400 bg-emerald-400/10">
+              <span className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-black">Déposer ici : ajouté à l&apos;instant du curseur</span>
+            </div>
+          ) : null}
 
           <div
             className="pointer-events-none absolute left-3 top-3 z-[100] rounded-full border border-line bg-black/60 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-muted backdrop-blur-sm"
@@ -79,8 +104,8 @@ function EmptyState({ playing }: { playing: boolean }) {
         )}
         <p className="text-xs text-muted">Aucun élément à cet instant de la timeline.</p>
         <p className="max-w-64 text-[11px] leading-relaxed text-muted/70">
-          Déplacez le curseur temporel ou ajoutez un élément depuis la
-          bibliothèque (panneau gauche).
+          Déplacez le curseur temporel, ou glissez un template de la
+          bibliothèque (onglet Templates) jusqu&apos;ici.
         </p>
       </div>
     </div>

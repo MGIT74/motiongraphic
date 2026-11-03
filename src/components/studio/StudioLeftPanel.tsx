@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Copy, Film, Image as ImageIcon, Layers3, Palette, Plus, Trash2, Upload, Wand2, X } from "lucide-react";
 import MediaPanel from "./MediaPanel";
+import TemplateLibrary from "./TemplateLibrary";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
 import { LOGO_MAX_CHARS } from "@/lib/animations/config";
 import type { BrandKit, MediaAsset, ProjectAudio, SceneTransition, StudioProject } from "@/lib/studio/project-model";
@@ -16,7 +17,6 @@ const TRANSITION_LABELS: Record<string, string> = {
   wipe: "Volet",
   zoom: "Zoom",
 };
-import { STUDIO_CATEGORIES, STUDIO_TEMPLATES } from "@/lib/studio/template-registry";
 
 /**
  * Panneau gauche du Studio : scènes + bibliothèque de templates + médias
@@ -204,42 +204,7 @@ export default function StudioLeftPanel({
             </button>
           </div>
         ) : tab === "library" ? (
-          <div className="flex flex-col gap-4">
-            <p className="px-1 text-[11px] leading-relaxed text-muted">
-              Cliquez sur un template pour l’ajouter à la scène courante.
-            </p>
-            {STUDIO_CATEGORIES.map((category) => {
-              const templates = Object.entries(STUDIO_TEMPLATES).filter(
-                ([, t]) => t.studioCategory === category.id
-              );
-              if (templates.length === 0) return null;
-              return (
-                <div key={category.id}>
-                  <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    {category.label}
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    {templates.map(([key, template]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => onAddElement(key)}
-                        className="flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-line bg-background/60 px-3 py-2.5 text-left transition-colors hover:border-accent/50"
-                      >
-                        <span>
-                          <span className="block text-xs font-semibold text-ink">{template.name}</span>
-                          <span className="block font-mono text-[10px] text-muted">{key}</span>
-                        </span>
-                        <span className="shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
-                          {template.timelineDuration}s
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <TemplateLibrary project={project} onAddElement={onAddElement} />
         ) : tab === "media" ? (
           <MediaPanel
             project={project}

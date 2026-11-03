@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Download, Film, Loader2, RotateCcw } from "lucide-react";
+import { friendlyError } from "@/lib/studio/errors";
+import { useToasts } from "./Toasts";
 
 type ExportState =
   | { kind: "idle" }
@@ -22,6 +24,11 @@ export default function ExportButton({
   beforeExport: () => Promise<boolean>;
 }) {
   const [state, setState] = useState<ExportState>({ kind: "idle" });
+  const toasts = useToasts();
+  const fail = (message: string) => {
+    setState({ kind: "error", message });
+    toasts.error(message, "export", () => void start());
+  };
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => {
@@ -31,17 +38,23 @@ export default function ExportButton({
   const start = async () => {
     setState({ kind: "running", renderId: "", progress: 0 });
     if (!(await beforeExport())) {
-      setState({ kind: "error", message: "Connectez-vous : l'export nécessite la sauvegarde cloud." });
+      fail("Connectez-vous : l'export nécessite la sauvegarde cloud.");
       return;
     }
-    const res = await fetch("/api/studio/render", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ project_id: projectId }),
-    });
+    let res: Response;
+    try {
+      res = await fetch("/api/studio/render", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ project_id: projectId }),
+      });
+    } catch (e) {
+      fail(e instanceof Error ? e.message : String(e));
+      return;
+    }
     const body = (await res.json().catch(() => ({}))) as { render_id?: string; error?: string };
     if (!res.ok || !body.render_id) {
-      setState({ kind: "error", message: body.error ?? `Échec (${res.status})` });
+      fail(body.error ?? `Erreur ${res.status}`);
       return;
     }
     const renderId = body.render_id;
@@ -52,10 +65,17 @@ export default function ExportButton({
       if (!s) return;
       if (s.status === "done" && s.url) {
         if (timer.current) clearInterval(timer.current);
-        setState({ kind: "done", url: s.url });
+        const url = s.url;
+        setState({ kind: "done", url });
+        toasts.success("Votre vidéo est prête", "Le MP4 est disponible pendant 7 jours.", {
+          label: "Télécharger",
+          run: () => {
+            window.location.href = url;
+          },
+        });
       } else if (s.status === "error") {
         if (timer.current) clearInterval(timer.current);
-        setState({ kind: "error", message: s.error ?? "Erreur de rendu." });
+        fail(s.error ?? "Erreur de rendu.");
       } else {
         setState({ kind: "running", renderId, progress: s.progress ?? 0 });
       }
@@ -87,7 +107,11 @@ export default function ExportButton({
   }
   return (
     <span className="inline-flex items-center gap-2">
-      {state.kind === "error" ? <span className="max-w-56 truncate text-[11px] text-red-300" title={state.message}>{state.message}</span> : null}
+      {state.kind === "error" ? (
+        <span className="max-w-56 truncate text-[11px] text-red-300" title={state.message}>
+          {friendlyError(state.message, "export").title}
+        </span>
+      ) : null}
       <button type="button" onClick={() => void start()} className={`${base} border-line text-ink hover:border-accent/50`}>
         <Film className="h-3.5 w-3.5" aria-hidden="true" /> Exporter MP4
       </button>

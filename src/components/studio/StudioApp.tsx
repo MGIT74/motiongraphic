@@ -26,6 +26,8 @@ import {
   makeScene,
   removeElement,
   replaceElementTemplate,
+  roundToFrame,
+  sceneIndexAtTime,
   sceneOffsets,
   updateElement,
 } from "@/lib/studio/project-model";
@@ -49,6 +51,7 @@ import StudioRightPanel from "./StudioRightPanel";
 import StudioTimeline from "./StudioTimeline";
 import ExportButton from "./ExportButton";
 import ProjectsMenu from "./ProjectsMenu";
+import { ToastProvider, useToasts } from "./Toasts";
 import AudioTrack from "./AudioTrack";
 import { MediaRuntimeContext } from "./MediaLayer";
 
@@ -76,9 +79,15 @@ function computeSelection(
   return null;
 }
 
-export default function StudioApp({
-  customTemplates = [],
-}: {
+export default function StudioApp(props: StudioAppProps) {
+  return (
+    <ToastProvider>
+      <StudioAppInner {...props} />
+    </ToastProvider>
+  );
+}
+
+type StudioAppProps = {
   /** Templates personnalisés PUBLIÉS (serveur) — bibliothèque commune + timeline. */
   customTemplates?: {
     id: string;
@@ -90,7 +99,9 @@ export default function StudioApp({
     elementKind: string;
     defaultConfig: import("@/types/animation").AnimationConfig;
   }[];
-}) {
+};
+
+function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
   // Initial DÉTERMINISTE : le rendu serveur et le premier rendu client sont
   // identiques ; le contenu réel (localStorage/nuage) est restauré après
   // l'hydratation via `reset`.
@@ -109,6 +120,14 @@ export default function StudioApp({
     registeredRef.current = signature;
     registerCustomStudioTemplates(customTemplates);
   }, [customTemplates]);
+
+  const toasts = useToasts();
+  const toastsRef = useRef(toasts);
+  useEffect(() => {
+    toastsRef.current = toasts;
+  }, [toasts]);
+  const cloudErrorShownRef = useRef(false);
+  const saveNowRef = useRef<(target: StudioProject) => Promise<void>>(async () => {});
 
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("saved");
@@ -190,8 +209,12 @@ export default function StudioApp({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ assets: missing.map((m) => ({ id: m.id, storagePath: m.storagePath })) }),
       }).catch(() => null);
-      const body = (await res?.json().catch(() => null)) as { urls?: Record<string, string> } | null;
-      if (!cancelled && body?.urls) setMediaUrls((prev) => ({ ...prev, ...body.urls }));
+      const body = (await res?.json().catch(() => null)) as { urls?: Record<string, string>; error?: string } | null;
+      if (cancelled) return;
+      if (body?.urls) setMediaUrls((prev) => ({ ...prev, ...body.urls }));
+      if (!res || !res.ok || !body?.urls) {
+        toastsRef.current.error(body?.error ?? (res ? `Erreur ${res.status}` : "Failed to fetch"), "media");
+      }
     })();
     return () => {
       cancelled = true;
@@ -205,13 +228,24 @@ export default function StudioApp({
   const saveNow = useCallback(async (target: StudioProject) => {
     const ok = saveProject(target);
     setSaveState(ok ? "saved" : "error");
-    const cloud = await saveProjectToCloud(target, remoteVersionRef.current);
+    const cloud = await saveProjectToCloud(target, remoteVersionRef.current).catch(
+      (e: unknown) => ({ state: "error" as const, message: e instanceof Error ? e.message : String(e), updatedAt: undefined })
+    );
     setCloudState(cloud.state);
+    // Une seule notification par série d'échecs (la sauvegarde réessaie à chaque modification).
+    if (cloud.state === "error" && !cloudErrorShownRef.current) {
+      cloudErrorShownRef.current = true;
+      toastsRef.current.error(cloud.message ?? "Échec de la sauvegarde cloud", "save", () => void saveNowRef.current(projectRef.current));
+    }
+    if (cloud.state === "synced") cloudErrorShownRef.current = false;
     if (cloud.state === "synced") {
       remoteVersionRef.current = cloud.updatedAt;
       if (projectRef.current === target) dirtyRef.current = false;
     }
   }, []);
+  useEffect(() => {
+    saveNowRef.current = saveNow;
+  }, [saveNow]);
 
   useEffect(() => {
     if (skipSaveRef.current) {
@@ -343,6 +377,28 @@ export default function StudioApp({
     commit(appendElement(project, scene.id, element), "add-element");
     setSelectedElementId(element.id);
     seek(offsets[sceneIndexAt] + start + 0.2);
+  };
+
+  /** Template déposé à l'instant global `at` (timeline ou aperçu) : dans la scène visée, à cet instant. */
+  const addElementAt = (templateKey: string, at: number) => {
+    const template = getStudioTemplate(templateKey);
+    if (!template) return;
+    const idx = Math.max(0, Math.min(project.scenes.length - 1, sceneIndexAtTime(project, at)));
+    const scene = project.scenes[idx];
+    const start = roundToFrame(Math.max(0, Math.min(scene.duration - 0.5, at - offsets[idx])));
+    const element = makeElement(templateKey, template.elementKind, brandedConfig({ ...template.defaultConfig }, template.elementKind, project.brand), {
+      start,
+      duration: template.timelineDuration,
+      label: template.name,
+      timing: "fit",
+    });
+    let next = appendElement(project, scene.id, element);
+    if (start + element.duration > scene.duration) {
+      next = updateScene(next, scene.id, { duration: start + element.duration });
+    }
+    commit(next, "add-element");
+    setSelectedElementId(element.id);
+    seek(offsets[idx] + start + Math.min(0.6, element.duration / 2));
   };
 
   const changeElementTemplate = (elementId: string, newTemplateKey: string) => {
@@ -568,6 +624,7 @@ export default function StudioApp({
             sceneIndex={sceneIndex}
             selectedElementId={selectedElementId}
             onSelectElement={setSelectedElementId}
+            onDropTemplate={(templateKey) => addElementAt(templateKey, time)}
           />
           <StudioTimeline
             project={project}
@@ -577,13 +634,11 @@ export default function StudioApp({
             selectedElementId={selectedElementId}
             onSelectElement={setSelectedElementId}
             onSeek={seek}
-            onMoveElement={(sceneId, elementId, start) =>
-              commit(updateElement(project, sceneId, elementId, (el) => ({ ...el, start })), "move-element", `move:${elementId}`)
-            }
-            onResizeElement={(sceneId, elementId, duration) =>
-              commit(updateElement(project, sceneId, elementId, (el) => ({ ...el, duration })), "resize-element", `resize:${elementId}:${duration.toFixed(2)}`)
+            onChangeTiming={(sceneId, elementId, timing, gesture) =>
+              commit(updateElement(project, sceneId, elementId, (el) => ({ ...el, ...timing })), "timing-element", `timing:${elementId}:${gesture}`)
             }
             onDeleteElement={deleteElement}
+            onDropTemplate={(templateKey, at) => addElementAt(templateKey, at)}
           />
         </div>
 

@@ -5,6 +5,7 @@ import { Copy, FolderOpen, Loader2, Trash2 } from "lucide-react";
 import { listCloudProjects, type CloudProjectSummary } from "@/lib/studio/projects-supabase";
 import { listProjects as listLocalProjects } from "@/lib/studio/persistence";
 import { formatOf } from "@/lib/studio/project-model";
+import { friendlyError } from "@/lib/studio/errors";
 
 /**
  * « Mes projets » : liste des projets (cloud si connecté, sinon ceux du
@@ -65,7 +66,8 @@ export default function ProjectsMenu({
       if (close) setOpen(false);
       else await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Action impossible.");
+      const f = friendlyError(e, "project");
+      setError(`${f.title} — ${f.hint}`);
     } finally {
       setBusy(null);
       setConfirmId(null);
