@@ -1,6 +1,7 @@
 export type ComponentKey =
   | "kinetic-type-01"
   | "text-reveal-01"
+  | "notification-stack-premium-02"
   | "elastic-text-01"
   | "shape-morph-01"
   | "staggered-cards-01"
