@@ -1,4 +1,5 @@
 export type ComponentKey =
+  | "ai-input-morph-01"
   | "kinetic-type-01"
   | "text-reveal-01"
   | "elastic-text-01"
