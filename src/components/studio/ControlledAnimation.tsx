@@ -11,6 +11,7 @@ import { timelineTimeFor } from "@/lib/studio/timing";
 import type { ElementTiming } from "@/lib/studio/project-model";
 import { fontCss } from "@/lib/brand/fonts";
 import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
+import { NotificationStackPremium02Frame } from "@/components/animations/NotificationStackPremium02";
 import { TextReveal01Frame } from "@/components/animations/TextReveal01";
 import { ElasticText01Frame } from "@/components/animations/ElasticText01";
 import { ShapeMorph01Frame } from "@/components/animations/ShapeMorph01";
@@ -21,6 +22,7 @@ import MinimalSaaSUIShowcase01 from "@/components/animations/MinimalSaaSUIShowca
 const STUDIO_FRAMES: Record<ComponentKey, ComponentType<AnimationComponentProps>> = {
   "kinetic-type-01": KineticTypography01Frame,
   "text-reveal-01": TextReveal01Frame,
+  "notification-stack-premium-02": NotificationStackPremium02Frame,
   "elastic-text-01": ElasticText01Frame,
   "shape-morph-01": ShapeMorph01Frame,
   "staggered-cards-01": StaggeredCards01Frame,
