@@ -105,6 +105,10 @@ const PROMPTS = {
         "Le mot est divisé en sous-calques du texte (une lettre par index) ; chaque lettre entre de bas en haut avec un masque (alpha inverted) décalé de 2 frames, puis un point violet apparaît en pop, puis sortie inversée vers le haut pour boucler.",
     }),
   },
+  "typewriter-01": {
+    web: webPrompt("typewriter-01", { visuel: "Typographie monospacée ou sans-serif, lettres révélées une à une, curseur vert menthe.", easing: "Révélation de caractères en pas discrets pilotés par GSAP, sans animations CSS.", boucle: "Saisie, pause, effacement puis répétition." }),
+    after_effects: jsxPrompt("typewriter-01", { compo: "MGSI_Typewriter, 1920×1080, 30 fps, 6 s, fond sombre.", comportement: "Révélation caractère par caractère avec opacité en hold keyframes et curseur animé." }),
+  },
   "text-reveal-01": {
     web: webPrompt("text-reveal-01", {
       visuel:
