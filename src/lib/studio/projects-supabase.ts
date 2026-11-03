@@ -27,11 +27,16 @@ interface FilterBuilder extends PromiseLike<QueryResult> {
   eq: (col: string, value: string) => FilterBuilder;
 }
 
+interface DeleteBuilder {
+  eq: (col: string, value: string) => PromiseLike<{ error: { message: string } | null }>;
+}
+
 interface SupabaseLikeMinimal {
   auth: { getUser: () => PromiseLike<{ data: { user: { id: string } | null } }> };
   from: (table: "studio_projects") => {
     upsert: (row: Record<string, unknown>, opts?: { onConflict?: string }) => PromiseLike<{ error: { message: string } | null }>;
     select: (sel: string) => FilterBuilder;
+    delete: () => DeleteBuilder;
   };
 }
 
@@ -139,4 +144,36 @@ export async function loadCloudProject(projectId: string): Promise<CloudProject 
   const row = (data as { data: unknown; updated_at: string }[])[0];
   const project = validateProject(row?.data ?? null);
   return project ? { project, updatedAt: row.updated_at } : null;
+}
+
+export interface CloudProjectSummary {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  updatedAt: string;
+}
+
+/** Projets cloud de l'utilisateur connecté, du plus récent au plus ancien (RLS). */
+export async function listCloudProjects(): Promise<CloudProjectSummary[] | null> {
+  const client = await getBrowserClient();
+  if (!client) return null;
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await client
+    .from("studio_projects")
+    .select("id, name, width, height, updated_at")
+    .eq("user_id", user.id);
+  if (error || !Array.isArray(data)) return null;
+  return (data as { id: string; name: string; width: number; height: number; updated_at: string }[])
+    .map((r) => ({ id: r.id, name: r.name || "Sans titre", width: r.width, height: r.height, updatedAt: r.updated_at }))
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+}
+
+/** Supprime un projet cloud de l'utilisateur connecté (RLS). */
+export async function deleteCloudProject(projectId: string): Promise<boolean> {
+  const client = await getBrowserClient();
+  if (!client) return false;
+  const { error } = await client.from("studio_projects").delete().eq("id", projectId);
+  return !error;
 }

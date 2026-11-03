@@ -36,6 +36,7 @@ export default function StudioTopBar({
   onReloadRemote,
   onKeepLocal,
   exportSlot,
+  projectsSlot,
 }: {
   projectName: string;
   onRename: (name: string) => void;
@@ -57,6 +58,8 @@ export default function StudioTopBar({
   onKeepLocal?: () => void;
   /** Bouton d'export vidéo (rendu MP4), fourni par l'orchestrateur. */
   exportSlot?: React.ReactNode;
+  /** Menu « Projets » (ouvrir / dupliquer / supprimer). */
+  projectsSlot?: React.ReactNode;
 }) {
   return (
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-surface/60 px-4">
@@ -168,6 +171,7 @@ export default function StudioTopBar({
         </span>
 
         {exportSlot}
+        {projectsSlot}
 
         <button
           type="button"

@@ -1,7 +1,8 @@
 "use client";
 
-import type { StudioProject } from "@/lib/studio/project-model";
-import { roundToFrame, sceneIndexAtTime, sceneOffsets } from "@/lib/studio/project-model";
+import type { CSSProperties } from "react";
+import type { SceneTransitionType, StudioProject } from "@/lib/studio/project-model";
+import { FRAME_SECONDS, roundToFrame, sceneIndexAtTime, sceneOffsets, transitionDurationOf } from "@/lib/studio/project-model";
 import ControlledAnimation from "./ControlledAnimation";
 import MediaLayer from "./MediaLayer";
 import type { ComponentKey } from "@/types/animation";
@@ -24,16 +25,85 @@ export default function StageLayers({
   onSelectElement?: (elementId: string) => void;
 }) {
   const sceneIndex = sceneIndexAtTime(project, time);
+  const offsets = sceneOffsets(project);
+  const sceneStart = offsets[sceneIndex] ?? 0;
+  const scene = project.scenes[Math.min(sceneIndex, project.scenes.length - 1)];
+  const tDur = transitionDurationOf(project, sceneIndex);
+  const inTransition = tDur > 0 && time - sceneStart < tDur && scene.transition;
+
+  const current = (
+    <SceneLayers
+      project={project}
+      sceneIndex={sceneIndex}
+      time={time}
+      selectedElementId={selectedElementId}
+      onSelectElement={onSelectElement}
+    />
+  );
+  if (!inTransition) return current;
+
+  // Transition : la scène précédente reste figée sur sa dernière image, la
+  // nouvelle arrive par-dessus (calculé depuis le temps → MP4 identique).
+  const p = easeInOut(Math.min(1, Math.max(0, (time - sceneStart) / tDur)));
+  return (
+    <div className="absolute inset-0 overflow-hidden" data-canvas-surface="">
+      <div className="absolute inset-0" style={{ pointerEvents: "none" }}>
+        <SceneLayers project={project} sceneIndex={sceneIndex - 1} time={sceneStart} endState />
+      </div>
+      <div className="absolute inset-0" style={transitionStyle(scene.transition!.type, p)} data-scene-transition={scene.transition!.type}>
+        {current}
+      </div>
+    </div>
+  );
+}
+
+function easeInOut(x: number): number {
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+function transitionStyle(type: SceneTransitionType, p: number): CSSProperties {
+  switch (type) {
+    case "fade":
+      return { opacity: p };
+    case "slide-left":
+      return { transform: `translateX(${(1 - p) * 100}%)` };
+    case "slide-up":
+      return { transform: `translateY(${(1 - p) * 100}%)` };
+    case "wipe":
+      return { clipPath: `inset(0 ${(1 - p) * 100}% 0 0)` };
+    case "zoom":
+      return { opacity: p, transform: `scale(${1.12 - 0.12 * p})` };
+    default:
+      return {};
+  }
+}
+
+function SceneLayers({
+  project,
+  sceneIndex,
+  time,
+  selectedElementId,
+  onSelectElement,
+  endState = false,
+}: {
+  project: StudioProject;
+  sceneIndex: number;
+  time: number;
+  selectedElementId?: string | null;
+  onSelectElement?: (elementId: string) => void;
+  /** État final de la scène (sous une transition) : chaque calque qui dure jusqu'à la fin, dans son état final. */
+  endState?: boolean;
+}) {
   const scene = project.scenes[Math.min(sceneIndex, project.scenes.length - 1)];
   const sceneStart = sceneOffsets(project)[sceneIndex] ?? 0;
-  const active = scene.elements.filter(
-    (el) => time >= sceneStart + el.start && time < sceneStart + el.start + el.duration
-  );
+  const active = endState
+    ? scene.elements.filter((el) => el.start + el.duration >= scene.duration - FRAME_SECONDS / 2)
+    : scene.elements.filter((el) => time >= sceneStart + el.start && time < sceneStart + el.start + el.duration);
 
   return (
     <div className="absolute inset-0" style={{ backgroundColor: scene.background ?? "#000000" }} data-canvas-surface="">
       {active.map((element, layer) => {
-        const localTime = roundToFrame(time - (sceneStart + element.start));
+        const localTime = endState ? element.duration : roundToFrame(time - (sceneStart + element.start));
         const isSelected = element.id === selectedElementId;
         return (
           <div

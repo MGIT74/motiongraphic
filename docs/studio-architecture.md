@@ -115,3 +115,10 @@ Mesuré : 15 s de vidéo 1080p rendues en ~57 s (4 cœurs).
 - MCP : `list_media`, `import_media_url`, `capture_screenshot` (Chromium du serveur), `add_media_element`, `set_audio` ; `update_element` accepte `fit`, `frame`, `motion`, `enter`, `trim_start`.
 - Sécurité : import par URL et capture refusent les réseaux privés/locaux (résolution DNS, redirections revérifiées, requêtes de page filtrées) — `MEDIA_ALLOW_PRIVATE_HOSTS=1` réservé aux tests locaux, **jamais en production**.
 - Mesuré : 11 s avec capture + vidéo + musique rendues en ~93 s (local).
+
+## Transitions, projets, raccourcis
+
+- Transitions : `scene.transition` (`fade`, `slide-left`, `slide-up`, `wipe`, `zoom` ; 0,2 à 2 s, limitée à la moitié de la scène), appliquée à l'entrée d'une scène (sauf la 1re). Pendant la transition, la scène précédente est affichée dans son état final (chaque calque qui dure jusqu'à la fin, à `localTime = durée`) et la nouvelle arrive par-dessus ; tout est calculé depuis le temps → MP4 identique au Studio.
+- Projets : menu « Projets » (cloud si connecté, sinon navigateur) — ouvrir, dupliquer (ouvre la copie), supprimer avec confirmation (pas le projet ouvert).
+- Raccourcis : Espace lecture, Cmd/Ctrl+Z / Maj+Z, Suppr supprimer le calque, Cmd/Ctrl+D dupliquer, ← → une image (Maj : 1 s), Échap désélectionner.
+- MCP : `list_projects`, `duplicate_project` (avec changement de format), `duplicate_scene` ; `create_scene` / `update_scene` acceptent `transition`, `transition_duration`, `background`.

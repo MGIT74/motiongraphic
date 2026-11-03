@@ -177,6 +177,31 @@ export interface StudioScene {
   background?: string;
   /** Calques : le premier est au fond, le dernier au premier plan. */
   elements: StudioElement[];
+  /** Transition d'entrée depuis la scène précédente (ignorée pour la 1re scène). */
+  transition?: SceneTransition;
+}
+
+export type SceneTransitionType = "none" | "fade" | "slide-left" | "slide-up" | "wipe" | "zoom";
+export interface SceneTransition {
+  type: SceneTransitionType;
+  /** Durée en secondes (0,2 à 2, limitée à la moitié de la scène). */
+  duration: number;
+}
+export const SCENE_TRANSITIONS: SceneTransitionType[] = ["none", "fade", "slide-left", "slide-up", "wipe", "zoom"];
+
+export function sanitizeTransition(input: unknown): SceneTransition | null {
+  if (typeof input !== "object" || input === null) return null;
+  const t = input as Record<string, unknown>;
+  if (!SCENE_TRANSITIONS.includes(t.type as SceneTransitionType) || t.type === "none") return null;
+  const d = Number(t.duration);
+  return { type: t.type as SceneTransitionType, duration: roundToFrame(Number.isFinite(d) ? clampNumber(d, 0.2, 2) : 0.6) };
+}
+
+/** Durée effective de la transition d'entrée de la scène `index` (0 si aucune). */
+export function transitionDurationOf(project: StudioProject, index: number): number {
+  const scene = project.scenes[index];
+  if (index === 0 || !scene?.transition) return 0;
+  return Math.min(scene.transition.duration, scene.duration / 2);
 }
 
 export interface StudioProject {
@@ -377,6 +402,7 @@ export function validateProject(input: unknown): StudioProject | null {
         duration: sceneDuration,
         ...(isSafeColor(s.background) ? { background: s.background as string } : {}),
         elements,
+        ...(sanitizeTransition(s.transition) ? { transition: sanitizeTransition(s.transition) as SceneTransition } : {}),
       });
     }
 
@@ -646,7 +672,7 @@ export function removeElement(project: StudioProject, sceneId: string, elementId
 export function updateScene(
   project: StudioProject,
   sceneId: string,
-  patch: Partial<Pick<StudioScene, "name" | "duration" | "background">>
+  patch: Partial<Pick<StudioScene, "name" | "duration" | "background">> & { transition?: SceneTransition | null }
 ): StudioProject {
   return {
     ...project,
@@ -658,6 +684,11 @@ export function updateScene(
       if (typeof patch.duration === "number") next.duration = roundToFrame(clampNumber(patch.duration, 1, 600));
       if (patch.background !== undefined) {
         if (isSafeColor(patch.background)) next.background = patch.background;
+      }
+      if (patch.transition !== undefined) {
+        const t = sanitizeTransition(patch.transition);
+        if (t) next.transition = t;
+        else delete next.transition;
       }
       return next;
     }),
@@ -761,4 +792,49 @@ export function deserializeProject(json: string | null): StudioProject | null {
   } catch {
     return null;
   }
+}
+/** Nouveaux identifiants pour une scène copiée (scène + calques). */
+function cloneScene(scene: StudioScene, name?: string): StudioScene {
+  const copy = JSON.parse(JSON.stringify(scene)) as StudioScene;
+  copy.id = uid();
+  copy.name = (name ?? `${scene.name} (copie)`).slice(0, 80);
+  copy.elements = copy.elements.map((el) => ({ ...el, id: uid() }));
+  return copy;
+}
+
+/** Duplique une scène juste après l'originale. */
+export function duplicateScene(project: StudioProject, sceneId: string): { project: StudioProject; scene: StudioScene } | null {
+  const index = project.scenes.findIndex((s) => s.id === sceneId);
+  if (index < 0) return null;
+  const scene = cloneScene(project.scenes[index]);
+  const scenes = [...project.scenes];
+  scenes.splice(index + 1, 0, scene);
+  return { project: { ...project, updatedAt: new Date().toISOString(), scenes }, scene };
+}
+
+/** Duplique un calque dans sa scène, juste au-dessus de l'original. */
+export function duplicateElement(project: StudioProject, sceneId: string, elementId: string): { project: StudioProject; elementId: string } | null {
+  const scene = project.scenes.find((s) => s.id === sceneId);
+  const index = scene ? scene.elements.findIndex((el) => el.id === elementId) : -1;
+  if (!scene || index < 0) return null;
+  const copy = { ...JSON.parse(JSON.stringify(scene.elements[index])), id: uid() } as StudioElement;
+  const elements = [...scene.elements];
+  elements.splice(index + 1, 0, copy);
+  return {
+    project: { ...project, updatedAt: new Date().toISOString(), scenes: project.scenes.map((s) => (s.id === sceneId ? { ...s, elements } : s)) },
+    elementId: copy.id,
+  };
+}
+
+/** Copie complète d'un projet (nouvel id, nouveaux ids de scènes et calques). */
+export function duplicateProject(project: StudioProject, name?: string): StudioProject {
+  const now = new Date().toISOString();
+  return {
+    ...JSON.parse(JSON.stringify(project)),
+    id: uid(),
+    name: (name ?? `${project.name} (copie)`).slice(0, 120),
+    scenes: project.scenes.map((s) => cloneScene(s, s.name)),
+    createdAt: now,
+    updatedAt: now,
+  };
 }
