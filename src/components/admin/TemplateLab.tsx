@@ -19,6 +19,7 @@ import { COMPONENT_KEYS, getComponentMeta } from "@/lib/animations/registry";
 import { STUDIO_CATEGORIES } from "@/lib/studio/template-registry";
 import {
   sanitizeCustomTemplate,
+  fromCustomTemplateRow,
   type CustomTemplate,
   type CustomTemplateStatus,
   type CustomSourceKind,
@@ -154,7 +155,7 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
           } else {
             setTemplates(
               ((data ?? []) as unknown[])
-                .map(sanitizeCustomTemplate)
+                .map(fromCustomTemplateRow)
                 .filter((t): t is CustomTemplate => t !== null)
             );
           }

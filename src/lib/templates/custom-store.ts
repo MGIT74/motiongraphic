@@ -1,6 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { sanitizeCustomTemplate, validateCustomTemplate, type CustomTemplate } from "./custom-model";
+import { sanitizeCustomTemplate, fromCustomTemplateRow, validateCustomTemplate, type CustomTemplate } from "./custom-model";
 import type { AnimationConfig } from "@/types/animation";
 
 /**
@@ -56,18 +56,6 @@ function toRow(template: CustomTemplate): CustomTemplateRow {
     updated_at: template.updatedAt,
     validation: template.validation ?? null,
   };
-}
-
-function fromRow(row: CustomTemplateRow): CustomTemplate | null {
-  return sanitizeCustomTemplate({
-    ...row,
-    sourceKind: row.source_kind,
-    componentKey: row.component_key ?? undefined,
-    promptWeb: row.prompt_web ?? "",
-    promptAfterEffects: row.prompt_after_effects ?? "",
-    createdAt: row.created_at ?? undefined,
-    updatedAt: row.updated_at ?? undefined,
-  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -140,7 +128,7 @@ export async function listCustomTemplates(): Promise<CustomTemplate[]> {
   const { data, error } = await client.from("custom_templates").select(CUSTOM_SELECT);
   if (error) throw new CustomStoreError(`Supabase (custom_templates) : ${error.message}`);
   return ((data ?? []) as unknown as CustomTemplateRow[])
-    .map(fromRow)
+    .map(fromCustomTemplateRow)
     .filter((t): t is CustomTemplate => t !== null);
 }
 

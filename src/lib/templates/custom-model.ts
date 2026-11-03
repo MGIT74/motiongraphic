@@ -213,6 +213,22 @@ export function sanitizeCustomTemplate(input: unknown): CustomTemplate | null {
   }
 }
 
+/** Convertit une ligne Supabase snake_case avant validation du modèle client. */
+export function fromCustomTemplateRow(input: unknown): CustomTemplate | null {
+  if (!input || typeof input !== "object") return null;
+  const row = input as Record<string, unknown>;
+  return sanitizeCustomTemplate({
+    ...row,
+    sourceKind: row.source_kind,
+    componentKey: row.component_key ?? undefined,
+    defaultConfig: row.default_config,
+    promptWeb: row.prompt_web ?? "",
+    promptAfterEffects: row.prompt_after_effects ?? "",
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
+  });
+}
+
 /** Métadonnées d'un template custom : type d'élément (compatibilité). */
 export function customElementKind(template: CustomTemplate): string {
   if (template.sourceKind === "component" && template.componentKey) {

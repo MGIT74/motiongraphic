@@ -57,6 +57,8 @@ dans la PR (« touche aussi : … »).
 
 ## 3. En cours
 
+- [ChatGPT] `fix/template-lab-supabase-row-mapping` — correction du mapping des lignes Supabase côté admin et serveur ; code terminé, CI/revue en attente. Zone administration modifiée de façon ciblée.
+
 - [ChatGPT] `feat/two-typography-custom-templates` — Letter Reveal + Typewriter en brouillons via migration 0008 ; code prêt, attente revue/tests SQL et application manuelle.
 
 ## 4. Repères techniques
