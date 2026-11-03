@@ -32,6 +32,13 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     technologies: ["React", "GSAP", "SVG"],
     defaultConfig: CONFIG({ text: "MOTION", duration: 3.2 }),
   },
+  "letter-reveal-01": {
+    key: "letter-reveal-01",
+    name: "Letter Reveal — Gradient",
+    description: "Lettres révélées en cascade avec flou et dégradé, animation GSAP pilotable par la timeline.",
+    technologies: ["React", "GSAP", "CSS"],
+    defaultConfig: CONFIG({ text: "CREATE\nMOTION", primaryColor: "#FFFFFF", accentColor: "#E879F9", backgroundColor: "#1C1533", duration: 3.8 }),
+  },
   "text-reveal-01": {
     key: "text-reveal-01",
     name: "Text Reveal (Masque)",
