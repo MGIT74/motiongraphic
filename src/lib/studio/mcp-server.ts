@@ -793,6 +793,8 @@ export const MCP_PROJECT_TOOLS = [
         progress: Math.round(job.progress * 100),
         url: job.url ?? null,
         size_mb: job.sizeBytes ? Math.round((job.sizeBytes / 1048576) * 10) / 10 : null,
+        stored: job.storagePath ? "supabase-storage" : job.url ? "serveur (temporaire)" : null,
+        storage_error: job.storageError ?? null,
         error: job.error ?? null,
       });
     },
