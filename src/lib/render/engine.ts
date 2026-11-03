@@ -35,6 +35,8 @@ export interface RenderJob {
   finishedAt?: string;
   error?: string;
   storagePath?: string;
+  /** Raison de l'échec du dépôt dans Supabase Storage (diagnostic). */
+  storageError?: string;
   localPath?: string;
   width?: number;
   height?: number;
@@ -283,21 +285,8 @@ async function runRender(job: RenderJob) {
     await done;
     job.localPath = out;
 
-    // Dépôt dans Supabase Storage (si disponible).
-    try {
-      const client = await adminSupabase();
-      const { data: buckets } = await client.storage.listBuckets();
-      if (!buckets?.some((b) => b.name === BUCKET)) {
-        await client.storage.createBucket(BUCKET, { public: false, fileSizeLimit: 200 * 1024 * 1024 });
-      }
-      const storagePath = `${job.userId}/${job.projectId}/${job.id}.mp4`;
-      const { error } = await client.storage
-        .from(BUCKET)
-        .upload(storagePath, await readFile(out), { contentType: "video/mp4", upsert: true });
-      if (!error) job.storagePath = storagePath;
-    } catch {
-      // Stockage indisponible : le fichier reste servi par le serveur.
-    }
+    // Dépôt dans Supabase Storage (si disponible) — durable, contrairement au disque.
+    job.storageError = await uploadToStorage(job, out);
     job.status = "done";
     job.progress = 1;
   } catch (error) {
@@ -307,6 +296,32 @@ async function runRender(job: RenderJob) {
     job.finishedAt = new Date().toISOString();
     await stage?.context.close().catch(() => undefined);
     await persistJob(job);
+  }
+}
+
+/**
+ * Dépose le MP4 dans le bucket privé « studio-renders » (créé au besoin, sans
+ * limite de taille propre : celle du serveur Storage s'applique). Renvoie la
+ * raison d'un échec, ou undefined si le fichier est stocké.
+ */
+async function uploadToStorage(job: RenderJob, file: string): Promise<string | undefined> {
+  try {
+    const client = await adminSupabase();
+    const { data: buckets, error: listError } = await client.storage.listBuckets();
+    if (listError) return `listBuckets : ${listError.message}`;
+    if (!buckets?.some((b) => b.name === BUCKET)) {
+      const { error: createError } = await client.storage.createBucket(BUCKET, { public: false });
+      if (createError && !/already exists/i.test(createError.message)) return `createBucket : ${createError.message}`;
+    }
+    const storagePath = `${job.userId}/${job.projectId}/${job.id}.mp4`;
+    const { error } = await client.storage
+      .from(BUCKET)
+      .upload(storagePath, await readFile(file), { contentType: "video/mp4", upsert: true });
+    if (error) return `upload : ${error.message}`;
+    job.storagePath = storagePath;
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
   }
 }
 
