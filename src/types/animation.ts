@@ -8,7 +8,11 @@ export type ComponentKey =
   | "logo-reveal-01"
   | "minimal-saas-ui-01";
 
+export type EntranceDirection = "top" | "bottom" | "left" | "right";
+
 export interface AnimationConfig {
+  /** Direction d’entrée des éléments UI Motion. */
+  entranceDirection?: EntranceDirection;
   /** Texte principal affiché par l'animation */
   text: string;
   /** Couleur principale de l'animation (format CSS) */
