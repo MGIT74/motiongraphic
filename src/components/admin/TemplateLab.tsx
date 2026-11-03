@@ -19,6 +19,7 @@ import { COMPONENT_KEYS, getComponentMeta } from "@/lib/animations/registry";
 import { STUDIO_CATEGORIES } from "@/lib/studio/template-registry";
 import {
   sanitizeCustomTemplate,
+  fromCustomTemplateRow,
   type CustomTemplate,
   type CustomTemplateStatus,
   type CustomSourceKind,
@@ -26,7 +27,6 @@ import {
 import TemplateDemoControls from "@/components/templates/TemplateDemoControls";
 import SandboxPreview, { type AnimationConfigLite } from "@/components/templates/SandboxPreview";
 import { SANDBOX_STARTER_CODE } from "@/lib/templates/sandbox-starter";
-import { fromCustomTemplateRow } from "@/lib/templates/custom-store";
 import type { AnimationConfig } from "@/types/animation";
 
 /**
