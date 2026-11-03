@@ -20,6 +20,7 @@ const ANIMATION_COMPONENTS: Record<
   "staggered-cards-01": dynamic(() => import("@/components/animations/StaggeredCards01")),
   "logo-reveal-01": dynamic(() => import("@/components/animations/LogoReveal01")),
   "minimal-saas-ui-01": dynamic(() => import("@/components/animations/MinimalSaaSUIShowcase01")),
+  "notification-stack-01": dynamic(() => import("@/components/animations/NotificationStack01")),
 };
 
 function PlayerPlaceholder({ active, backgroundColor }: { active: boolean; backgroundColor: string }) {

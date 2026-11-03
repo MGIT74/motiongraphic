@@ -5,6 +5,8 @@ import { isBrandFont } from "@/lib/brand/fonts";
 /** Logo importé : data URL image uniquement (rendue via <image>, jamais exécutée). */
 const LOGO_RE = /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
 export const LOGO_MAX_CHARS = 400_000;
+/** Texte d'un élément (plusieurs lignes pour les templates à liste, ex. notifications). */
+export const TEXT_MAX_CHARS = 800;
 
 export function isSafeLogoUrl(value: unknown): value is string {
   return typeof value === "string" && value.length <= LOGO_MAX_CHARS && LOGO_RE.test(value);
@@ -45,7 +47,7 @@ export function sanitizeConfig(input: unknown, fallback: AnimationConfig): Anima
     const n = typeof v === "number" ? v : Number(v);
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
   };
-  const text = typeof raw.text === "string" ? raw.text.slice(0, 120) : fallback.text;
+  const text = typeof raw.text === "string" ? raw.text.slice(0, TEXT_MAX_CHARS) : fallback.text;
   return {
     text,
     primaryColor: isSafeColor(raw.primaryColor) ? (raw.primaryColor as string) : fallback.primaryColor,

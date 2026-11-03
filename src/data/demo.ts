@@ -1,6 +1,7 @@
 import type { AnimationConfig, ComponentKey } from "@/types/animation";
 import type { Category, TemplatePrompt } from "@/types/template";
 import { DEMO_PROMPTS } from "@/data/prompts";
+import { NOTIFICATION_DEFAULT_TEXT } from "@/lib/animations/notifications";
 
 /**
  * Données de démonstration — mode "sans Supabase".
@@ -193,6 +194,25 @@ const TEMPLATES: DemoTemplateInput[] = [
       speed: 1,
     },
     duration: 5,
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000018",
+    title: "Notification Stack",
+    slug: "notification-stack-01",
+    description:
+      "Des notifications de téléphone arrivent une à une en cartes de verre dépoli : la carte se dévoile du flou, le message s'écrit mot par mot et la pile remonte. Parfait pour une démo d'app, un lancement ou des retours clients.",
+    categoryId: "interface",
+    componentKey: "notification-stack-01",
+    config: {
+      text: NOTIFICATION_DEFAULT_TEXT,
+      primaryColor: "#1C1C1E",
+      accentColor: "#0A84FF",
+      backgroundColor: "#EDEDF0",
+      duration: 6,
+      speed: 1,
+      fontFamily: "manrope",
+    },
+    duration: 6.5,
   },
 ];
 

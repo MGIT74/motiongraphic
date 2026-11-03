@@ -13,6 +13,7 @@ export interface BrandFont {
 export const BRAND_FONTS: BrandFont[] = [
   { id: "system", label: "Système (par défaut)", css: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" },
   { id: "inter", label: "Inter", css: "'Inter Variable', 'Inter', sans-serif" },
+  { id: "manrope", label: "Manrope", css: "'Manrope Variable', 'Manrope', sans-serif" },
   { id: "poppins", label: "Poppins", css: "'Poppins', sans-serif" },
   { id: "montserrat", label: "Montserrat", css: "'Montserrat Variable', 'Montserrat', sans-serif" },
   { id: "space-grotesk", label: "Space Grotesk", css: "'Space Grotesk Variable', 'Space Grotesk', sans-serif" },

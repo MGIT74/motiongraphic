@@ -1,4 +1,5 @@
 import type { AnimationConfig } from "@/types/animation";
+import { TEXT_MAX_CHARS } from "@/lib/animations/config";
 import {
   makeElement,
   serializeProject,
@@ -111,7 +112,7 @@ export const MCP_TOOLS: McpTool[] = [
       if (!scene) return fail("sceneIndex invalide");
       const element = makeElement(templateKey, template.elementKind, {
         ...template.defaultConfig,
-        text: isStr(args.text) ? args.text.slice(0, 120) : template.defaultConfig.text,
+        text: isStr(args.text) ? args.text.slice(0, TEXT_MAX_CHARS) : template.defaultConfig.text,
       } as AnimationConfig, {
         start: Number(args.start) || 0,
         duration: Number(args.duration) || template.timelineDuration,

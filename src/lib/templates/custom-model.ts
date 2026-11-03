@@ -147,6 +147,7 @@ export const RESERVED_SLUGS: string[] = [
   "staggered-cards-01",
   "logo-reveal-01",
   "minimal-saas-ui-01",
+  "notification-stack-01",
   "admin",
   "studio",
   "login",

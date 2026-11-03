@@ -196,6 +196,22 @@ const PROMPTS = {
       comportement: "Animer l'apparition des cartes, le tracé du graphique, la recherche et le bouton avec des interpolations douces.",
     }),
   },
+  "notification-stack-01": {
+    web: webPrompt("notification-stack-01", {
+      visuel:
+        "- Fond dégradé gris clair (#EDEDF0 → légèrement plus sombre en bas), style écran de verrouillage de téléphone.\n- Pile verticale de notifications en cartes de verre dépoli (blanc 62 %, backdrop-filter blur, bordure blanche, ombre douce, coins très arrondis) : icône d'app carrée arrondie, nom de l'app et heure en petit gris, titre en gras, message sur une ligne.\n- Police Manrope ; textes configurables via un tableau CONFIG.notifications = [{ app, title, message, time }].",
+      easing:
+        "Chaque carte entre toutes les ~1,4 s : opacité 0 → 1, montée de 35 %, scale 0.92 → 1 et flou 12px → 0 (power3.out, 0.55 s) ; l'icône pop (back.out(2)) ; le nom de l'app glisse depuis la gauche ; titre puis message révélés mot par mot (opacité + flou 6px → 0, stagger 0.06). La pile entière remonte (power3.inOut, 0.65 s) pour garder la dernière notification centrée.",
+      boucle:
+        "après la dernière carte, courte pause puis la pile monte et disparaît dans un flou (power2.in, 0.55 s), pause 0.8 s, redémarrage.",
+    }),
+    after_effects: jsxPrompt("notification-stack-01", {
+      compo:
+        "- Compo « MGSI_NotificationStack », 1920×1080, 30 fps, 8 s, calque solide dégradé gris clair.\n- Une pré-compo par notification : rectangle arrondi blanc semi-transparent (effet Flou de l'arrière-plan / CC Composite), icône, calques texte app, heure, titre, message ; un nul « MGSI_Stack » parent de toutes les cartes.",
+      comportement:
+        "Les cartes apparaissent l'une après l'autre (opacité, position Y, échelle 92 → 100 %, Flou gaussien 12 → 0) ; animateurs de texte par mot (opacité + flou) sur titre et message ; le nul parent remonte à chaque nouvelle carte avec un easing doux (Easy Ease 80 %) ; sortie : montée + flou + fondu.",
+    }),
+  },
 } as const satisfies Record<ComponentKey, { web: string; after_effects: string }>;
 
 export const DEMO_PROMPTS = PROMPTS;

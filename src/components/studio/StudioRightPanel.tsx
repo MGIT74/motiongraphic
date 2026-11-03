@@ -2,6 +2,7 @@
 
 import { ArrowDownToLine, ArrowUpToLine, Check, ChevronDown, ChevronUp, Layers, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
+import { TEXT_MAX_CHARS } from "@/lib/animations/config";
 import type { ElementTiming, MediaOptions, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
 import { getStudioTemplate, templatesForKind } from "@/lib/studio/template-registry";
 import LoopingDemoFrame from "@/components/studio/LoopingDemoFrame";
@@ -114,12 +115,16 @@ function ElementProperties({
           <label htmlFor="pr-text" className={labelCls}>
             <Type className="mr-1 inline-block h-3 w-3" aria-hidden="true" /> Texte
           </label>
-          <input
+          <textarea
             id="pr-text"
             value={config.text}
-            onChange={(e) => onPatchElement(element.id, { config: { ...config, text: e.target.value.slice(0, 120) } })}
-            className={inputCls}
+            rows={Math.min(7, Math.max(1, config.text.split("\n").length))}
+            onChange={(e) => onPatchElement(element.id, { config: { ...config, text: e.target.value.slice(0, TEXT_MAX_CHARS) } })}
+            className={`${inputCls} h-auto resize-y py-2 leading-snug`}
           />
+          {element.templateKey === "notification-stack-01" ? (
+            <p className="mt-1 text-[10px] leading-relaxed text-muted">Une ligne par notification : App | Titre | Message | Heure</p>
+          ) : null}
         </div>
 
         <div>

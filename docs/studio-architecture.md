@@ -122,3 +122,12 @@ Mesuré : 15 s de vidéo 1080p rendues en ~57 s (4 cœurs).
 - Projets : menu « Projets » (cloud si connecté, sinon navigateur) — ouvrir, dupliquer (ouvre la copie), supprimer avec confirmation (pas le projet ouvert).
 - Raccourcis : Espace lecture, Cmd/Ctrl+Z / Maj+Z, Suppr supprimer le calque, Cmd/Ctrl+D dupliquer, ← → une image (Maj : 1 s), Échap désélectionner.
 - MCP : `list_projects`, `duplicate_project` (avec changement de format), `duplicate_scene` ; `create_scene` / `update_scene` acceptent `transition`, `transition_duration`, `background`.
+
+## Template « Notification Stack » (notification-stack-01, UI Motion)
+
+- Texte : une ligne par notification, `App | Titre | Message | Heure` (8 max). Un titre `@Nom` donne une notification de contact (avatar à initiales + badge d'app). L'icône est un pictogramme générique choisi d'après le nom de l'app (messages, mail, agenda, paiement, équipe, rappel ; sinon une lettre sur la couleur d'accent) — pas de logos de marque.
+- Couleurs : principale = texte, accent = icônes génériques et avatars, fond = dégradé (fond sombre → cartes sombres ; `transparent` → cartes seules, à poser sur une capture). Police par défaut : Manrope (ajoutée à la liste blanche).
+- Mise en page en unité `--u = min(1cqh, 1.333cqw)` : mêmes proportions en 16:9 et 1:1, cartes à ~88 % de la largeur en 9:16.
+- Animation (builder `buildNotificationStack`) : carte flou → net avec montée et échelle, icône en pop, nom de l'app, titre et message mot par mot ; la pile remonte (yPercent, indépendant de la taille) pour centrer les dernières cartes ; label `out` puis sortie floue.
+- Galerie publique : migration `0008_notification_stack.sql` (contrainte + ligne), à exécuter par le propriétaire.
+- Texte des éléments limité à 800 caractères (`TEXT_MAX_CHARS`), champ multiligne dans le Studio.

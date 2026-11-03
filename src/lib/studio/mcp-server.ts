@@ -5,7 +5,7 @@ import { listAllPublishedTemplates } from "@/lib/templates/registry";
 import { listPublishedCustomTemplates } from "@/lib/templates/custom-store";
 import { customElementKind } from "@/lib/templates/custom-model";
 import { registerCustomStudioTemplates } from "./template-registry";
-import { isSafeColor } from "@/lib/animations/config";
+import { isSafeColor, TEXT_MAX_CHARS } from "@/lib/animations/config";
 import { BRAND_FONTS, isBrandFont } from "@/lib/brand/fonts";
 import {
   addMediaAsset,
@@ -560,7 +560,7 @@ export const MCP_PROJECT_TOOLS = [
   },
   {
     name: "add_element",
-    description: "Ajoute un élément d'animation (template publié) à une scène, au premier plan. Par défaut timing = fit. Utilisez transparent=true pour superposer le calque à ceux du dessous.",
+    description: "Ajoute un élément d'animation (template publié) à une scène, au premier plan. Par défaut timing = fit. Utilisez transparent=true pour superposer le calque à ceux du dessous. notification-stack-01 : text = une ligne par notification « App | Titre | Message | Heure » (8 max ; l'icône dépend du nom de l'app : messages, mail, agenda, paiement, équipe…).",
     inputSchema: {
       type: "object",
       required: ["project_id", "template_key"],
@@ -592,7 +592,7 @@ export const MCP_PROJECT_TOOLS = [
 
       const config: AnimationConfig = {
         ...template.meta.defaultConfig,
-        text: typeof input.text === "string" ? input.text.slice(0, 120) : template.meta.defaultConfig.text,
+        text: typeof input.text === "string" ? input.text.slice(0, TEXT_MAX_CHARS) : template.meta.defaultConfig.text,
       };
       // Couleurs, transparence, vitesse, police : appliquées par applyStyle (valeurs validées).
 
@@ -661,7 +661,7 @@ export const MCP_PROJECT_TOOLS = [
         if (optNumber(input, "y") !== undefined) patched.y = Math.max(0, Math.min(100, optNumber(input, "y") as number));
         if (optNumber(input, "scale") !== undefined) patched.scale = Math.max(0.2, Math.min(3, optNumber(input, "scale") as number));
         if (typeof input.label === "string") patched.label = input.label.slice(0, 60);
-        if (typeof input.text === "string") patched.config = { ...patched.config, text: input.text.slice(0, 120) };
+        if (typeof input.text === "string") patched.config = { ...patched.config, text: input.text.slice(0, TEXT_MAX_CHARS) };
         patched.config = applyStyle(patched.config, input);
         if (patched.media) patched.media = applyMediaOptions(patched.media, input);
         const timing = optTiming(input);

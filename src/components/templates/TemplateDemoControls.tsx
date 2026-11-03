@@ -1,5 +1,7 @@
 "use client";
 
+import { TEXT_MAX_CHARS } from "@/lib/animations/config";
+
 import { useMemo, useState } from "react";
 import { RotateCcw, Wand2 } from "lucide-react";
 import type { AnimationConfig } from "@/types/animation";
@@ -88,11 +90,12 @@ export default function TemplateDemoControls({
       <div className="grid grid-cols-2 gap-3 rounded-2xl border border-line bg-surface/60 p-4 sm:grid-cols-3">
         <div className="col-span-2 sm:col-span-3">
           <label htmlFor="demo-text" className={labelCls}>Texte</label>
-          <input
+          <textarea
             id="demo-text"
             value={config.text}
-            onChange={(e) => patch({ text: e.target.value.slice(0, 120) })}
-            className={inputCls}
+            rows={Math.min(6, Math.max(1, config.text.split("\n").length))}
+            onChange={(e) => patch({ text: e.target.value.slice(0, TEXT_MAX_CHARS) })}
+            className={`${inputCls} h-auto resize-y py-2 leading-snug`}
           />
         </div>
         {(
