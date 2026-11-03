@@ -58,18 +58,6 @@ function toRow(template: CustomTemplate): CustomTemplateRow {
   };
 }
 
-function fromRow(row: CustomTemplateRow): CustomTemplate | null {
-  return sanitizeCustomTemplate({
-    ...row,
-    sourceKind: row.source_kind,
-    componentKey: row.component_key ?? undefined,
-    promptWeb: row.prompt_web ?? "",
-    promptAfterEffects: row.prompt_after_effects ?? "",
-    createdAt: row.created_at ?? undefined,
-    updatedAt: row.updated_at ?? undefined,
-  });
-}
-
 /* ------------------------------------------------------------------ */
 /* Mode démo                                                           */
 /* ------------------------------------------------------------------ */
