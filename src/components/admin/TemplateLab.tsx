@@ -26,6 +26,7 @@ import {
 import TemplateDemoControls from "@/components/templates/TemplateDemoControls";
 import SandboxPreview, { type AnimationConfigLite } from "@/components/templates/SandboxPreview";
 import { SANDBOX_STARTER_CODE } from "@/lib/templates/sandbox-starter";
+import { fromCustomTemplateRow } from "@/lib/templates/custom-store";
 import type { AnimationConfig } from "@/types/animation";
 
 /**
@@ -154,7 +155,7 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
           } else {
             setTemplates(
               ((data ?? []) as unknown[])
-                .map(sanitizeCustomTemplate)
+                .map(fromCustomTemplateRow)
                 .filter((t): t is CustomTemplate => t !== null)
             );
           }
