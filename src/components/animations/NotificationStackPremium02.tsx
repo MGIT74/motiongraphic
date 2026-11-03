@@ -50,7 +50,7 @@ export function NotificationStackPremium02Frame({ config }: AnimationComponentPr
 
 export default function NotificationStackPremium02({ config }: AnimationComponentProps) {
   const rootRef = useAnimationEngine({
-    deps: [config.text, config.primaryColor, config.accentColor, config.backgroundColor, config.duration, config.speed, config.fontFamily],
+    deps: [config.text, config.primaryColor, config.accentColor, config.backgroundColor, config.duration, config.speed, config.fontFamily, config.entranceDirection],
     speed: config.speed,
     build: (root) => buildNotificationStackPremium(root, config),
   });
