@@ -77,7 +77,7 @@ const TEMPLATES: DemoTemplateInput[] = [
     categoryId: "interface",
     componentKey: "ai-input-morph-01",
     config: {
-      text: "What will you create?\\nDescribe your next idea...\\nGenerate",
+      text: "What will you create?\nDescribe your next idea...\nGenerate",
       primaryColor: "#F8FAFC",
       accentColor: "#7268F4",
       backgroundColor: "#0C1020",
