@@ -3,7 +3,7 @@ import type { AnimationComponentProps } from "@/types/animation";
 import { useAnimationEngine } from "./engine";
 import { buildChatConversationReveal } from "@/lib/animations/builders";
 
-/** Original chat conversation UI, with deterministic GSAP-driven typing. */
+/** Original chat conversation UI, with deterministic GSAP bounce entrances. */
 export function ChatConversationReveal01Frame({ config }: AnimationComponentProps) {
   const [question = "How can I simplify my workflow?", answer = "Start with one clear idea, then bring it to life."] = config.text.split("\n").filter(Boolean);
   return (
@@ -16,11 +16,11 @@ export function ChatConversationReveal01Frame({ config }: AnimationComponentProp
         </div>
         <div data-chat-question style={{ alignSelf: "flex-end", maxWidth: "85%", borderRadius: "3cqmin 3cqmin 0.8cqmin 3cqmin", padding: "2.5cqmin 3cqmin", background: config.accentColor, color: "#fff", fontSize: "2.7cqmin", overflowWrap: "anywhere" }}>
           <span data-chat-question-text data-full-text={question.slice(0, 100)}>{question.slice(0, 100)}</span>
-          <span data-chat-question-caret style={{ display: "inline-block", width: "0.16em", height: "1em", marginLeft: "0.15em", verticalAlign: "-0.1em", background: "#fff" }} />
+
         </div>
         <div data-chat-answer style={{ alignSelf: "flex-start", maxWidth: "85%", borderRadius: "3cqmin 3cqmin 3cqmin 0.8cqmin", padding: "2.5cqmin 3cqmin", border: "1px solid currentColor", background: "color-mix(in srgb, currentColor 6%, transparent)", fontSize: "2.7cqmin", overflowWrap: "anywhere" }}>
           <span data-chat-answer-text data-full-text={answer.slice(0, 130)}>{answer.slice(0, 130)}</span>
-          <span data-chat-answer-caret style={{ display: "inline-block", width: "0.16em", height: "1em", marginLeft: "0.15em", verticalAlign: "-0.1em", background: config.accentColor }} />
+
         </div>
         <div data-chat-input style={{ border: "1px solid color-mix(in srgb, currentColor 25%, transparent)", borderRadius: "2.5cqmin", padding: "2.5cqmin 3cqmin", fontSize: "2.3cqmin", opacity: 0.7, display: "flex", justifyContent: "space-between" }}>
           <span>Ask a follow-up...</span>
