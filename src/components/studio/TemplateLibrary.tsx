@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { GripVertical, Search, X } from "lucide-react";
 import type { StudioProject } from "@/lib/studio/project-model";
 import { brandedConfig, FRAME_SECONDS } from "@/lib/studio/project-model";
@@ -37,10 +37,10 @@ export default function TemplateLibrary({
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setPreviewKey(key);
   };
-  const closePreview = () => {
+  const closePreview = useCallback(() => {
     setPreviewKey(null);
     requestAnimationFrame(() => previousFocusRef.current?.focus());
-  };
+  }, []);
   const normalizedQuery = query.trim().toLocaleLowerCase("fr");
   const allTemplates = Object.entries(STUDIO_TEMPLATES);
   const matches = allTemplates.filter(([key, template]) =>
@@ -70,7 +70,7 @@ export default function TemplateLibrary({
     closeRef.current?.focus();
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [previewTemplate]);
+  }, [previewTemplate, closePreview]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -99,6 +99,7 @@ export default function TemplateLibrary({
         ))}
       </div>
       <p className="sr-only" role="status" aria-live="polite">{lastAdded ? `${lastAdded} ajouté à la scène` : ""}</p>
+      {lastAdded ? (<div className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-[11px] text-ink"><span className="truncate">✓ {lastAdded} ajouté à la scène</span><button type="button" onClick={() => setLastAdded(null)} aria-label="Masquer la confirmation" className="p-1 text-muted"><X className="h-3 w-3" /></button></div>) : null}
       <p className="px-1 text-[11px] text-muted" role="status">
         {matches.length} animation{matches.length > 1 ? "s" : ""} · Prévisualisez avant d’ajouter à la scène.
       </p>
