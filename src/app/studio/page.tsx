@@ -2,6 +2,11 @@ import type { Metadata, Viewport } from "next";
 import StudioApp from "@/components/studio/StudioApp";
 import { listStudioCustomTemplates } from "@/lib/templates/published-studio";
 
+// Lecture à CHAQUE requête : un template publié dans le Lab apparaît
+  // immédiatement (aucun rebuild nécessaire). Sans cela le page était
+  // prérendue au build -> catalogue Studio périmé.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Motion Studio — Bêta",
   description:

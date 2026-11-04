@@ -46,3 +46,11 @@ Les animations CSS/JS libres utilisant setTimeout, Date.now, requestAnimationFra
 
 ## Livraison
 Développer sur cette branche en PR brouillon. Demander revue Claude pour les changements de moteur, Studio, API et sécurité. Fusion/déploiement seulement après tests et accord de validation fonctionnelle.
+
+## Implémentation (réalisée, branche feat/template-lab-studio-pipeline)
+- `src/lib/templates/capabilities.ts` — capacités calculées depuis le code : contrat + détection des sources de nondéterminisme (setTimeout/rAF/Date.now/Math.random/CSS animation) → `studioCompatible` / `exportCompatible` + raisons.
+- `src/lib/templates/published-studio.ts` — source unique serveur : tous les templates publiés (composants + codes) au format registre, serveur Studio (/studio) et rendu (/render).
+- `src/components/studio/sandbox-frame.tsx` — runtime sandbox : iframe `sandbox="allow-scripts"` + CSP (réseau interdit, `eval` neuté via calquage — l'attribut csp seul étant ignoré par Chromium), sessions validées, SEEK→FRAME_READY acquitté, quotas timeline(8)/aperçus(4), messages hostiles ignorés/comptés.
+- Contrôles CI : `/dev/template-check` exerce les codes sandbox (déterminisme : seek(1.2) ×2 identiques, mouvement, formats 9:16/1:1) ; `/dev/sandbox-check` (tests/security) : bornes réseau/stockage/parent/eval + messages hostiles ; `/dev/render-stage` : export MP4 réel (tests/export) via le MÊME moteur que /render.
+- Catalogue : `/studio` et `/render` relisent le store à chaque requête (`dynamic = "force-dynamic"`) — publication/dépublication visibles immédiatement, sans rebuild.
+- Limites honnêtes : les codes SANS contrat restent visibles au catalogue avec l'ajout Studio désactivé (raison affichée) et l'export refuse le projet avec la liste des non-compatibles ; `document.write`/img/scripts distants neutralisés au calquage ; `eval` lexical direct reste possible DANS l'iframe (origine opaque, aucune issue vers le parent/réseau) mais est interdit en publication par le validateur.

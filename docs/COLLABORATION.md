@@ -57,6 +57,8 @@ dans la PR (« touche aussi : … »).
 
 ## 3. En cours
 
+- [OpenCode] `feat/template-lab-studio-pipeline` (PR #31) — **réalisé** : capacités timeline/MP4 calculées (contrat `__MGS_TIMELINE__ = { duration, outAt, renderAt(time, params) }`), runtime sandbox déterministe (SEEK/FRAME_READY, sessions, CSP, quotas, neutralisation réseau/eval/img), catalogue Studio unifié (`/studio` + `/render` relisent le store à chaque requête), starter codes (libre + renderAt), tests `test:security` (12 contrôles), `test:export` (MP4 réel 16:9/9:16/1:1), contrôle CI des templates sandbox via /dev/template-check.
+
 - [ChatGPT] `fix/template-lab-supabase-row-mapping` — correction du mapping des lignes Supabase côté admin et serveur ; code terminé, CI/revue en attente. Zone administration modifiée de façon ciblée.
 
 - [ChatGPT] `feat/two-typography-custom-templates` — Letter Reveal + Typewriter en brouillons via migration 0008 ; code prêt, attente revue/tests SQL et application manuelle.
