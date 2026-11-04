@@ -74,7 +74,7 @@ export default function TemplateCheck() {
 
   /* Templates sandbox (contrat déterministe) : codes du Template Lab (démo). */
   const [sandboxTemplates, setSandboxTemplates] = useState<
-    { key: string; name: string; code: string; duration: number; outAt?: number; compatible: boolean; config: AnimationConfig }[]
+    { key: string; name: string; code: string; version: number; duration: number; outAt?: number; compatible: boolean; config: AnimationConfig }[]
   >([]);
   const [sandboxTime, setSandboxTime] = useState(0);
 
@@ -100,6 +100,7 @@ export default function TemplateCheck() {
               defaultConfig: t.defaultConfig,
               code: t.code,
               capabilities: caps,
+              version: t.version,
             };
           })
         );
@@ -110,6 +111,7 @@ export default function TemplateCheck() {
               key: t.slug,
               name: t.name,
               code: t.code as string,
+              version: t.version,
               duration: caps.contractDuration ?? t.defaultConfig.duration,
               outAt: caps.contractDuration ? caps.contractDuration * 0.8 : undefined,
               compatible: caps.studioCompatible,
@@ -315,8 +317,7 @@ export default function TemplateCheck() {
           >
             <SandboxTimelineFrame
               preview
-              code={sandboxEntry.code}
-              sessionId={`tc-${sandboxEntry.key}`}
+              sourceTemplate={{ templateId: sandboxEntry.key, version: sandboxEntry.version }}
               params={loaded.config as import("@/components/studio/sandbox-frame").SandboxParams}
               time={sandboxTime}
               compatible={sandboxEntry.compatible}

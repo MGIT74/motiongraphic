@@ -5,7 +5,6 @@ import SandboxTimelineFrame, {
   metricsFor,
   type SandboxParams,
 } from "./sandbox-frame";
-import { SANDBOX_TIMELINE_STARTER_CODE } from "@/lib/templates/sandbox-starter";
 
 declare global {
   interface Window {
@@ -30,53 +29,12 @@ interface Bounds {
   evalBlocked: boolean;
 }
 
-/** Sonde injectée DANS l'iframe : vérifie les bornes côté sandbox. */
-const PROBE_SNIPPET = `
-window.addEventListener("message", function (message) {
-  var data = message && message.data;
-  if (data && data.type === "mgsi:probe" && data.session === window.__MGS_SESSION__) {
-    var results = { networkBlocked: false, networkDetail: "", storageBlocked: false, storageDetail: "", topOpaque: false, evalBlocked: false };
-    try {
-      var probeFetch = window.fetch("https://example.com/ping");
-      probeFetch.then(function () {
-        results.networkBlocked = false;
-        results.networkDetail = "fetch autorisé (?!)";
-      }, function (err) {
-        results.networkBlocked = true;
-        results.networkDetail = err && err.message ? String(err.message).slice(0, 60) : "bloqué";
-      });
-    } catch (err) {
-      results.networkBlocked = true;
-      results.networkDetail = err && err.message ? String(err.message).slice(0, 60) : "bloqué (throw)";
-    }
-    try {
-      window.localStorage.setItem("mgsi", "1");
-      results.storageDetail = "localStorage accessible (?!)";
-    } catch (err) {
-      results.storageBlocked = true;
-      results.storageDetail = err && err.name ? String(err.name) : "bloqué";
-    }
-    try {
-      var topDoc = window.top.document;
-      results.topOpaque = Boolean(topDoc) === false;
-    } catch (err) {
-      results.topOpaque = true; // SECURITY_ERR attendu (origine opaque)
-    }
-    try {
-      window.eval("1+1");
-    } catch (err) {
-      results.evalBlocked = true; // CSP sans 'unsafe-eval' attendu
-    }
-    setTimeout(function () {
-      window.parent.postMessage({ type: "mgsi:bounds", session: window.__MGS_SESSION__, results: results }, "*");
-    }, 150);
-  }
-});
-`;
-
 /**
- * Page de contrôle du runtime sandbox (TEMPLATE_CHECK uniquement) :
- * déterminisme (seek identiques), bornes de sécurité, messages hostiles.
+ * Page de contrôle du runtime sandbox (TEMPLATE_CHECK uniquement), branchée
+ * sur la ROUTE /sandbox/sandbox-check-probe (CSP par en-tête = production) :
+ * - déterminisme : seek identiques (voir tests/security) ;
+ * - bornes de sécurité exécutées DANS l'iframe (sonde du template probe) ;
+ * - messages hostiles ignorés + comptés.
  * Utilisée par tests/security/sandbox.security.cjs.
  */
 export default function SandboxCheck() {
@@ -86,9 +44,8 @@ export default function SandboxCheck() {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const frameAckRef = useRef<(() => void) | null>(null);
   const boundsRef = useRef<((results: Bounds) => void) | null>(null);
-  const setTimeRef = useRef(setTime);
+  const sessionRef = useRef<string | null>(null);
 
-  const sessionId = "check-session-01";
   const params: SandboxParams = {
     text: "SECURITE",
     primaryColor: "#F5F5F7",
@@ -97,37 +54,39 @@ export default function SandboxCheck() {
     duration: 3,
     speed: 1,
   };
-  const code = `${SANDBOX_TIMELINE_STARTER_CODE("Controle Sandbox")}\n${PROBE_SNIPPET}`;
 
-  // API : seule instance, stabilisée (aucune re-création).
+  // API : instance unique, stable.
   useEffect(() => {
+    const winOfStage = () => frameRef.current?.querySelector("iframe")?.contentWindow ?? null;
     window.__mgsSandboxCheck = {
       ready: false,
       mode,
       incompatible,
       seek: (t: number) => {
-        setTimeRef.current(t);
+        setTime(t);
         return new Promise<void>((resolve) => {
           frameAckRef.current = resolve;
           setTimeout(() => resolve(), 4000);
         });
       },
       metrics: () => {
-        const m = metricsFor(sessionId);
+        const m = metricsFor(sessionRef.current ?? "unknown");
         return { received: m.received, ignored: m.ignored, errors: m.errors, degraded: m.degraded };
       },
       sendHostile: () => {
-        const win = frameRef.current?.querySelector("iframe")?.contentWindow;
-        if (!win) return 0;
+        const win = winOfStage();
+        const session = sessionRef.current;
+        if (!win || !session) return 0;
         win.postMessage({ type: "mgsi:seek", session: "WRONG-SESSION", t: 1, id: 1 }, "*");
         win.postMessage({ type: "mgsi:seek", session: null, t: 1, id: 2 }, "*");
         win.postMessage({ type: "mgsi:seek", t: "not-a-number" }, "*");
-        win.postMessage({ type: "mgsi:gibberish", session: sessionId }, "*");
+        win.postMessage({ type: "mgsi:gibberish", session }, "*");
         return 4;
       },
       boundsProbe: () => {
-        const win = frameRef.current?.querySelector("iframe")?.contentWindow;
-        if (!win) return Promise.reject(new Error("iframe absente"));
+        const win = winOfStage();
+        const session = sessionRef.current;
+        if (!win || !session) return Promise.reject(new Error("iframe/session absentes"));
         return new Promise((resolve) => {
           boundsRef.current = resolve;
           setTimeout(() => {
@@ -140,10 +99,11 @@ export default function SandboxCheck() {
               evalBlocked: false,
             });
           }, 5000);
-          win.postMessage({ type: "mgsi:probe", session: sessionId }, "*");
+          win.postMessage({ type: "mgsi:probe", session }, "*");
         });
       },
     };
+
     const onMessage = (event: MessageEvent) => {
       const data = event.data as { type?: string; session?: string; mode?: "timeline" | "free"; results?: Bounds } | null;
       if (!data || typeof data.type !== "string") return;
@@ -166,7 +126,7 @@ export default function SandboxCheck() {
       delete window.__mgsSandboxCheck;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, []);
 
   return (
     <div className="p-6">
@@ -178,14 +138,16 @@ export default function SandboxCheck() {
       >
         <SandboxTimelineFrame
           preview
-          code={code}
-          sessionId={sessionId}
+          sourceTemplate={{ templateId: "sandbox-check-probe" }}
           params={params}
           time={time}
           onFrame={() => {
             const ack = frameAckRef.current;
             frameAckRef.current = null;
             ack?.();
+          }}
+          onSession={(session) => {
+            sessionRef.current = session;
           }}
           onIncompatible={(reason) => setIncompatible(reason ? [reason] : [])}
         />

@@ -6,6 +6,7 @@ import {
   buildSandboxExportProject,
   PULSE_GRID_TEMPLATE_ID,
   PULSE_GRID_TEMPLATE_DEFAULT_CONFIG,
+  BROKEN_TEMPLATE,
 } from "@/lib/testing/sandbox-fixture";
 
 /**
@@ -37,15 +38,100 @@ const customTemplates: StudioCustomTemplateInput[] = [
 export default async function DevRenderStagePage({
   searchParams,
 }: {
-  searchParams: Promise<{ w?: string; h?: string }>;
+  searchParams: Promise<{ w?: string; h?: string; degraded?: string; broken?: string }>;
 }) {
   if (process.env.TEMPLATE_CHECK !== "1") notFound();
-  const { w, h } = await searchParams;
+  const { w, h, degraded, broken } = await searchParams;
   const width = clampDim(Number(w) || 1920);
   const height = clampDim(Number(h) || 1080);
   const project = buildSandboxExportProject({ width, height });
+  if (degraded === "1") {
+    // Cas de test : un template code NON déterministe (mode libre) dans la
+    // scène -> le moteur doit REFUSER le rendu (jamais d'export dégradé).
+    const withFree = {
+      ...project,
+      scenes: [
+        ...project.scenes,
+        {
+          id: "scene-free-code",
+          name: "Free code",
+          duration: 1,
+          elements: [
+            {
+              id: "element-free-1",
+              label: "Free",
+              kind: "cards" as const,
+              templateKey: "free-code-test",
+              start: 0,
+              duration: 1,
+              config: { ...project.scenes[0].elements[0].config, text: "FREE" },
+              x: 50,
+              y: 50,
+              scale: 1,
+            },
+          ],
+        },
+      ],
+    };
+    return <RenderStage project={withFree} customTemplates={[...customTemplates, FREE_CODE_TEMPLATE_INPUT]} />;
+  }
+  if (broken === "1") {
+    // Cas de test : contrat déclaré, renderAt en ÉCHEC à l'exécution —
+    // le runtime doit rejeter les seek (FRAME_DÉGRADÉE) et l'export échouer.
+    const withBroken = {
+      ...project,
+      scenes: [
+        {
+          id: "scene-broken-code",
+          name: "Broken",
+          duration: 1,
+          elements: [
+            {
+              id: "element-broken-1",
+              label: "Broken",
+              kind: "cards" as const,
+              templateKey: "broken-code-test",
+              start: 0,
+              duration: 1,
+              config: { ...project.scenes[0].elements[0].config, text: "BROKEN" },
+              x: 50,
+              y: 50,
+              scale: 1,
+            },
+          ],
+        },
+      ],
+    };
+    return <RenderStage project={withBroken} customTemplates={[...customTemplates, BROKEN_TEMPLATE_INPUT]} />;
+  }
   return <RenderStage project={project} customTemplates={customTemplates} />;
 }
+
+const BROKEN_TEMPLATE_INPUT: StudioCustomTemplateInput = {
+  id: BROKEN_TEMPLATE.id,
+  slug: BROKEN_TEMPLATE.slug,
+  name: BROKEN_TEMPLATE.name,
+  category: BROKEN_TEMPLATE.category,
+  sourceKind: BROKEN_TEMPLATE.sourceKind,
+  elementKind: "cards",
+  defaultConfig: BROKEN_TEMPLATE.defaultConfig,
+  code: BROKEN_TEMPLATE.code,
+  capabilities: { studioCompatible: true, exportCompatible: true, reasons: [], contractDuration: 1 },
+  version: 1,
+};
+
+const FREE_CODE_TEMPLATE_INPUT: StudioCustomTemplateInput = {
+  id: "free-code-test",
+  slug: "free-code-test",
+  name: "Free (non pilodable)",
+  category: "ui-motion",
+  sourceKind: "code",
+  elementKind: "cards",
+  defaultConfig: { text: "FREE", primaryColor: "#F5F5F7", accentColor: "#0A84FF", backgroundColor: "#000000", duration: 1, speed: 1 },
+  code: "var x = 1; // sans contrat __MGS_TIMELINE__",
+  capabilities: { studioCompatible: false, exportCompatible: false, reasons: ["Pas de contrat renderAt(time)"] },
+  version: 1,
+};
 
 function clampDim(value: number): number {
   return Math.max(320, Math.min(3840, value % 2 === 0 ? value : value - 1));

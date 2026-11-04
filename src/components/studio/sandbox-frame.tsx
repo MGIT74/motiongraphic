@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 /**
  * Runtime de bac à sable déterministe pour les templates « code ».
@@ -25,6 +25,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Promesses d'attente des FRAME_READY — consommées par /render (RenderStage). */
 export const pendingCodeWaits = new Set<Promise<void>>();
+
+/** Frames dégradées (timeout / renderAt en échec) : /render/Studio refusent
+ * d'encoder du dégradé silencieusement — journalisé + consommé par le moteur. */
+export interface DegradedFrameInfo {
+  sessionId: string;
+  seq: number;
+  reason: "timeout" | "render-at-failed" | "unmount";
+}
+export const degradedFrames: DegradedFrameInfo[] = [];
+
+/** Consomme le journal (le moteur d'export le vide après lecture). */
+export function drainDegradedFrames(): DegradedFrameInfo[] {
+  const drained = [...degradedFrames];
+  degradedFrames.length = 0;
+  return drained;
+}
 
 // Quotas : iframes sandboxées simultanées (timeline vs vignettes/aperçus).
 const MAX_SANDBOX_FRAMES = 8;
@@ -59,159 +75,21 @@ export function metricsFor(sessionId: string): SandboxHostMetrics {
 /* Document sandboxé (protocole v2)                                    */
 /* ------------------------------------------------------------------ */
 
-export interface SandboxParams {
-  text: string;
-  primaryColor: string;
-  accentColor: string;
-  backgroundColor: string;
-  duration: number;
-  speed: number;
-  [key: string]: unknown;
-}
+import {
+  buildSandboxDocumentV2,
+  SANDBOX_CSP_FALLBACK_HEADER,
+  type SandboxParams,
+} from "@/lib/templates/sandbox-runtime";
+export { SANDBOX_CSP_FALLBACK_HEADER };
+export { buildSandboxDocumentV2 };
+export type { SandboxParams };
+export { SANDBOX_CSP_FALLBACK_HEADER as SANDBOX_CSP };
 
 /** Prelude (sans balise script : l'hôte l'emballl lui-même). */
 // Neutralisation au calquage : Chrome ignore l'attribut csp des iframes
 // (spec retirée) -> le prelude remplace les fonctions réseau/eval avant tout
 // code utilisateur (Propriétés non réinscriptibles). Les accès via <img>/<script>
 // injectés sont interceptés dans document.createElement.
-const PRELUDE_V2_SOURCE = `
-(function () {
-  "use strict";
-  var SESSION = window.__MGS_SESSION__;
-  var metrics = { received: 0, ignored: 0, frames: 0, degraded: 0, errors: 0, neutered: [] };
-
-  function neuter(name, body) {
-    Object.defineProperty(window, name, {
-      value: body,
-      writable: false,
-      configurable: false,
-    });
-    metrics.neutered.push(name);
-  }
-  try {
-    neuter("fetch", function () { throw new Error("RESEAU_BLOQUE (sandbox MotionGraphic)"); });
-  } catch (e) { metrics.neutered.push("fetch:ERR:" + (e && e.message)); }
-  try {
-    neuter("WebSocket", function () { throw new Error("RESEAU_BLOQUE (sandbox MotionGraphic)"); });
-  } catch (e) { metrics.neutered.push("ws:ERR"); }
-  try {
-    neuter("EventSource", function () { throw new Error("RESEAU_BLOQUE (sandbox MotionGraphic)"); });
-  } catch (e) { metrics.neutered.push("es:ERR"); }
-  try {
-    neuter("XMLHttpRequest", function () {
-      this.open = function () {}; this.send = function () { throw new Error("RESEAU_BLOQUE (sandbox MotionGraphic)"); };
-    });
-  } catch (e) { metrics.neutered.push("xhr:ERR"); }
-  try {
-    neuter("eval", function () { throw new Error("EVAL_BLOQUE (sandbox MotionGraphic)"); });
-  } catch (e) { metrics.neutered.push("eval:ERR:" + (e && e.message).slice(0, 40)); }
-  (function patchCreate() {
-    var originalCreate = document.createElement.bind(document);
-    document.createElement = function (tag) {
-      var lower = String(tag).toLowerCase();
-      if (lower === "script" || lower === "iframe" || lower === "embed" || lower === "object") {
-        var neutral = originalCreate("span");
-        neutral.setAttribute("data-mgsi-blocked", lower);
-        return neutral;
-      }
-      if (lower === "img" || lower === "link") {
-        var neutralImg = originalCreate("span");
-        neutralImg.setAttribute("data-mgsi-blocked", lower);
-        return neutralImg;
-      }
-      return originalCreate(tag);
-    };
-  })();
-  try { document.write = function () {}; document.close = function () {}; } catch (e) {}
-  function post(message) {
-    message.session = SESSION;
-    try { window.parent.postMessage(message, "*"); } catch (e) { metrics.errors++; }
-  }
-  function nextTwoFrames(cb) {
-    requestAnimationFrame(function () { requestAnimationFrame(function () { cb(); }); });
-  }
-  function applyParams(params) {
-    window.MGSI_CONFIG = params || {};
-    try { window.dispatchEvent(new CustomEvent("mgsi:configchange", { detail: params })); } catch (e) {}
-  }
-  function postReady() {
-    var contract = window.__MGS_TIMELINE__;
-    post({
-      type: "mgsi:ready",
-      mode: contract && typeof contract.renderAt === "function" ? "timeline" : "free",
-      duration: contract ? Number(contract.duration) || 0 : 0,
-      outAt: contract && Number(contract.outAt) > 0 ? Number(contract.outAt) : undefined,
-      metrics: metrics,
-    });
-  }
-  function handleSeek(data) {
-    var contract = window.__MGS_TIMELINE__;
-    if (!contract || typeof contract.renderAt !== "function") {
-      post({ type: "mgsi:error", code: "CONTRACT_MISSING" });
-      metrics.degraded++;
-      nextTwoFrames(function () {
-        post({ type: "mgsi:frame", seq: data.id, t: data.t, degraded: true });
-      });
-      return;
-    }
-    var contractDuration = Number(contract.duration) || 0;
-    var t = contractDuration > 0 ? Math.max(0, Math.min(contractDuration, data.t)) : Math.max(0, data.t);
-    Promise.resolve()
-      .then(function () { return contract.renderAt(t, window.MGSI_CONFIG || {}); })
-      .then(function () {
-        nextTwoFrames(function () { post({ type: "mgsi:frame", seq: data.id, t: t, metrics: metrics }); });
-      }, function (err) {
-        metrics.errors++;
-        post({ type: "mgsi:error", seq: data.id, message: String(err && err.message || err) });
-        nextTwoFrames(function () { post({ type: "mgsi:frame", seq: data.id, t: t, degraded: true, metrics: metrics }); });
-      });
-  }
-  window.addEventListener("message", function (message) {
-    var data = message && message.data;
-    metrics.received++;
-    if (!data || typeof data !== "object" || data.session !== SESSION || typeof data.type !== "string") {
-      metrics.ignored++;
-      return;
-    }
-    if (data.type === "mgsi:ping") {
-      postReady();
-      return;
-    }
-    if (data.type === "mgsi:seek" && typeof data.t === "number" && typeof data.id !== "undefined") {
-      handleSeek(data);
-    } else if (data.type === "mgsi:set_params" && data.params && typeof data.params === "object") {
-      applyParams(data.params);
-      nextTwoFrames(function () { post({ type: "mgsi:frame", seq: data.id, t: null, metrics: metrics }); });
-    } else {
-      metrics.ignored++;
-    }
-  });
-  window.addEventListener("load", postReady);
-})();
-`;
-
-export const SANDBOX_CSP_FALLBACK_HEADER =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; worker-src 'none'; form-action 'none'; frame-ancestors 'self'";
-
-export function buildSandboxDocumentV2(
-  code: string,
-  sessionId: string,
-  params?: SandboxParams
-): string {
-  const sessionJson = JSON.stringify(sessionId);
-  const paramsJson = params ? JSON.stringify(params).replace(/</g, "\\u003c") : "undefined";
-  const safeCode = code.replace(/<\/script/gi, "<\\/script");
-  return [
-    '<!doctype html><html><head><meta charset="utf-8" /><meta name="referrer" content="no-referrer" />',
-    "<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent}*{box-sizing:border-box}</style>",
-    "<script>window.__MGS_SESSION__ = " + sessionJson + ";</script>",
-    "<script>window.MGSI_CONFIG = " + paramsJson + ";</script>",
-    "<script>" + PRELUDE_V2_SOURCE.replace(/<\/script/gi, "<\\/script") + "</script>",
-    "</head><body>",
-    "<script>" + safeCode + "</script>",
-    "</body></html>",
-  ].join("");
-}
 
 /* ------------------------------------------------------------------ */
 /* Hôte de l'iframe (Studio, rendu MP4, vignettes, fiches publiques)   */
@@ -225,12 +103,12 @@ interface PendingSeek {
 export default function SandboxTimelineFrame({
   code,
   sourceTemplate,
-  sessionId,
   params,
   time,
   compatible = true,
   preview = false,
   hideOverlay = false,
+  onSession,
   onIncompatible,
   onFrame,
   backgroundColor = "transparent",
@@ -242,7 +120,6 @@ export default function SandboxTimelineFrame({
    * de saisie). L'origine reste opaque + calquage ; la CSP n'est pas
    * applicable dans ce mode (documenté). */
   code?: string;
-  sessionId: string;
   params: SandboxParams;
   /** Temps moteur (déjà converti par timelineTimeFor) — SEEK à chaque changement. */
   time: number;
@@ -256,8 +133,13 @@ export default function SandboxTimelineFrame({
   onFrame?: (info: { seq: number; degraded: boolean }) => void;
   /** Signale une incompatibilité détectée au runtime (badge éditeur). */
   onIncompatible?: (reason: string | null) => void;
+  /** Session établie (tests : métriques par session). */
+  onSession?: (sessionId: string) => void;
   backgroundColor?: string;
 }) {
+  // Session UNIQUE par instance (cross-talk impossible ; route : ?s=<session>).
+  const sessionUid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const sessionId = `sbx-${sessionUid}`;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [doc, setDoc] = useState(() =>
     code ? buildSandboxDocumentV2(code, sessionId, params) : ""
@@ -352,11 +234,21 @@ export default function SandboxTimelineFrame({
       pendingRef.current.delete(seq);
       pending.resolve();
       onFrameRef.current?.({ seq, degraded: true });
+      degradedFrames.push({ sessionId, seq, reason: "timeout" });
+    if (degradedFrames.length > 200) degradedFrames.splice(0, degradedFrames.length - 200);
     }, 2500);
     const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
     pendingCodeWaits.add(wrapped);
     win.postMessage({ type: "mgsi:seek", session: sessionId, t, id: seq }, "*");
   }, [sessionId, runtimeIncompatible]);
+
+  /* Session exposée (tests) : l'API de check lit les métriques par session. */
+  const onSessionRef = useRef(onSession);
+  useEffect(() => {
+    onSessionRef.current = onSession;
+    onSessionRef.current?.(sessionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   /* Libération des acks au démontage (protège le rendu d'un blocage). */
   const isPreview = Boolean(preview);
@@ -420,6 +312,8 @@ export default function SandboxTimelineFrame({
       }
       if (data.type === "mgsi:error") {
         if (data.code === "CONTRACT_MISSING") setRuntimeIncompatible(true);
+        else degradedFrames.push({ sessionId, seq: Number(data.seq) || 0, reason: "render-at-failed" });
+      if (degradedFrames.length > 200) degradedFrames.splice(0, degradedFrames.length - 200);
         return;
       }
       if (data.type === "mgsi:frame" && typeof data.seq === "number") {
@@ -441,7 +335,7 @@ export default function SandboxTimelineFrame({
       clearInterval(pingTimer);
       clearTimeout(stopPing);
     };
-  }, [sessionId, compatible, runtimeIncompatible, sendParamsNow, sourceTemplate]);
+  }, [sessionId, compatible, runtimeIncompatible, sendParamsNow, sourceTemplate, seekNow]);
 
   // Chaque changement d'instant (lecture, scrub, export) -> SEEK.
   // Mode gratuit : aucun ACK (l'animation n'est pas déterministe ; l'export

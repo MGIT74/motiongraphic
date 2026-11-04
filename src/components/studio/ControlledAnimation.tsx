@@ -122,8 +122,19 @@ export default function ControlledAnimation({
   if (!builder || !Frame) {
     if (sandboxCode) {
       // Templates « code » : le moteur du Studio est maître du temps via le
-      // contrat déterministe (SEEK) : l'iframe rend renderAt(time).
-      const sandboxMeta = studioMeta as { sandboxCode?: string; timeDriven?: boolean } | null;
+      // contrat déterministe (SEEK) ; le code est servi par /sandbox/<id>
+      // (CSP par en-tête HTTP).
+      const sandboxMeta = studioMeta as
+        | {
+            sandboxCode?: string;
+            timeDriven?: boolean;
+            timelineDuration?: number;
+            version?: number;
+            sandboxVersion?: number;
+            sandboxContract?: { duration: number; outAt?: number };
+          }
+        | null;
+      const total = sandboxMeta?.sandboxContract?.duration ?? sandboxMeta?.timelineDuration ?? elementDuration ?? config.duration;
       return (
         <div
           className="absolute inset-0 h-full w-full overflow-hidden"
@@ -133,11 +144,11 @@ export default function ControlledAnimation({
           <SandboxTimelineFrame
             preview={preview}
             hideOverlay={renderStage}
-            code={sandboxCode}
-            sessionId={`sbx-${templateKey}`}
+            sourceTemplate={{ templateId: templateKey, version: sandboxMeta?.sandboxVersion }}
             params={config as import("@/components/studio/sandbox-frame").SandboxParams}
             time={timelineTimeFor(localTime, {
-              total: sandboxMeta?.timeDriven ? (sandboxMeta as unknown as { timelineDuration: number }).timelineDuration : elementDuration ?? config.duration,
+              total,
+              outAt: sandboxMeta?.sandboxContract?.outAt,
               elementDuration: elementDuration ?? config.duration,
               timing,
               speed: 1,

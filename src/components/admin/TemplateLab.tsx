@@ -780,7 +780,6 @@ function Editor({
                   code={editor.code}
                   config={previewConfig as AnimationConfigLite}
                   rerunKey={rerunKey}
-                  ariaLabel="Aperçu sandboxé du code en cours d'édition"
                 />
                 <span className="pointer-events-none absolute left-2 top-2 rounded-full border border-line bg-black/60 px-2 py-0.5 text-[9px] uppercase tracking-wider text-muted">
                   Sandbox isolé

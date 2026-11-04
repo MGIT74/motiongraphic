@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "@/app/studio-fonts.css";
 import StageLayers from "@/components/studio/StageLayers";
 import { MediaRuntimeContext, pendingMediaWaits } from "@/components/studio/MediaLayer";
-import { pendingCodeWaits } from "@/components/studio/sandbox-frame";
+import { pendingCodeWaits, drainDegradedFrames } from "@/components/studio/sandbox-frame";
 import { projectDuration, type StudioProject } from "@/lib/studio/project-model";
 import { registerCustomStudioTemplates } from "@/lib/studio/template-registry";
 import type { StudioCustomTemplateInput } from "@/lib/render/server-projects";
@@ -47,7 +47,13 @@ export default function RenderStage({
     return true;
   });
   const [time, setTime] = useState(0);
-  const waiters = useRef<(() => void)[]>([]);
+  const [flushTick, setFlushTick] = useState(0);
+  const timeRef = useRef(0);
+  useEffect(() => {
+    timeRef.current = time;
+  });
+  /** Attentes du flux de rendu : résolution OK / rejet (frame dégradée). */
+  const waiters = useRef<{ resolve: () => void; reject: (reason: Error) => void }[]>([]);
   const size = useMemo(() => renderStageSize(project), [project]);
 
   // Templates non compatibles avec l'export (code sandbox sans contrat
@@ -67,21 +73,38 @@ export default function RenderStage({
     return result;
   }, [project]);
 
-  // Après chaque changement d'instant : effets React + GSAP appliqués, puis 2 images.
+  // Après chaque changement d'instant : effets React + GSAP appliqués, puis
+  // acks (médias, sandbox) — JAMAIS d'image dégradée encodée silencieusement.
   useEffect(() => {
     const pending = waiters.current;
     waiters.current = [];
     void (async () => {
-      await nextFrame();
-      await nextFrame();
-      // Médias : chaque vidéo positionnée / image chargée.
-      while (pendingMediaWaits.size > 0) await Promise.all(Array.from(pendingMediaWaits));
-      // Templates sandbox (contrat renderAt) : chaque SEEK acquitté.
-      while (pendingCodeWaits.size > 0) await Promise.all(Array.from(pendingCodeWaits));
-      await nextFrame();
-      pending.forEach((resolve) => resolve());
+      try {
+        await nextFrame();
+        await nextFrame();
+        // Médias : chaque vidéo positionnée / image chargée.
+        while (pendingMediaWaits.size > 0) await Promise.all(Array.from(pendingMediaWaits));
+        // Templates sandbox (contrat renderAt) : chaque SEEK acquitté.
+        while (pendingCodeWaits.size > 0) {
+          await Promise.all(Array.from(pendingCodeWaits));
+          // garde-fou : pas de boucle infinie si un ack rate
+          if (pendingCodeWaits.size > 0) await nextFrame();
+        }
+        await nextFrame();
+        const degraded = drainDegradedFrames();
+        if (degraded.length > 0) {
+          throw new Error(
+            `FRAME_DÉGRADÉE : ${degraded.length} acquitement(s) sandbox en échec (${degraded
+              .map((d) => `${d.sessionId}#${d.seq} ${d.reason}`)
+              .join(", ")})`
+          );
+        }
+        pending.forEach((w) => w.resolve());
+      } catch (error) {
+        pending.forEach((w) => w.reject(error instanceof Error ? error : new Error(String(error))));
+      }
     })();
-  }, [time]);
+  }, [time, flushTick]);
 
   useEffect(() => {
     if (!registered) return;
@@ -93,19 +116,14 @@ export default function RenderStage({
       width: project.width,
       height: project.height,
       seek: (t: number) =>
-        new Promise<void>((resolve) => {
-          waiters.current.push(resolve);
-          setTime((prev) => {
-            if (prev === t) {
-              // Même instant : on libère quand même après deux images.
-              void nextFrame().then(nextFrame).then(() => {
-                const pending = waiters.current;
-                waiters.current = [];
-                pending.forEach((r) => r());
-              });
-            }
-            return t;
-          });
+        new Promise<void>((resolve, reject) => {
+          waiters.current.push({ resolve, reject });
+          if (timeRef.current === t) {
+            // Même instant : relance le flush (les acks éventuels sont traités).
+            setFlushTick((v) => v + 1);
+            return;
+          }
+          setTime(t);
         }),
     };
     window.__mgsiRender = api;

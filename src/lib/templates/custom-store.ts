@@ -4,7 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sanitizeCustomTemplate, fromCustomTemplateRow, validateCustomTemplate, type CustomTemplate } from "./custom-model";
 import type { AnimationConfig } from "@/types/animation";
-import { PULSE_GRID_TEMPLATE } from "@/lib/testing/sandbox-fixture";
+import { PULSE_GRID_TEMPLATE, SANDBOX_PROBE_TEMPLATE, PULSE_GRID_TEMPLATE_ID, BROKEN_TEMPLATE } from "@/lib/testing/sandbox-fixture";
 
 /**
  * Store des templates personnalisés.
@@ -144,15 +144,20 @@ function ensureDemoSeed() {
         .map(sanitizeCustomTemplate)
         .filter((t): t is CustomTemplate => t !== null)
         .forEach((t) => memory.set(t.id, t));
-      return;
     }
   } catch {
-    // fichier corrompu/illisible : seed standard
+    // fichier corrompu/illisible : reseed
   }
+  // Seeds de démonstration systématiquement garantis (les brouillons du
+  // fichier sont préservés ; les démo ne sont jamais écrasées si modifiés).
   const cta = demoSeedCTA();
-  if (cta) memory.set(cta.id, cta);
+  if (cta && !memory.has(cta.id)) memory.set(cta.id, cta);
   const grid = demoSeedPulseGrid();
-  if (grid) memory.set(grid.id, grid);
+  if (grid && !memory.has(PULSE_GRID_TEMPLATE_ID)) memory.set(grid.id, grid);
+  const probe = sanitizeCustomTemplate({ ...SANDBOX_PROBE_TEMPLATE });
+  if (probe && !memory.has(probe.id)) memory.set(probe.id, probe);
+  const broken = sanitizeCustomTemplate({ ...BROKEN_TEMPLATE });
+  if (broken && !memory.has(broken.id)) memory.set(broken.id, broken);
 }
 
 /** Persiste le store démo (git-ignoré) : les brouillons survivent au restart. */

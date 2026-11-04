@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listCustomTemplates, getCustomTemplateBySlug } from "@/lib/templates/custom-store";
-import { buildSandboxDocumentV2, SANDBOX_CSP_FALLBACK_HEADER } from "@/components/studio/sandbox-frame";
+import { buildSandboxDocumentV2, SANDBOX_CSP_FALLBACK_HEADER } from "@/lib/templates/sandbox-runtime";
 
 /**
  * Service du code sandboxé AVEC CSP RÉELLE.

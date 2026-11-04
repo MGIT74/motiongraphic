@@ -10,6 +10,10 @@ import { makeDefaultProject } from "@/lib/studio/project-model";
  * Aucun secret, aucun serveur requis (constantes déterministes).
  */
 
+import { SANDBOX_TIMELINE_STARTER_CODE } from "@/lib/templates/sandbox-starter";
+
+const SANDBOX_TIMELINE_PROBE_BASE = SANDBOX_TIMELINE_STARTER_CODE("Probe Sandbox");
+
 export const PULSE_GRID_CODE = [
   "// MotionGraphic — Pulse Grid (contrat TIMELINE : renderAt déterministe)",
   "window.__MGS_TIMELINE__ = {",
@@ -48,6 +52,37 @@ export const PULSE_GRID_CODE = [
   "}",
 ].join("\n");
 
+/** Cas de test : contrat DÉCLARÉ mais renderAt en échec à l'exécution
+ * (capabilities statiques = compatible ; le runtime/export doit refuser). */
+export const BROKEN_TEMPLATE = {
+  id: "00000000-0000-4000-8000-000000000098",
+  slug: "broken-code-test",
+  name: "Broken Code",
+  category: "ui-motion",
+  description: "Cas de test (candidate) : renderAt échoue à l'exécution.",
+  sourceKind: "code",
+  code: [
+    "window.__MGS_TIMELINE__ = {",
+    "  duration: 1,",
+    "  renderAt: function () {",
+    "    throw new Error('BUG_RENDU (test)');",
+    "  },",
+    "};",
+  ].join("\n"),
+  defaultConfig: {
+    text: "BROKEN",
+    primaryColor: "#F5F5F7",
+    accentColor: "#0A84FF",
+    backgroundColor: "#000000",
+    duration: 1,
+    speed: 1,
+  } as AnimationConfig,
+  promptWeb: "",
+  promptAfterEffects: "",
+  version: 1,
+  status: "candidate",
+} as const;
+
 export const PULSE_GRID_TEMPLATE_ID = "b0000000-0000-4000-8000-000000000022";
 export const PULSE_GRID_TEMPLATE_DEFAULT_CONFIG = {
   text: "PULSE",
@@ -57,6 +92,51 @@ export const PULSE_GRID_TEMPLATE_DEFAULT_CONFIG = {
   duration: 2,
   speed: 1,
 } as const satisfies AnimationConfig;
+
+
+/** Template de PROBE de sécurité (NE JAMAIS publier : statut candidate) :
+ * contrat timeline + sonde de bornes (réseau/stockage/parent/eval). */
+export const SANDBOX_PROBE_CODE = SANDBOX_TIMELINE_PROBE_BASE + "\n" + [
+  "window.addEventListener(\"message\", function (message) {",
+  "  var data = message && message.data;",
+  "  if (data && data.type === \"mgsi:probe\" && data.session === window.__MGS_SESSION__) {",
+  "    var results = { networkBlocked: false, networkDetail: \"\", storageBlocked: false, storageDetail: \"\", topOpaque: false, evalBlocked: false };",
+  "    try {",
+  "      window.fetch(\"https://example.com/ping\").then(function () { results.networkBlocked = false; results.networkDetail = \"fetch autorisé (?!)\"; },",
+  "        function (err) { results.networkBlocked = true; results.networkDetail = err && err.message ? String(err.message).slice(0, 60) : \"bloqué\"; });",
+  "    } catch (err) { results.networkBlocked = true; results.networkDetail = \"throw\"; }",
+  "    try { window.localStorage.setItem(\"mgsi\", \"1\"); results.storageDetail = \"localStorage accessible (?!)\"; }",
+  "    catch (err) { results.storageBlocked = true; results.storageDetail = err && err.name ? String(err.name) : \"bloqué\"; }",
+  "    try { var topDoc = window.top.document; results.topOpaque = Boolean(topDoc) === false; } catch (err) { results.topOpaque = true; }",
+  "    try { window.eval(\"1+1\"); } catch (err) { results.evalBlocked = true; }",
+  "    setTimeout(function () {",
+  "      window.parent.postMessage({ type: \"mgsi:bounds\", session: window.__MGS_SESSION__, results: results }, \"*\");",
+  "    }, 150);",
+  "  }",
+  "});",
+].join("\n");
+
+export const SANDBOX_PROBE_TEMPLATE = {
+  id: "00000000-0000-4000-8000-000000000099",
+  slug: "sandbox-check-probe",
+  name: "Sandbox Check Probe",
+  category: "ui-motion",
+  description: "Sonde de tests (réseau/stockage/parent/eval) — JAMAIS publiée (candidate).",
+  sourceKind: "code",
+  code: SANDBOX_PROBE_CODE,
+  defaultConfig: {
+    text: "PROBE",
+    primaryColor: "#F5F5F7",
+    accentColor: "#0A84FF",
+    backgroundColor: "#000000",
+    duration: 3,
+    speed: 1,
+  } as AnimationConfig,
+  promptWeb: "",
+  promptAfterEffects: "",
+  version: 1,
+  status: "candidate",
+} as const;
 
 export const PULSE_GRID_TEMPLATE = {
   id: "b0000000-0000-4000-8000-000000000022",

@@ -127,6 +127,37 @@ function ffmpeg(args, { input } = {}) {
     ok(t1s.length >= 100, `${format.name} : image à t=1s extractible`);
   }
 
+  // ---- REFUS si renderAt échoue à l'exécution (contract ok, rendu KO) ----
+  {
+    const b = await launchBrowser({});
+    const page = await b.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 });
+    await page.goto(`${BASE}/dev/render-stage?w=1080&h=1080&broken=1`, { waitUntil: "networkidle", timeout: 60_000 });
+    await page.waitForFunction(() => window.__mgsiRender?.ready === true, undefined, { timeout: 30_000 });
+    const incompatible = await page.evaluate(() => window.__mgsiRender?.incompatible ?? []);
+    // Ici le contrat EST déclaré (pas d'incompatibilité statique) : le refus
+    // doit venir du RUNTIME (seek rejeté : FRAME_DÉGRADÉE).
+    const seekResult = await page
+      .evaluate(() => window.__mgsiRender.seek(0.3))
+      .then(() => "resolved(!)", (e) => String(e?.message || e).slice(0, 200));
+    ok(incompatible.length === 0, `Contrat déclaré : pas de refus statique (${incompatible.length})`);
+    ok(String(seekResult).includes("FRAME_DÉGRADÉE"), `Seek rejeté pour renderAt en échec : ${seekResult.slice(0, 120)}`);
+    await b.close();
+  }
+
+  // ---- REFUS de l'export si un template non pilotable est présent ----
+  // Même vérification que le moteur d'export (openStage lit incompatible).
+  {
+    const b = await launchBrowser({});
+    const page = await b.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 });
+    const url = `${BASE}/dev/render-stage?w=1920&h=1080&degraded=1`;
+    await page.goto(url, { waitUntil: "networkidle", timeout: 60_000 });
+    await page.waitForFunction(() => window.__mgsiRender?.ready === true, undefined, { timeout: 30_000 });
+    const incompatible = await page.evaluate(() => window.__mgsiRender?.incompatible ?? []);
+    const refused = incompatible.length > 0;
+    ok(refused, `Export refusé (template non pilotable) : ${incompatible.join(", ")}`);
+    await b.close();
+  }
+
   console.log(failures === 0 ? "\nExport MP4 : TOUS les tests passent." : `\n${failures} échec(s) d'export.`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

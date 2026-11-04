@@ -105,6 +105,9 @@ export interface CustomStudioTemplateMeta extends StudioTemplateMeta {
   incompatibility?: string[];
   /** Vrai si le pipeline d'export MP4 (capture image par image) le supporte. */
   exportCompatible?: boolean;
+  /** Déclaire par READY du sandbox (durée/outAt exacts + version du template custom). */
+  sandboxContract?: { duration: number; outAt?: number };
+  sandboxVersion?: number;
 }
 
 /**
@@ -127,6 +130,7 @@ export function registerCustomStudioTemplates(
     defaultConfig: AnimationConfig;
     code?: string;
     capabilities?: TemplateCapabilities;
+    version?: number;
   }[]
 ): void {
   for (const template of templates) {
@@ -165,9 +169,13 @@ export function registerCustomStudioTemplates(
       } as StudioTemplateMeta;
       const meta = STUDIO_TEMPLATES[template.slug] as CustomStudioTemplateMeta;
       meta.sandboxCode = template.code;
+      meta.sandboxVersion = template.version;
       meta.timeDriven = caps.studioCompatible === true;
       meta.exportCompatible = caps.studioCompatible === true;
       meta.technologies = ["HTML", "CSS", "JavaScript"];
+      meta.sandboxContract = caps.contractDuration
+        ? { duration: caps.contractDuration, outAt: undefined }
+        : { duration: template.defaultConfig.duration, outAt: undefined };
       if (!caps.studioCompatible) meta.incompatibility = caps.reasons;
       CUSTOM_STUDIO_KEYS.add(template.slug);
       continue;

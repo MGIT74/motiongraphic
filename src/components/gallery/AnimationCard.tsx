@@ -19,11 +19,10 @@ export default function AnimationCard({ template }: { template: TemplateSummary 
   const { ref, visible } = useNearViewport<HTMLDivElement>();
   const meta = template.componentKey ? getComponentMeta(template.componentKey) : null;
 
-  const preview = template.custom?.sourceKind === "code" && template.custom.code ? (
+  const preview = template.custom?.sourceKind === "code" ? (
     <SandboxPreview
-      code={template.custom.code}
+      sourceTemplate={{ templateId: template.slug, version: template.custom.version }}
       config={template.config as AnimationConfigLite}
-      ariaLabel={template.title}
     />
   ) : template.componentKey ? (
     <AnimationPlayer
