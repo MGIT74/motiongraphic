@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 /**
  * Runtime de bac à sable déterministe pour les templates « code ».
@@ -48,7 +48,7 @@ export interface SandboxHostMetrics {
 }
 
 const METRICS_KEY = "__MGS_HOST_METRICS__";
-function metricsFor(sessionId: string): SandboxHostMetrics {
+export function metricsFor(sessionId: string): SandboxHostMetrics {
   const holder = window as unknown as Record<string, Record<string, SandboxHostMetrics>>;
   holder[METRICS_KEY] ??= {};
   holder[METRICS_KEY][sessionId] ??= { received: 0, ignored: 0, frames: 0, degraded: 0, errors: 0 };
@@ -177,6 +177,7 @@ export default function SandboxTimelineFrame({
   preview = false,
   hideOverlay = false,
   onIncompatible,
+  onFrame,
   backgroundColor = "transparent",
 }: {
   code: string;
@@ -190,6 +191,8 @@ export default function SandboxTimelineFrame({
   preview?: boolean;
   /** Rendu MP4 : pas d'overlay incompatible (sinon capturé dans la vidéo). */
   hideOverlay?: boolean;
+  /** Ack rendu : résolu à chaque FRAME_READY (ou timeout dégradé). */
+  onFrame?: (info: { seq: number; degraded: boolean }) => void;
   /** Signale une incompatibilité détectée au runtime (badge éditeur). */
   onIncompatible?: (reason: string | null) => void;
   backgroundColor?: string;
@@ -200,6 +203,16 @@ export default function SandboxTimelineFrame({
   const pendingRef = useRef<Map<number, PendingSeek>>(new Map());
   const [runtimeIncompatible, setRuntimeIncompatible] = useState(false);
   const [quotaReached, setQuotaReached] = useState(() => sandboxQuotaExceeded(Boolean(preview)));
+
+  // Événements-effet : dernière valeur des callbacks parents lue à
+  // l'invocation (jamais pendant le rendu) — compatible React Compiler.
+  const onIncompatibleEvent = useEffectEvent((reason: string | null) => {
+    if (onIncompatible) onIncompatible(reason);
+  });
+  const onFrameEvent = useEffectEvent((info: { seq: number; degraded: boolean }) => {
+    if (onFrame) onFrame(info);
+  });
+
 
   const docKey = keyOf(code, sessionId, JSON.stringify(params));
   const [lastDocKey, setLastDocKey] = useState(docKey);
@@ -225,16 +238,11 @@ export default function SandboxTimelineFrame({
       pendingMap.forEach((pending) => {
         if (pending.timer) clearTimeout(pending.timer);
         pending.resolve();
+      onFrameEvent({ seq: 0, degraded: true });
       });
       pendingMap.clear();
     };
   }, [isPreview]);
-
-  // Callback parent (stabilisé : le message listener ne dépend que de la session).
-  const onIncompatibleRef = useRef(onIncompatible);
-  useEffect(() => {
-    onIncompatibleRef.current = onIncompatible;
-  });
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -256,16 +264,11 @@ export default function SandboxTimelineFrame({
       if (data.session !== sessionId) return;
 
       const local = metricsFor(sessionId);
-      if (data.metrics) {
-        local.received = data.metrics.received;
-        local.ignored = data.metrics.ignored;
-        local.errors = data.metrics.errors;
-        local.degraded = data.metrics.degraded;
-      }
+      recordMetrics(local, data.metrics ?? null);
       if (data.type === "mgsi:ready") {
         const incompatible = data.mode === "free" || !compatible;
         setRuntimeIncompatible(incompatible);
-        onIncompatibleRef.current?.(incompatible ? "Contrat __MGS_TIMELINE__ / renderAt(time) manquant ou non déterministe." : null);
+        onIncompatibleEvent(incompatible ? "Contrat __MGS_TIMELINE__ / renderAt(time) manquant ou non déterministe." : null);
         return;
       }
       if (data.type === "mgsi:error") {
@@ -278,6 +281,10 @@ export default function SandboxTimelineFrame({
         pendingRef.current.delete(data.seq);
         if (pending.timer) clearTimeout(pending.timer);
         pending.resolve();
+        onFrameEvent({
+          seq: data.seq,
+          degraded: Boolean(data.degraded) || Number(data.t) === null,
+        });
         return;
       }
     };
@@ -302,6 +309,7 @@ export default function SandboxTimelineFrame({
     pending.timer = setTimeout(() => {
       pendingRef.current.delete(seq);
       pending.resolve();
+      onFrameEvent({ seq, degraded: true });
     }, 2500);
     const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
     pendingCodeWaits.add(wrapped);
@@ -344,4 +352,13 @@ export default function SandboxTimelineFrame({
 
 function keyOf(code: string, sessionId: string, paramsSignature: string): string {
   return `${code.length}:${sessionId}:${paramsSignature}`;
+}
+
+/** Fusion des métriques sandbox -> hôte (module, hors composant). */
+function recordMetrics(local: SandboxHostMetrics, data: SandboxHostMetrics | null): void {
+  if (!data) return;
+  local.received = data.received;
+  local.ignored = data.ignored;
+  local.errors = data.errors;
+  local.degraded = data.degraded;
 }
