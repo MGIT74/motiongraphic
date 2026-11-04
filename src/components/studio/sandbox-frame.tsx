@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Runtime de bac à sable déterministe pour les templates « code ».
@@ -190,16 +190,16 @@ const PRELUDE_V2_SOURCE = `
 })();
 `;
 
-export const SANDBOX_CSP =
-  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src 'unsafe-inline'";
+export const SANDBOX_CSP_FALLBACK_HEADER =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; worker-src 'none'; form-action 'none'; frame-ancestors 'self'";
 
 export function buildSandboxDocumentV2(
   code: string,
   sessionId: string,
-  params: SandboxParams
+  params?: SandboxParams
 ): string {
   const sessionJson = JSON.stringify(sessionId);
-  const paramsJson = JSON.stringify(params).replace(/</g, "\\u003c");
+  const paramsJson = params ? JSON.stringify(params).replace(/</g, "\\u003c") : "undefined";
   const safeCode = code.replace(/<\/script/gi, "<\\/script");
   return [
     '<!doctype html><html><head><meta charset="utf-8" /><meta name="referrer" content="no-referrer" />',
@@ -224,6 +224,7 @@ interface PendingSeek {
 
 export default function SandboxTimelineFrame({
   code,
+  sourceTemplate,
   sessionId,
   params,
   time,
@@ -234,7 +235,13 @@ export default function SandboxTimelineFrame({
   onFrame,
   backgroundColor = "transparent",
 }: {
-  code: string;
+  /** Mode ROUTE (défaut studio/fiches/rendu) : code servi par /sandbox/<id>
+   * avec CSP par EN-TÊTE (Chromium ignore l'attribut csp des iframes). */
+  sourceTemplate?: { templateId: string; version?: number };
+  /** Mode srcdoc brut : UNIQUEMENT l'aperçu live de l'éditeur (code en cours
+   * de saisie). L'origine reste opaque + calquage ; la CSP n'est pas
+   * applicable dans ce mode (documenté). */
+  code?: string;
   sessionId: string;
   params: SandboxParams;
   /** Temps moteur (déjà converti par timelineTimeFor) — SEEK à chaque changement. */
@@ -252,35 +259,104 @@ export default function SandboxTimelineFrame({
   backgroundColor?: string;
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const [doc, setDoc] = useState(() => buildSandboxDocumentV2(code, sessionId, params));
+  const [doc, setDoc] = useState(() =>
+    code ? buildSandboxDocumentV2(code, sessionId, params) : ""
+  );
   const seqRef = useRef(0);
   const pendingRef = useRef<Map<number, PendingSeek>>(new Map());
   const [runtimeIncompatible, setRuntimeIncompatible] = useState(false);
   const [quotaReached, setQuotaReached] = useState(() => sandboxQuotaExceeded(Boolean(preview)));
 
-  // Événements-effet : dernière valeur des callbacks parents lue à
-  // l'invocation (jamais pendant le rendu) — compatible React Compiler.
-  const onIncompatibleEvent = useEffectEvent((reason: string | null) => {
-    if (onIncompatible) onIncompatible(reason);
-  });
-  const onFrameEvent = useEffectEvent((info: { seq: number; degraded: boolean }) => {
-    if (onFrame) onFrame(info);
+  // Callbacks parents (stabilisés) : valeurs lues via les refs dans les
+  // effets only (l'assignation dans un effet est validée par le linter React).
+  const onIncompatibleRef = useRef(onIncompatible);
+  const onFrameRef = useRef(onFrame);
+  const sendParamsRef = useRef<(params: SandboxParams) => void>(() => {});
+
+  // Paramètres courants (injectés par SET_PARAMS en mode route).
+  const paramsRef = useRef<SandboxParams>(params);
+  useEffect(() => {
+    paramsRef.current = params;
+    onIncompatibleRef.current = onIncompatible;
+    onFrameRef.current = onFrame;
   });
 
+  /** SET_PARAMS + ACK : envoi + promesse partagée (résolue par l'ack). */
+  const sendParamsNow = useCallback((nextParams: SandboxParams) => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    const seq = seqRef.current + 1;
+    seqRef.current = seq;
+    const pendingRef2 = pendingRef.current;
+    const pending: PendingSeek = { resolve: () => {} };
+    pendingRef2.set(seq, pending);
+    const wait = new Promise<void>((resolve) => {
+      pending.resolve = resolve;
+    });
+    pending.timer = setTimeout(() => {
+      pendingRef2.delete(seq);
+      pending.resolve();
+    }, 2500);
+    const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
+    pendingCodeWaits.add(wrapped);
+    win.postMessage({ type: "mgsi:set_params", session: sessionId, params: nextParams, id: seq }, "*");
+  }, [sessionId]);
 
-  const docKey = keyOf(code, sessionId, JSON.stringify(params));
+  // Liaison (dans un effet, jamais pendant le rendu) :
+  useEffect(() => {
+    sendParamsRef.current = sendParamsNow;
+  }, [sendParamsNow]);
+
+
+  const isRouteMode = Boolean(sourceTemplate);
+  const docKey = keyOf(code ?? `route:${sourceTemplate?.templateId}:${sourceTemplate?.version ?? ""}`, sessionId, JSON.stringify(params));
   const [lastDocKey, setLastDocKey] = useState(docKey);
-  if (lastDocKey !== docKey) {
+  if (lastDocKey !== docKey && !isRouteMode) {
     // Reconstruction pendant le rendu (pattern React « adjusted state »).
     setLastDocKey(docKey);
-    setDoc(buildSandboxDocumentV2(code, sessionId, params));
+    setDoc(buildSandboxDocumentV2(code ?? "", sessionId, params));
     setRuntimeIncompatible(false);
   }
+  // Mode route : src calculé (cohérent avec la méta enregistrée au rendu) ;
+  // chaque changement de PARAMÈTRES passe par SET_PARAMS (postMessage).
+  const sandboxSrc = isRouteMode
+    ? `/sandbox/${encodeURIComponent(sourceTemplate?.templateId ?? "")}?s=${encodeURIComponent(sessionId)}${
+        sourceTemplate?.version ? `&v=${sourceTemplate.version}` : ""
+      }`
+    : null;
   // Quota (module global, non-réactif) : suivi au rendu (le canvas re-rendu
   // à chaque instant : le quota est réévalué régulièrement).
   if (sandboxQuotaExceeded(Boolean(preview)) !== quotaReached) {
     setQuotaReached(!quotaReached);
   }
+
+  /* Temps courant + SEEK/ACK (le handler mgsi:ready et les effets d'instant s'en servent). */
+  const currentTimeRef = useRef(0);
+  useEffect(() => {
+    currentTimeRef.current = time;
+  });
+
+  /** SEEK + ACK : envoi, promesse partagée, ack résolu par FRAME_READY. */
+  const seekNow = useCallback((t: number, fromIncompatible = runtimeIncompatible) => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    if (fromIncompatible) return; // jamais de faux ACK
+    const seq = seqRef.current + 1;
+    seqRef.current = seq;
+    const pending: PendingSeek = { resolve: () => {} };
+    pendingRef.current.set(seq, pending);
+    const wait = new Promise<void>((resolve) => {
+      pending.resolve = resolve;
+    });
+    pending.timer = setTimeout(() => {
+      pendingRef.current.delete(seq);
+      pending.resolve();
+      onFrameRef.current?.({ seq, degraded: true });
+    }, 2500);
+    const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
+    pendingCodeWaits.add(wrapped);
+    win.postMessage({ type: "mgsi:seek", session: sessionId, t, id: seq }, "*");
+  }, [sessionId, runtimeIncompatible]);
 
   /* Libération des acks au démontage (protège le rendu d'un blocage). */
   const isPreview = Boolean(preview);
@@ -292,7 +368,7 @@ export default function SandboxTimelineFrame({
       pendingMap.forEach((pending) => {
         if (pending.timer) clearTimeout(pending.timer);
         pending.resolve();
-      onFrameEvent({ seq: 0, degraded: true });
+      onFrameRef.current?.({ seq: 0, degraded: true });
       });
       pendingMap.clear();
     };
@@ -333,7 +409,13 @@ export default function SandboxTimelineFrame({
       if (data.type === "mgsi:ready") {
         const incompatible = data.mode === "free" || !compatible;
         setRuntimeIncompatible(incompatible);
-        onIncompatibleEvent(incompatible ? "Contrat __MGS_TIMELINE__ / renderAt(time) manquant ou non déterministe." : null);
+        onIncompatibleRef.current?.(incompatible ? "Contrat __MGS_TIMELINE__ / renderAt(time) manquant ou non déterministe." : null);
+        // Mode route : les params initiaux passent par SET_PARAMS (CSP = doc
+        // sans params inline), puis premier SEEK au temps courant.
+        if (!incompatible && sourceTemplate) {
+          sendParamsRef.current(paramsRef.current);
+        }
+        seekNow(currentTimeRef.current, incompatible);
         return;
       }
       if (data.type === "mgsi:error") {
@@ -346,7 +428,7 @@ export default function SandboxTimelineFrame({
         pendingRef.current.delete(data.seq);
         if (pending.timer) clearTimeout(pending.timer);
         pending.resolve();
-        onFrameEvent({
+        onFrameRef.current?.({
           seq: data.seq,
           degraded: Boolean(data.degraded) || Number(data.t) === null,
         });
@@ -359,54 +441,31 @@ export default function SandboxTimelineFrame({
       clearInterval(pingTimer);
       clearTimeout(stopPing);
     };
-  }, [sessionId, compatible, runtimeIncompatible]);
+  }, [sessionId, compatible, runtimeIncompatible, sendParamsNow, sourceTemplate]);
 
-  // Chaque changement d'instant (lecture, scrub, export) -> SEEK + promesse
-  // d'ack partagée. Mode gratuit / quota atteint : aucun ack (le rendu
-  // n'attend rien — l'animation n'est pas déterministe, capture dégradée).
+  // Chaque changement d'instant (lecture, scrub, export) -> SEEK.
+  // Mode gratuit : aucun ACK (l'animation n'est pas déterministe ; l'export
+  // sera refusé — jamais de faux rendu promis frame-exact).
+  const quotaBlock = quotaReached ? (
+    <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-4 text-center text-[10px] uppercase tracking-wider text-muted">
+      Quota d&apos;aperçus sandboxés atteint
+    </div>
+  ) : null;
   useEffect(() => {
-    const win = iframeRef.current?.contentWindow;
-    if (!win || quotaReached || runtimeIncompatible) return;
+    if (quotaReached || runtimeIncompatible) return;
+    seekNow(time);
+  }, [time, doc, sessionId, quotaReached, runtimeIncompatible, seekNow]);
 
-    const seq = seqRef.current + 1;
-    seqRef.current = seq;
-    const pending: PendingSeek = { resolve: () => {} };
-    pendingRef.current.set(seq, pending);
-    const wait = new Promise<void>((resolve) => {
-      pending.resolve = resolve;
-    });
-    pending.timer = setTimeout(() => {
-      pendingRef.current.delete(seq);
-      pending.resolve();
-      onFrameEvent({ seq, degraded: true });
-    }, 2500);
-    const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
-    pendingCodeWaits.add(wrapped);
-    win.postMessage({ type: "mgsi:seek", session: sessionId, t: time, id: seq }, "*");
-  }, [time, doc, sessionId, quotaReached, runtimeIncompatible]);
-
-  if (quotaReached) {
-    return (
-      <div
-        className="absolute inset-0 flex items-center justify-center bg-black/80 px-4 text-center text-[10px] uppercase tracking-wider text-muted"
-      >
-        Quota d&apos;aperçus sandboxés atteint ({MAX_SANDBOX_FRAMES})
-      </div>
-    );
-  }
+  if (quotaBlock) return <div className="absolute inset-0" style={{ background: backgroundColor }}>{quotaBlock}</div>;
 
   return (
     <div className="absolute inset-0" style={{ background: backgroundColor }}>
       <iframe
-        ref={(node) => {
-          iframeRef.current = node;
-          if (node && node.getAttribute("csp") !== SANDBOX_CSP) {
-            node.setAttribute("csp", SANDBOX_CSP);
-          }
-        }}
+        ref={iframeRef}
         sandbox="allow-scripts"
         className="absolute inset-0 h-full w-full border-0"
-        srcDoc={doc}
+        src={sandboxSrc ?? undefined}
+        srcDoc={sandboxSrc ? undefined : doc}
         tabIndex={-1}
         aria-hidden="true"
       />
