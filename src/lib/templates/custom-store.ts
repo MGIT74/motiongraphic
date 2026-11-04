@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -103,6 +103,7 @@ function demoSeedCTA(): CustomTemplate | null {
 interface GlobalCustomStore {
   __mgsiCustomTemplates?: Map<string, CustomTemplate>;
   __mgsiCustomSeeded?: boolean;
+  __mgsiCustomFileMtime?: number;
 }
 const globalStore = globalThis as GlobalCustomStore;
 const memory: Map<string, CustomTemplate> = (globalStore.__mgsiCustomTemplates ??= new Map());
@@ -114,8 +115,28 @@ function demoSeedPulseGrid(): CustomTemplate | null {
 const DEMO_STORE_FILE = path.join(process.cwd(), ".mgsi-demo-store.json");
 
 function ensureDemoSeed() {
+  const fileMtime = existsSync(DEMO_STORE_FILE) ? statSync(DEMO_STORE_FILE).mtimeMs : 0;
+
+  // Fichier modifié par un AUTRE processus serveur (dev multi-instances) :
+  // rechargement (le contenu validé vient toujours du disque).
+  if (fileMtime > 0 && globalStore.__mgsiCustomFileMtime !== undefined && fileMtime > globalStore.__mgsiCustomFileMtime) {
+    try {
+      const parsed = JSON.parse(readFileSync(DEMO_STORE_FILE, "utf8")) as unknown[];
+      memory.clear();
+      (parsed ?? [])
+        .map(sanitizeCustomTemplate)
+        .filter((t): t is CustomTemplate => t !== null)
+        .forEach((t) => memory.set(t.id, t));
+      globalStore.__mgsiCustomFileMtime = fileMtime;
+      return;
+    } catch {
+      // fichier en cours d'écriture : on garde la mémoire courante
+    }
+  }
+
   if (globalStore.__mgsiCustomSeeded) return;
   globalStore.__mgsiCustomSeeded = true;
+  globalStore.__mgsiCustomFileMtime = fileMtime;
   try {
     if (existsSync(DEMO_STORE_FILE)) {
       const parsed = JSON.parse(readFileSync(DEMO_STORE_FILE, "utf8")) as unknown[];
@@ -139,6 +160,7 @@ function flushDemoStore(): void {
   try {
     if (!globalStore.__mgsiCustomSeeded) return;
     writeFileSync(DEMO_STORE_FILE, JSON.stringify(Array.from(memory.values())), "utf8");
+    globalStore.__mgsiCustomFileMtime = statSync(DEMO_STORE_FILE).mtimeMs;
   } catch {
     // disque non disponible : la session en cours garde l'état en mémoire
   }
