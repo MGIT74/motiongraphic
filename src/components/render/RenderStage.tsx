@@ -10,10 +10,13 @@ import { registerCustomStudioTemplates } from "@/lib/studio/template-registry";
 import type { StudioCustomTemplateInput } from "@/lib/render/server-projects";
 import { renderStageSize } from "@/lib/render/stage-size";
 
+import { getStudioTemplate } from "@/lib/studio/template-registry";
+
 declare global {
   interface Window {
     __mgsiRender?: {
       ready: boolean;
+      incompatible: string[];
       duration: number;
       fps: number;
       width: number;
@@ -47,6 +50,23 @@ export default function RenderStage({
   const waiters = useRef<(() => void)[]>([]);
   const size = useMemo(() => renderStageSize(project), [project]);
 
+  // Templates non compatibles avec l'export (code sandbox sans contrat
+  // déterministe) : le moteur MP4 refuse de produire une vidéo fausse.
+  const incompatibleTemplates = useMemo(() => {
+    const result: string[] = [];
+    project.scenes.forEach((scene) =>
+      scene.elements.forEach((el) => {
+        const meta = getStudioTemplate(el.templateKey) as
+          | { exportCompatible?: boolean; name?: string }
+          | undefined;
+        if (meta && meta.exportCompatible === false) {
+          result.push(`${el.templateKey} (élément « ${el.label} »)`);
+        }
+      })
+    );
+    return result;
+  }, [project]);
+
   // Après chaque changement d'instant : effets React + GSAP appliqués, puis 2 images.
   useEffect(() => {
     const pending = waiters.current;
@@ -66,7 +86,8 @@ export default function RenderStage({
   useEffect(() => {
     if (!registered) return;
     const api = {
-      ready: false,
+      ready: true,
+      incompatible: incompatibleTemplates,
       duration: projectDuration(project),
       fps: project.fps,
       width: project.width,
@@ -95,7 +116,7 @@ export default function RenderStage({
       );
       api.ready = true;
     })();
-  }, [registered, project]);
+  }, [registered, project, incompatibleTemplates]);
 
   return (
     <div

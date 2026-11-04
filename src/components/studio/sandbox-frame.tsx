@@ -26,11 +26,13 @@ import { useEffect, useRef, useState } from "react";
 /** Promesses d'attente des FRAME_READY — consommées par /render (RenderStage). */
 export const pendingCodeWaits = new Set<Promise<void>>();
 
-// Quota : nombre raisonnable d'iframes sandboxées simultanées.
+// Quotas : iframes sandboxées simultanées (timeline vs vignettes/aperçus).
 const MAX_SANDBOX_FRAMES = 8;
+const MAX_SANDBOX_PREVIEWS = 4;
 let activeSandboxFrames = 0;
-function sandboxQuotaExceeded(): boolean {
-  return activeSandboxFrames >= MAX_SANDBOX_FRAMES;
+let activeSandboxPreviews = 0;
+function sandboxQuotaExceeded(preview: boolean): boolean {
+  return preview ? activeSandboxPreviews >= MAX_SANDBOX_PREVIEWS : activeSandboxFrames >= MAX_SANDBOX_FRAMES;
 }
 
 /* ------------------------------------------------------------------ */
@@ -172,6 +174,8 @@ export default function SandboxTimelineFrame({
   params,
   time,
   compatible = true,
+  preview = false,
+  hideOverlay = false,
   onIncompatible,
   backgroundColor = "transparent",
 }: {
@@ -182,6 +186,10 @@ export default function SandboxTimelineFrame({
   time: number;
   /** Contrat présent dans le code (calculé par les capacités). */
   compatible?: boolean;
+  /** Vignette/apercu : quota distinct (léger). */
+  preview?: boolean;
+  /** Rendu MP4 : pas d'overlay incompatible (sinon capturé dans la vidéo). */
+  hideOverlay?: boolean;
   /** Signale une incompatibilité détectée au runtime (badge éditeur). */
   onIncompatible?: (reason: string | null) => void;
   backgroundColor?: string;
@@ -191,7 +199,7 @@ export default function SandboxTimelineFrame({
   const seqRef = useRef(0);
   const pendingRef = useRef<Map<number, PendingSeek>>(new Map());
   const [runtimeIncompatible, setRuntimeIncompatible] = useState(false);
-  const [quotaReached, setQuotaReached] = useState(() => sandboxQuotaExceeded());
+  const [quotaReached, setQuotaReached] = useState(() => sandboxQuotaExceeded(Boolean(preview)));
 
   const docKey = keyOf(code, sessionId, JSON.stringify(params));
   const [lastDocKey, setLastDocKey] = useState(docKey);
@@ -203,22 +211,24 @@ export default function SandboxTimelineFrame({
   }
   // Quota (module global, non-réactif) : suivi au rendu (le canvas re-rendu
   // à chaque instant : le quota est réévalué régulièrement).
-  if (sandboxQuotaExceeded() !== quotaReached) {
+  if (sandboxQuotaExceeded(Boolean(preview)) !== quotaReached) {
     setQuotaReached(!quotaReached);
   }
 
   /* Libération des acks au démontage (protège le rendu d'un blocage). */
+  const isPreview = Boolean(preview);
   useEffect(() => {
     const pendingMap = pendingRef.current;
     return () => {
-      activeSandboxFrames -= 1;
+      if (isPreview) activeSandboxPreviews -= 1;
+      else activeSandboxFrames -= 1;
       pendingMap.forEach((pending) => {
         if (pending.timer) clearTimeout(pending.timer);
         pending.resolve();
       });
       pendingMap.clear();
     };
-  }, []);
+  }, [isPreview]);
 
   // Callback parent (stabilisé : le message listener ne dépend que de la session).
   const onIncompatibleRef = useRef(onIncompatible);
@@ -323,7 +333,7 @@ export default function SandboxTimelineFrame({
         tabIndex={-1}
         aria-hidden="true"
       />
-      {runtimeIncompatible ? (
+      {runtimeIncompatible && !hideOverlay ? (
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/80 px-6 text-center text-[11px] leading-relaxed text-amber-300">
           Non pilotable par la timeline : contrat renderAt(time) manquant ou non déterministe.
         </span>

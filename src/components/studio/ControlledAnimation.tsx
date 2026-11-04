@@ -45,6 +45,7 @@ export default function ControlledAnimation({
   elementDuration,
   timing,
   preview = false,
+  renderStage = false,
 }: {
   templateKey: ComponentKey;
   config: AnimationConfig;
@@ -55,6 +56,8 @@ export default function ControlledAnimation({
   timing?: ElementTiming;
   /** Vignette (bibliothèque) : pas un calque du projet. */
   preview?: boolean;
+  /** Côté rendu MP4 : pas d'overlay (sinon la capture l'inclut). */
+  renderStage?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
@@ -128,6 +131,8 @@ export default function ControlledAnimation({
           data-mgsi-element={preview ? undefined : ""}
         >
           <SandboxTimelineFrame
+            preview={preview}
+            hideOverlay={renderStage}
             code={sandboxCode}
             sessionId={`sbx-${templateKey}`}
             params={config as import("@/components/studio/sandbox-frame").SandboxParams}

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { GripVertical } from "lucide-react";
 import type { StudioProject } from "@/lib/studio/project-model";
 import { brandedConfig, FRAME_SECONDS } from "@/lib/studio/project-model";
-import { STUDIO_CATEGORIES, STUDIO_TEMPLATES, type StudioTemplateMeta } from "@/lib/studio/template-registry";
+import { STUDIO_CATEGORIES, STUDIO_TEMPLATES, type CustomStudioTemplateMeta, type StudioTemplateMeta } from "@/lib/studio/template-registry";
 import type { ComponentKey } from "@/types/animation";
 import ControlledAnimation from "./ControlledAnimation";
 
@@ -67,28 +67,48 @@ function TemplateCard({
     e.dataTransfer.effectAllowed = "copy";
     setActive(false);
   };
-  return (
-    <button
-      type="button"
-      draggable
-      onDragStart={onDragStart}
-      onClick={onAdd}
-      onMouseEnter={() => setActive(true)}
-      onMouseLeave={() => setActive(false)}
-      onFocus={() => setActive(true)}
-      onBlur={() => setActive(false)}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded-xl border border-line bg-background/60 text-left transition-colors hover:border-accent/60 focus-visible:border-accent focus-visible:outline-none"
-      aria-label={`Ajouter ${template.name} (${template.timelineDuration} s)`}
-      data-template-card={templateKey}
-    >
-      <TemplateThumb templateKey={templateKey} template={template} project={project} playing={active} />
-      <span className="flex items-center gap-1 px-2 py-1.5">
-        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-ink">{template.name}</span>
-        <span className="shrink-0 font-mono text-[9px] text-muted">{template.timelineDuration}s</span>
-        <GripVertical className="h-3 w-3 shrink-0 text-muted/50 group-hover:text-muted" aria-hidden="true" />
-      </span>
-    </button>
-  );
+  const custom = template as StudioTemplateMeta & Partial<CustomStudioTemplateMeta>;
+    const notDrivable = custom.timeDriven === false;
+    const reason = custom.incompatibility?.[0];
+    return (
+      <button
+        type="button"
+        draggable={!notDrivable}
+        onDragStart={onDragStart}
+        onClick={onAdd}
+        title={notDrivable ? reason : undefined}
+        onMouseEnter={() => setActive(true)}
+        onMouseLeave={() => setActive(false)}
+        onFocus={() => setActive(true)}
+        onBlur={() => setActive(false)}
+        disabled={notDrivable}
+        className={`group flex flex-col overflow-hidden rounded-xl border bg-background/60 text-left transition-colors ${
+          notDrivable
+            ? "cursor-not-allowed border-line opacity-70"
+            : "cursor-pointer border-line hover:border-accent/60 focus-visible:border-accent focus-visible:outline-none"
+        }`}
+        aria-label={
+          notDrivable
+            ? `Non pilotable : ${template.name} — ${reason ?? "contrat déterministe manquant"}`
+            : `Ajouter ${template.name} (${template.timelineDuration} s)`
+        }
+        data-template-card={templateKey}
+      >
+        <TemplateThumb templateKey={templateKey} template={template} project={project} playing={active} />
+        <span className="flex items-center gap-1 px-2 py-1.5">
+          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-ink">{template.name}</span>
+          {notDrivable ? (
+            <span className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-[1px] text-[8px] font-semibold uppercase tracking-wider text-amber-300">
+              non pilotable
+            </span>
+          ) : custom.exportCompatible === false ? (
+            <span className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-[1px] text-[8px] text-amber-300">MP4 ✗</span>
+          ) : null}
+          <span className="shrink-0 font-mono text-[9px] text-muted">{template.timelineDuration}s</span>
+          <GripVertical className="h-3 w-3 shrink-0 text-muted/50 group-hover:text-muted" aria-hidden="true" />
+        </span>
+      </button>
+    );
 }
 
 /**
