@@ -5,9 +5,14 @@
  *           BASE_URL=http://localhost:3000 npm run test:e2e
  */
 const { chromium } = require("playwright");
+/** Navigateur : Chrome système si dispo, sinon Chromium Playwright. */
+async function launchBrowser(opts = {}) {
+  try { return await chromium.launch({ channel: "chrome", headless: true, ...opts }); }
+  catch { return await chromium.launch({ headless: true, ...opts }); }
+}
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 (async () => {
-const b = await chromium.launch({ channel: "chrome", headless: true }); const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } }); const p = await ctx.newPage();
+const b = await launchBrowser({}); const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } }); const p = await ctx.newPage();
 const errors = []; p.on("pageerror", e => errors.push(e.message)); p.on("console", m => { if (m.type()==="error") errors.push(m.text().slice(0,120)); });
 const ok = (c, msg) => { console.log((c ? "✅ " : "❌ ") + msg); if (!c) process.exitCode = 1; };
 await p.goto(BASE + "/studio", { waitUntil: "networkidle" }); await p.waitForTimeout(1500);

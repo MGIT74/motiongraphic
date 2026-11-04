@@ -16,6 +16,11 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { chromium } from "playwright";
+/** Navigateur : Chrome système si dispo, sinon Chromium Playwright. */
+async function launchBrowser(opts = {}) {
+  try { return await chromium.launch({ channel: "chrome", headless: true, ...opts }); }
+  catch { return await chromium.launch({ headless: true, ...opts }); }
+}
 
 const require_ = createRequire(import.meta.url);
 const ffmpegPath = require_("ffmpeg-static");
@@ -51,7 +56,7 @@ function ffmpeg(args, { input } = {}) {
 
   for (const format of FORMATS) {
     const started = Date.now();
-    const b = await chromium.launch({ channel: "chrome", headless: true });
+    const b = await launchBrowser({});
     const page = await b.newPage({
       viewport: { width: format.width === 1920 ? 1200 : Math.round(1200 * (format.width / format.height)), height: 800 },
       deviceScaleFactor: format.width / 1000,

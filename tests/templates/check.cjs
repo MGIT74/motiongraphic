@@ -22,6 +22,11 @@ const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
 const { PNG } = require("pngjs");
+/** Navigateur : Chrome système si dispo, sinon Chromium Playwright. */
+async function launchBrowser(opts = {}) {
+  try { return await chromium.launch({ channel: "chrome", headless: true, ...opts }); }
+  catch { return await chromium.launch({ headless: true, ...opts }); }
+}
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 const ROOT = process.env.REPO_ROOT || path.join(__dirname, "..", "..");
@@ -86,7 +91,7 @@ function flickers(series) {
 (async () => {
   sourceChecks();
 
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
+  const browser = await launchBrowser({});
   const page = await browser.newPage({ viewport: { width: 1100, height: 1000 } });
   let consoleErrors = [];
   page.on("pageerror", (e) => consoleErrors.push(e.message));

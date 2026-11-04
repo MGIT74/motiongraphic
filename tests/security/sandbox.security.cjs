@@ -15,9 +15,14 @@
  * 8. eval() neutralisé dans l'iframe (CSP script-src inline only? eval interdit).
  */
 const { chromium } = require("playwright");
+/** Navigateur : Chrome système si dispo, sinon Chromium Playwright. */
+async function launchBrowser(opts = {}) {
+  try { return await chromium.launch({ channel: "chrome", headless: true, ...opts }); }
+  catch { return await chromium.launch({ headless: true, ...opts }); }
+}
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 (async () => {
-  const b = await chromium.launch({ channel: "chrome", headless: true });
+  const b = await launchBrowser({});
   const ctx = await b.newContext({ viewport: { width: 1024, height: 768 } });
   const p = await ctx.newPage();
   const ok = (c, msg) => { console.log((c ? "✅ " : "❌ ") + msg); if (!c) process.exitCode = 1; };
