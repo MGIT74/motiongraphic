@@ -7,8 +7,11 @@ import type { AnimationConfig, ComponentKey } from "@/types/animation";
 import { ANIMATION_BUILDERS, type AnimationBuilder } from "@/lib/animations/builders";
 import { COMPONENT_KEYS, getComponentMeta } from "@/lib/animations/registry";
 import { STUDIO_TEMPLATES } from "@/lib/studio/template-registry";
-import { RESERVED_SLUGS } from "@/lib/templates/custom-model";
+import { RESERVED_SLUGS, type CustomTemplate } from "@/lib/templates/custom-model";
+import { computeCodeCapabilities } from "@/lib/templates/capabilities";
+import { registerCustomStudioTemplates } from "@/lib/studio/template-registry";
 import { STUDIO_FRAMES } from "./ControlledAnimation";
+import SandboxTimelineFrame from "./sandbox-frame";
 
 /**
  * Page de contrôle automatique des templates (CI uniquement, TEMPLATE_CHECK=1).
@@ -54,12 +57,73 @@ declare global {
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
+const API_REF: { seekWaiters: { current: (() => void)[] } } = { seekWaiters: { current: [] } };
+
 export default function TemplateCheck() {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const tlRef = useRef<gsap.core.Timeline | null>(null);
   const ctxRef = useRef<gsap.Context | null>(null);
   const pending = useRef<((v: { total: number; out: number | null; error?: string }) => void) | null>(null);
+  const [ready, setReady] = useState(false);
+  const [loadedKind, setLoadedKind] = useState<"gsap" | "sandbox">("gsap");
+  const loadedKindRef = useRef<"gsap" | "sandbox">("gsap");
+  useEffect(() => {
+    loadedKindRef.current = loadedKind;
+  }, [loadedKind]);
+
+  /* Templates sandbox (contrat déterministe) : codes du Template Lab (démo). */
+  const [sandboxTemplates, setSandboxTemplates] = useState<
+    { key: string; name: string; code: string; duration: number; outAt?: number; compatible: boolean; config: AnimationConfig }[]
+  >([]);
+  const [sandboxTime, setSandboxTime] = useState(0);
+
+  useEffect(() => {
+    const abort = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/templates/lab", { signal: abort.signal, cache: "no-store" });
+        const data = (await res.json()) as { ok?: boolean; templates?: CustomTemplate[] };
+        const publishedCodes = (data.templates ?? []).filter(
+          (t) => t.status === "published" && t.sourceKind === "code" && typeof t.code === "string"
+        );
+        registerCustomStudioTemplates(
+          publishedCodes.map((t) => {
+            const caps = computeCodeCapabilities(t.code as string);
+            return {
+              id: t.id,
+              slug: t.slug,
+              name: t.name,
+              category: t.category,
+              sourceKind: t.sourceKind,
+              elementKind: "cards",
+              defaultConfig: t.defaultConfig,
+              code: t.code,
+              capabilities: caps,
+            };
+          })
+        );
+        setSandboxTemplates(
+          publishedCodes.map((t) => {
+            const caps = computeCodeCapabilities(t.code as string);
+            return {
+              key: t.slug,
+              name: t.name,
+              code: t.code as string,
+              duration: caps.contractDuration ?? t.defaultConfig.duration,
+              outAt: caps.contractDuration ? caps.contractDuration * 0.8 : undefined,
+              compatible: caps.studioCompatible,
+              config: t.defaultConfig,
+            };
+          })
+        );
+      } catch {
+        // sans store Lab (absent/injoignable) : le contrôle des intégrés continue
+      }
+      setReady(true);
+    })();
+    return () => abort.abort();
+  }, []);
 
   // Construction de la timeline une fois le cadre rendu.
   useEffect(() => {
@@ -127,31 +191,58 @@ export default function TemplateCheck() {
     };
 
     window.__tc = {
-      ready: true,
-      list: () =>
-        COMPONENT_KEYS.map((key) => {
-          const meta = getComponentMeta(key);
-          return {
-            key,
-            name: meta.name,
-            defaultText: meta.defaultConfig.text,
-            inStudio: key in STUDIO_TEMPLATES,
-            hasBuilder: key in ANIMATION_BUILDERS,
-            hasFrame: key in STUDIO_FRAMES,
-            reserved: RESERVED_SLUGS.includes(key),
-          };
-        }),
+      ready,
+      list: () => [
+        ...COMPONENT_KEYS.map((key) => ({
+          kind: "gsap",
+          key,
+          name: getComponentMeta(key).name,
+          defaultText: getComponentMeta(key).defaultConfig.text,
+          inStudio: key in STUDIO_TEMPLATES,
+          hasBuilder: key in ANIMATION_BUILDERS,
+          hasFrame: key in STUDIO_FRAMES,
+          reserved: RESERVED_SLUGS.includes(key),
+        })),
+        ...sandboxTemplates.map((t) => ({
+          kind: "sandbox",
+          key: t.key,
+          name: t.name,
+          defaultText: t.config.text,
+          inStudio: t.key in STUDIO_TEMPLATES,
+          hasBuilder: false,
+          hasFrame: false,
+          reserved: true,
+          compatible: t.compatible,
+          duration: t.duration,
+        })),
+      ],
       load: (key, format, transparent) =>
         new Promise((resolve) => {
+          const sandboxEntry = sandboxTemplates.find((t) => t.key === key);
+          if (sandboxEntry) {
+            // Sandbox : pas de timeline GSAP — la totalité vient du contrat.
+            pending.current = null;
+            setLoaded({ key, format, config: sandboxEntry.config } as Loaded & { sandbox: boolean });
+            setLoadedKind("sandbox");
+            resolve({ total: sandboxEntry.duration, out: sandboxEntry.outAt ?? null });
+            return;
+          }
+          setLoadedKind("gsap");
           pending.current = resolve;
           const base = getComponentMeta(key as ComponentKey).defaultConfig;
           setLoaded({ key, format, config: { ...base, ...(transparent ? { backgroundColor: "transparent" } : {}) } });
         }),
-      seek: async (t) => {
-        tlRef.current?.pause(Math.max(0, t));
-        await frame();
-        await frame();
-      },
+      seek: (t) =>
+        new Promise<void>((resolve) => {
+          if (loadedKindRef.current === "sandbox") {
+            // Ack : résolu par onFrame (FRAME_READY de l'iframe).
+            API_REF.seekWaiters.current.push(resolve);
+            setSandboxTime(t);
+            return;
+          }
+          tlRef.current?.pause(Math.max(0, t));
+          void frame().then(frame).then(resolve);
+        }),
       sampleOpacity: async (times) => {
         const root = stageRef.current;
         if (!root) return [];
@@ -198,10 +289,16 @@ export default function TemplateCheck() {
         return res;
       },
     };
-  }, []);
+  }, [ready, sandboxTemplates]);
 
   const Frame = loaded ? STUDIO_FRAMES[loaded.key as ComponentKey] : null;
   const size = loaded ? SIZES[loaded.format] : SIZES["16:9"];
+  const sandboxEntry = sandboxTemplates.find((t) => t.key === loaded?.key) ?? null;
+  /* Ack du seek sandbox : promesse exposée via __tc.seek (résolution ci-dessous). */
+  useEffect(() => {
+    API_REF.seekWaiters.current.forEach((resolve) => resolve());
+    API_REF.seekWaiters.current = [];
+  }, [sandboxTime]);
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2147483000, background: "#808080" }}>
       <div
@@ -211,7 +308,25 @@ export default function TemplateCheck() {
         style={{ width: size.width, height: size.height, containerType: "size", backgroundColor: loaded?.config.backgroundColor === "transparent" ? "transparent" : undefined }}
         key={loaded ? `${loaded.key}-${loaded.format}-${loaded.config.backgroundColor}` : "none"}
       >
-        {Frame && loaded ? (
+        {loaded && sandboxEntry ? (
+          <div
+            className="absolute inset-0 h-full w-full overflow-hidden"
+            style={{ backgroundColor: loaded.config.backgroundColor }}
+          >
+            <SandboxTimelineFrame
+              preview
+              code={sandboxEntry.code}
+              sessionId={`tc-${sandboxEntry.key}`}
+              params={loaded.config as import("@/components/studio/sandbox-frame").SandboxParams}
+              time={sandboxTime}
+              compatible={sandboxEntry.compatible}
+              onFrame={() => {
+                API_REF.seekWaiters.current.forEach((resolve) => resolve());
+                API_REF.seekWaiters.current = [];
+              }}
+            />
+          </div>
+        ) : Frame && loaded ? (
           <div className="absolute inset-0 h-full w-full overflow-hidden" style={{ backgroundColor: loaded.config.backgroundColor }}>
             <Frame config={loaded.config} />
           </div>

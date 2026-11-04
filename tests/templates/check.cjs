@@ -86,7 +86,7 @@ function flickers(series) {
 (async () => {
   sourceChecks();
 
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ channel: "chrome", headless: true });
   const page = await browser.newPage({ viewport: { width: 1100, height: 1000 } });
   let consoleErrors = [];
   page.on("pageerror", (e) => consoleErrors.push(e.message));
