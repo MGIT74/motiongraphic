@@ -70,11 +70,59 @@ export interface SandboxParams {
 }
 
 /** Prelude (sans balise script : l'hôte l'emballl lui-même). */
+// Neutralisation au calquage : Chrome ignore l'attribut csp des iframes
+// (spec retirée) -> le prelude remplace les fonctions réseau/eval avant tout
+// code utilisateur (Propriétés non réinscriptibles). Les accès via <img>/<script>
+// injectés sont interceptés dans document.createElement.
 const PRELUDE_V2_SOURCE = `
 (function () {
   "use strict";
   var SESSION = window.__MGS_SESSION__;
-  var metrics = { received: 0, ignored: 0, frames: 0, degraded: 0, errors: 0 };
+  var metrics = { received: 0, ignored: 0, frames: 0, degraded: 0, errors: 0, neutered: [] };
+
+  function neuter(name, body) {
+    Object.defineProperty(window, name, {
+      value: body,
+      writable: false,
+      configurable: false,
+    });
+    metrics.neutered.push(name);
+  }
+  try {
+    neuter("fetch", function () { throw new Error("RESEAU_BLOQUE (sandbox MotionGraphic)"); });
+  } catch (e) { metrics.neutered.push("fetch:ERR:" + (e && e.message)); }
+  try {
+    neuter("WebSocket", function () { throw new Error("RESEAU_BLOQUE (sandbox MotionGraphic)"); });
+  } catch (e) { metrics.neutered.push("ws:ERR"); }
+  try {
+    neuter("EventSource", function () { throw new Error("RESEAU_BLOQUE (sandbox MotionGraphic)"); });
+  } catch (e) { metrics.neutered.push("es:ERR"); }
+  try {
+    neuter("XMLHttpRequest", function () {
+      this.open = function () {}; this.send = function () { throw new Error("RESEAU_BLOQUE (sandbox MotionGraphic)"); };
+    });
+  } catch (e) { metrics.neutered.push("xhr:ERR"); }
+  try {
+    neuter("eval", function () { throw new Error("EVAL_BLOQUE (sandbox MotionGraphic)"); });
+  } catch (e) { metrics.neutered.push("eval:ERR:" + (e && e.message).slice(0, 40)); }
+  (function patchCreate() {
+    var originalCreate = document.createElement.bind(document);
+    document.createElement = function (tag) {
+      var lower = String(tag).toLowerCase();
+      if (lower === "script" || lower === "iframe" || lower === "embed" || lower === "object") {
+        var neutral = originalCreate("span");
+        neutral.setAttribute("data-mgsi-blocked", lower);
+        return neutral;
+      }
+      if (lower === "img" || lower === "link") {
+        var neutralImg = originalCreate("span");
+        neutralImg.setAttribute("data-mgsi-blocked", lower);
+        return neutralImg;
+      }
+      return originalCreate(tag);
+    };
+  })();
+  try { document.write = function () {}; document.close = function () {}; } catch (e) {}
   function post(message) {
     message.session = SESSION;
     try { window.parent.postMessage(message, "*"); } catch (e) { metrics.errors++; }
@@ -85,6 +133,16 @@ const PRELUDE_V2_SOURCE = `
   function applyParams(params) {
     window.MGSI_CONFIG = params || {};
     try { window.dispatchEvent(new CustomEvent("mgsi:configchange", { detail: params })); } catch (e) {}
+  }
+  function postReady() {
+    var contract = window.__MGS_TIMELINE__;
+    post({
+      type: "mgsi:ready",
+      mode: contract && typeof contract.renderAt === "function" ? "timeline" : "free",
+      duration: contract ? Number(contract.duration) || 0 : 0,
+      outAt: contract && Number(contract.outAt) > 0 ? Number(contract.outAt) : undefined,
+      metrics: metrics,
+    });
   }
   function handleSeek(data) {
     var contract = window.__MGS_TIMELINE__;
@@ -115,6 +173,10 @@ const PRELUDE_V2_SOURCE = `
       metrics.ignored++;
       return;
     }
+    if (data.type === "mgsi:ping") {
+      postReady();
+      return;
+    }
     if (data.type === "mgsi:seek" && typeof data.t === "number" && typeof data.id !== "undefined") {
       handleSeek(data);
     } else if (data.type === "mgsi:set_params" && data.params && typeof data.params === "object") {
@@ -124,15 +186,7 @@ const PRELUDE_V2_SOURCE = `
       metrics.ignored++;
     }
   });
-  window.addEventListener("load", function () {
-    var contract = window.__MGS_TIMELINE__;
-    post({
-      type: "mgsi:ready",
-      mode: contract && typeof contract.renderAt === "function" ? "timeline" : "free",
-      duration: contract ? Number(contract.duration) || 0 : 0,
-      outAt: contract && Number(contract.outAt) > 0 ? Number(contract.outAt) : undefined,
-    });
-  });
+  window.addEventListener("load", postReady);
 })();
 `;
 
@@ -245,6 +299,17 @@ export default function SandboxTimelineFrame({
   }, [isPreview]);
 
   useEffect(() => {
+    // Ping/pong : certains READY partent avant l'écoute (srcdoc déjà chargé).
+    const pingTimer = setInterval(() => {
+      if (runtimeIncompatible) {
+        clearInterval(pingTimer);
+        return;
+      }
+      const win = iframeRef.current?.contentWindow;
+      if (win) win.postMessage({ type: "mgsi:ping", session: sessionId }, "*");
+    }, 500);
+    const stopPing = setTimeout(() => clearInterval(pingTimer), 12000);
+
     const onMessage = (event: MessageEvent) => {
       const win = iframeRef.current?.contentWindow;
       if (!win || event.source !== win) return;
@@ -289,8 +354,12 @@ export default function SandboxTimelineFrame({
       }
     };
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [sessionId, compatible]);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      clearInterval(pingTimer);
+      clearTimeout(stopPing);
+    };
+  }, [sessionId, compatible, runtimeIncompatible]);
 
   // Chaque changement d'instant (lecture, scrub, export) -> SEEK + promesse
   // d'ack partagée. Mode gratuit / quota atteint : aucun ack (le rendu

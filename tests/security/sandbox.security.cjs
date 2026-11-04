@@ -17,7 +17,7 @@
 const { chromium } = require("playwright");
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 (async () => {
-  const b = await chromium.launch({ args: ["--no-sandbox"] });
+  const b = await chromium.launch({ channel: "chrome", headless: true });
   const ctx = await b.newContext({ viewport: { width: 1024, height: 768 } });
   const p = await ctx.newPage();
   const ok = (c, msg) => { console.log((c ? "✅ " : "❌ ") + msg); if (!c) process.exitCode = 1; };
@@ -33,7 +33,7 @@ const BASE = process.env.BASE_URL || "http://localhost:3000";
 
   let state = await host();
   ok(state.mode === "timeline", `Contrat détecté : mode « ${state.mode} »`);
-  ok(!state.incompatible, "Incompatibilité : " + state.incompatible.join(", "));
+  ok((state.incompatible || []).length === 0, "Incompatibilité : " + state.incompatible.join(", "));
 
   // 2) DÉTERMINISME : seek(A) -> capture, seek(B) -> capture, seek(A) -> capture
   const snap = async (t) => { await p.evaluate((v) => window.__mgsSandboxCheck.seek(v), t); await p.waitForTimeout(120); const stage = await p.locator("[data-sandbox-stage]").boundingBox(); return p.screenshot({ clip: stage }); };

@@ -2,6 +2,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sanitizeCustomTemplate, fromCustomTemplateRow, validateCustomTemplate, type CustomTemplate } from "./custom-model";
 import type { AnimationConfig } from "@/types/animation";
+import { PULSE_GRID_TEMPLATE } from "@/lib/testing/sandbox-fixture";
 
 /**
  * Store des templates personnalisés.
@@ -104,11 +105,18 @@ interface GlobalCustomStore {
 const globalStore = globalThis as GlobalCustomStore;
 const memory: Map<string, CustomTemplate> = (globalStore.__mgsiCustomTemplates ??= new Map());
 
+function demoSeedPulseGrid(): CustomTemplate | null {
+  return sanitizeCustomTemplate({ ...PULSE_GRID_TEMPLATE });
+}
+
+
 function ensureDemoSeed() {
   if (globalStore.__mgsiCustomSeeded) return;
   globalStore.__mgsiCustomSeeded = true;
   const cta = demoSeedCTA();
   if (cta) memory.set(cta.id, cta);
+  const grid = demoSeedPulseGrid();
+  if (grid) memory.set(grid.id, grid);
 }
 
 /* ------------------------------------------------------------------ */
