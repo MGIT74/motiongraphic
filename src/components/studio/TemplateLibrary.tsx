@@ -26,6 +26,21 @@ export default function TemplateLibrary({
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [previewKey, setPreviewKey] = useState<string | null>(null);
+  const [lastAdded, setLastAdded] = useState<string | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const addTemplate = (key: string) => {
+    onAddElement(key);
+    setLastAdded(STUDIO_TEMPLATES[key]?.name ?? key);
+  };
+  const openPreview = (key: string) => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPreviewKey(key);
+  };
+  const closePreview = () => {
+    setPreviewKey(null);
+    requestAnimationFrame(() => previousFocusRef.current?.focus());
+  };
   const normalizedQuery = query.trim().toLocaleLowerCase("fr");
   const allTemplates = Object.entries(STUDIO_TEMPLATES);
   const matches = allTemplates.filter(([key, template]) =>
@@ -37,8 +52,22 @@ export default function TemplateLibrary({
   useEffect(() => {
     if (!previewTemplate) return;
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPreviewKey(null);
+      if (event.key === "Escape") closePreview();
+      if (event.key === "Tab") {
+        const controls = closeRef.current?.closest('[role="dialog"]')?.querySelectorAll<HTMLButtonElement>('button:not([disabled])');
+        if (!controls?.length) return;
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     };
+    closeRef.current?.focus();
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
   }, [previewTemplate]);
@@ -69,6 +98,7 @@ export default function TemplateLibrary({
           </button>
         ))}
       </div>
+      <p className="sr-only" role="status" aria-live="polite">{lastAdded ? `${lastAdded} ajouté à la scène` : ""}</p>
       <p className="px-1 text-[11px] text-muted" role="status">
         {matches.length} animation{matches.length > 1 ? "s" : ""} · Prévisualisez avant d’ajouter à la scène.
       </p>
@@ -89,8 +119,8 @@ export default function TemplateLibrary({
                   templateKey={key}
                   template={template}
                   project={project}
-                  onAdd={() => onAddElement(key)}
-                  onPreview={() => setPreviewKey(key)}
+                  onAdd={() => addTemplate(key)}
+                  onPreview={() => openPreview(key)}
                 />
               ))}
             </div>
@@ -101,19 +131,19 @@ export default function TemplateLibrary({
         <div
           role="presentation"
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
-          onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewKey(null); }}
+          onMouseDown={(event) => { if (event.target === event.currentTarget) closePreview(); }}
         >
           <div role="dialog" aria-modal="true" aria-label={`Prévisualisation : ${previewTemplate.name}`} className="w-full max-w-xl rounded-2xl border border-line bg-background p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-ink">{previewTemplate.name}</h3>
-              <button type="button" onClick={() => setPreviewKey(null)} aria-label="Fermer la prévisualisation" className="rounded-lg p-2 text-muted hover:text-ink"><X className="h-4 w-4" /></button>
+              <button ref={closeRef} type="button" onClick={closePreview} aria-label="Fermer la prévisualisation" className="rounded-lg p-2 text-muted hover:text-ink"><X className="h-4 w-4" /></button>
             </div>
             <div className="overflow-hidden rounded-xl">
               <TemplateThumb templateKey={previewKey} template={previewTemplate} project={project} playing />
             </div>
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className="text-xs text-muted">Durée : {previewTemplate.timelineDuration} s</span>
-              <button type="button" onClick={() => { onAddElement(previewKey); setPreviewKey(null); }} className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white">Ajouter à la scène</button>
+              <button type="button" onClick={() => { addTemplate(previewKey); closePreview(); }} className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white">Ajouter à la scène</button>
             </div>
           </div>
         </div>
@@ -148,6 +178,8 @@ function TemplateCard({
       onDragStart={onDragStart}
       onMouseEnter={() => setActive(true)}
       onMouseLeave={() => setActive(false)}
+      onFocus={() => setActive(true)}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setActive(false); }}
       className="group flex flex-col overflow-hidden rounded-xl border border-line bg-background/60 transition-colors hover:border-accent/60"
       data-template-card={templateKey}
     >
