@@ -1,0 +1,337 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+/**
+ * Runtime de bac à sable déterministe pour les templates « code ».
+ *
+ * CONTRAT (starter code + docs/template-lab-studio-pipeline.md) :
+ *   window.__MGS_TIMELINE__ = {
+ *     duration: <secondes>,
+ *     outAt?:   <secondes>,                 // début de sortie (timing fit/hold)
+ *     renderAt: function (time, params) {}  // rendu DÉTERMINISTE
+ *   }
+ *
+ * - Le Studio est MAÎTRE DU TEMPS : SEEK(t) → l'iframe rend puis répond
+ *   FRAME_READY(t, seq). Lecture = SEEKing image par image (aucune boucle).
+ * - Sécurité : iframe sandbox="allow-scripts" + CSP via attribut `csp`
+ *   (réseau/stockage/canvas cross-origin interdits), origine opaque,
+ *   session identifiée, messages hostiles ignorés + comptés, quotas.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Acks partagés (le rendu MP4 attend ces promesses)                   */
+/* ------------------------------------------------------------------ */
+
+/** Promesses d'attente des FRAME_READY — consommées par /render (RenderStage). */
+export const pendingCodeWaits = new Set<Promise<void>>();
+
+// Quota : nombre raisonnable d'iframes sandboxées simultanées.
+const MAX_SANDBOX_FRAMES = 8;
+let activeSandboxFrames = 0;
+function sandboxQuotaExceeded(): boolean {
+  return activeSandboxFrames >= MAX_SANDBOX_FRAMES;
+}
+
+/* ------------------------------------------------------------------ */
+/* Métriques exposées côté hôte (tests sécurité/déterminisme)          */
+/* ------------------------------------------------------------------ */
+
+export interface SandboxHostMetrics {
+  received: number;
+  ignored: number;
+  frames: number;
+  degraded: number;
+  errors: number;
+}
+
+const METRICS_KEY = "__MGS_HOST_METRICS__";
+function metricsFor(sessionId: string): SandboxHostMetrics {
+  const holder = window as unknown as Record<string, Record<string, SandboxHostMetrics>>;
+  holder[METRICS_KEY] ??= {};
+  holder[METRICS_KEY][sessionId] ??= { received: 0, ignored: 0, frames: 0, degraded: 0, errors: 0 };
+  return holder[METRICS_KEY][sessionId];
+}
+
+/* ------------------------------------------------------------------ */
+/* Document sandboxé (protocole v2)                                    */
+/* ------------------------------------------------------------------ */
+
+export interface SandboxParams {
+  text: string;
+  primaryColor: string;
+  accentColor: string;
+  backgroundColor: string;
+  duration: number;
+  speed: number;
+  [key: string]: unknown;
+}
+
+/** Prelude (sans balise script : l'hôte l'emballl lui-même). */
+const PRELUDE_V2_SOURCE = `
+(function () {
+  "use strict";
+  var SESSION = window.__MGS_SESSION__;
+  var metrics = { received: 0, ignored: 0, frames: 0, degraded: 0, errors: 0 };
+  function post(message) {
+    message.session = SESSION;
+    try { window.parent.postMessage(message, "*"); } catch (e) { metrics.errors++; }
+  }
+  function nextTwoFrames(cb) {
+    requestAnimationFrame(function () { requestAnimationFrame(function () { cb(); }); });
+  }
+  function applyParams(params) {
+    window.MGSI_CONFIG = params || {};
+    try { window.dispatchEvent(new CustomEvent("mgsi:configchange", { detail: params })); } catch (e) {}
+  }
+  function handleSeek(data) {
+    var contract = window.__MGS_TIMELINE__;
+    if (!contract || typeof contract.renderAt !== "function") {
+      post({ type: "mgsi:error", code: "CONTRACT_MISSING" });
+      metrics.degraded++;
+      nextTwoFrames(function () {
+        post({ type: "mgsi:frame", seq: data.id, t: data.t, degraded: true });
+      });
+      return;
+    }
+    var contractDuration = Number(contract.duration) || 0;
+    var t = contractDuration > 0 ? Math.max(0, Math.min(contractDuration, data.t)) : Math.max(0, data.t);
+    Promise.resolve()
+      .then(function () { return contract.renderAt(t, window.MGSI_CONFIG || {}); })
+      .then(function () {
+        nextTwoFrames(function () { post({ type: "mgsi:frame", seq: data.id, t: t, metrics: metrics }); });
+      }, function (err) {
+        metrics.errors++;
+        post({ type: "mgsi:error", seq: data.id, message: String(err && err.message || err) });
+        nextTwoFrames(function () { post({ type: "mgsi:frame", seq: data.id, t: t, degraded: true, metrics: metrics }); });
+      });
+  }
+  window.addEventListener("message", function (message) {
+    var data = message && message.data;
+    metrics.received++;
+    if (!data || typeof data !== "object" || data.session !== SESSION || typeof data.type !== "string") {
+      metrics.ignored++;
+      return;
+    }
+    if (data.type === "mgsi:seek" && typeof data.t === "number" && typeof data.id !== "undefined") {
+      handleSeek(data);
+    } else if (data.type === "mgsi:set_params" && data.params && typeof data.params === "object") {
+      applyParams(data.params);
+      nextTwoFrames(function () { post({ type: "mgsi:frame", seq: data.id, t: null, metrics: metrics }); });
+    } else {
+      metrics.ignored++;
+    }
+  });
+  window.addEventListener("load", function () {
+    var contract = window.__MGS_TIMELINE__;
+    post({
+      type: "mgsi:ready",
+      mode: contract && typeof contract.renderAt === "function" ? "timeline" : "free",
+      duration: contract ? Number(contract.duration) || 0 : 0,
+      outAt: contract && Number(contract.outAt) > 0 ? Number(contract.outAt) : undefined,
+    });
+  });
+})();
+`;
+
+export const SANDBOX_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src 'unsafe-inline'";
+
+export function buildSandboxDocumentV2(
+  code: string,
+  sessionId: string,
+  params: SandboxParams
+): string {
+  const sessionJson = JSON.stringify(sessionId);
+  const paramsJson = JSON.stringify(params).replace(/</g, "\\u003c");
+  const safeCode = code.replace(/<\/script/gi, "<\\/script");
+  return [
+    '<!doctype html><html><head><meta charset="utf-8" /><meta name="referrer" content="no-referrer" />',
+    "<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent}*{box-sizing:border-box}</style>",
+    "<script>window.__MGS_SESSION__ = " + sessionJson + ";</script>",
+    "<script>window.MGSI_CONFIG = " + paramsJson + ";</script>",
+    "<script>" + PRELUDE_V2_SOURCE.replace(/<\/script/gi, "<\\/script") + "</script>",
+    "</head><body>",
+    "<script>" + safeCode + "</script>",
+    "</body></html>",
+  ].join("");
+}
+
+/* ------------------------------------------------------------------ */
+/* Hôte de l'iframe (Studio, rendu MP4, vignettes, fiches publiques)   */
+/* ------------------------------------------------------------------ */
+
+interface PendingSeek {
+  resolve: () => void;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
+export default function SandboxTimelineFrame({
+  code,
+  sessionId,
+  params,
+  time,
+  compatible = true,
+  onIncompatible,
+  backgroundColor = "transparent",
+}: {
+  code: string;
+  sessionId: string;
+  params: SandboxParams;
+  /** Temps moteur (déjà converti par timelineTimeFor) — SEEK à chaque changement. */
+  time: number;
+  /** Contrat présent dans le code (calculé par les capacités). */
+  compatible?: boolean;
+  /** Signale une incompatibilité détectée au runtime (badge éditeur). */
+  onIncompatible?: (reason: string | null) => void;
+  backgroundColor?: string;
+}) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [doc, setDoc] = useState(() => buildSandboxDocumentV2(code, sessionId, params));
+  const seqRef = useRef(0);
+  const pendingRef = useRef<Map<number, PendingSeek>>(new Map());
+  const [runtimeIncompatible, setRuntimeIncompatible] = useState(false);
+  const [quotaReached, setQuotaReached] = useState(() => sandboxQuotaExceeded());
+
+  const docKey = keyOf(code, sessionId, JSON.stringify(params));
+  const [lastDocKey, setLastDocKey] = useState(docKey);
+  if (lastDocKey !== docKey) {
+    // Reconstruction pendant le rendu (pattern React « adjusted state »).
+    setLastDocKey(docKey);
+    setDoc(buildSandboxDocumentV2(code, sessionId, params));
+    setRuntimeIncompatible(false);
+  }
+  // Quota (module global, non-réactif) : suivi au rendu (le canvas re-rendu
+  // à chaque instant : le quota est réévalué régulièrement).
+  if (sandboxQuotaExceeded() !== quotaReached) {
+    setQuotaReached(!quotaReached);
+  }
+
+  /* Libération des acks au démontage (protège le rendu d'un blocage). */
+  useEffect(() => {
+    const pendingMap = pendingRef.current;
+    return () => {
+      activeSandboxFrames -= 1;
+      pendingMap.forEach((pending) => {
+        if (pending.timer) clearTimeout(pending.timer);
+        pending.resolve();
+      });
+      pendingMap.clear();
+    };
+  }, []);
+
+  // Callback parent (stabilisé : le message listener ne dépend que de la session).
+  const onIncompatibleRef = useRef(onIncompatible);
+  useEffect(() => {
+    onIncompatibleRef.current = onIncompatible;
+  });
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const win = iframeRef.current?.contentWindow;
+      if (!win || event.source !== win) return;
+      const data = event.data as
+        | {
+            type?: string;
+            session?: unknown;
+            seq?: number;
+            t?: number;
+            degraded?: boolean;
+            mode?: string;
+            code?: string;
+            metrics?: SandboxHostMetrics;
+          }
+        | null;
+      if (!data || typeof data.type !== "string") return;
+      if (data.session !== sessionId) return;
+
+      const local = metricsFor(sessionId);
+      if (data.metrics) {
+        local.received = data.metrics.received;
+        local.ignored = data.metrics.ignored;
+        local.errors = data.metrics.errors;
+        local.degraded = data.metrics.degraded;
+      }
+      if (data.type === "mgsi:ready") {
+        const incompatible = data.mode === "free" || !compatible;
+        setRuntimeIncompatible(incompatible);
+        onIncompatibleRef.current?.(incompatible ? "Contrat __MGS_TIMELINE__ / renderAt(time) manquant ou non déterministe." : null);
+        return;
+      }
+      if (data.type === "mgsi:error") {
+        if (data.code === "CONTRACT_MISSING") setRuntimeIncompatible(true);
+        return;
+      }
+      if (data.type === "mgsi:frame" && typeof data.seq === "number") {
+        const pending = pendingRef.current.get(data.seq);
+        if (!pending) return;
+        pendingRef.current.delete(data.seq);
+        if (pending.timer) clearTimeout(pending.timer);
+        pending.resolve();
+        return;
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [sessionId, compatible]);
+
+  // Chaque changement d'instant (lecture, scrub, export) -> SEEK + promesse
+  // d'ack partagée. Mode gratuit / quota atteint : aucun ack (le rendu
+  // n'attend rien — l'animation n'est pas déterministe, capture dégradée).
+  useEffect(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win || quotaReached || runtimeIncompatible) return;
+
+    const seq = seqRef.current + 1;
+    seqRef.current = seq;
+    const pending: PendingSeek = { resolve: () => {} };
+    pendingRef.current.set(seq, pending);
+    const wait = new Promise<void>((resolve) => {
+      pending.resolve = resolve;
+    });
+    pending.timer = setTimeout(() => {
+      pendingRef.current.delete(seq);
+      pending.resolve();
+    }, 2500);
+    const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
+    pendingCodeWaits.add(wrapped);
+    win.postMessage({ type: "mgsi:seek", session: sessionId, t: time, id: seq }, "*");
+  }, [time, doc, sessionId, quotaReached, runtimeIncompatible]);
+
+  if (quotaReached) {
+    return (
+      <div
+        className="absolute inset-0 flex items-center justify-center bg-black/80 px-4 text-center text-[10px] uppercase tracking-wider text-muted"
+      >
+        Quota d&apos;aperçus sandboxés atteint ({MAX_SANDBOX_FRAMES})
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute inset-0" style={{ background: backgroundColor }}>
+      <iframe
+        ref={(node) => {
+          iframeRef.current = node;
+          if (node && node.getAttribute("csp") !== SANDBOX_CSP) {
+            node.setAttribute("csp", SANDBOX_CSP);
+          }
+        }}
+        sandbox="allow-scripts"
+        className="absolute inset-0 h-full w-full border-0"
+        srcDoc={doc}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+      {runtimeIncompatible ? (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/80 px-6 text-center text-[11px] leading-relaxed text-amber-300">
+          Non pilotable par la timeline : contrat renderAt(time) manquant ou non déterministe.
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function keyOf(code: string, sessionId: string, paramsSignature: string): string {
+  return `${code.length}:${sessionId}:${paramsSignature}`;
+}

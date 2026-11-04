@@ -2,6 +2,7 @@ import type { ElementKind } from "./project-model";
 import { getComponentMeta } from "@/lib/animations/registry";
 import type { ComponentMeta } from "@/lib/animations/registry";
 import type { AnimationConfig } from "@/types/animation";
+import type { TemplateCapabilities } from "@/lib/templates/capabilities";
 
 /**
  * Registre Studio — couche au-dessus du registre public :
@@ -93,10 +94,17 @@ export function getStudioTemplate(templateKey: string): StudioTemplateMeta | nul
 /* ------------------------------------------------------------------ */
 
 export interface CustomStudioTemplateMeta extends StudioTemplateMeta {
-  /** Clé du composant intégré dont se sert le moteur (builder + frame). */
-  underlyingComponentKey: import("@/types/animation").ComponentKey;
-  /** Vrai si le template custom est de type composant (pilotable par la timeline). */
+  /** Clé du composant intégré dont se sert le moteur (builder + frame) ou
+   * du bac à sable (contrat déterministe __MGS_TIMELINE__/renderAt). */
+  underlyingComponentKey?: import("@/types/animation").ComponentKey;
+  /** Vrai si le moteur du Studio pilote ce template avec le temps (SEEK). */
   timeDriven: boolean;
+  /** Code sandboxé (contrat déterministe rendu/seek) si source « code » compatible. */
+  sandboxCode?: string;
+  /** Raisons d'incompatibilité (templates publiés non pilotables). */
+  incompatibility?: string[];
+  /** Vrai si le pipeline d'export MP4 (capture image par image) le supporte. */
+  exportCompatible?: boolean;
 }
 
 /**
@@ -117,28 +125,79 @@ export function registerCustomStudioTemplates(
     componentKey?: string;
     elementKind: string;
     defaultConfig: AnimationConfig;
+    code?: string;
+    capabilities?: TemplateCapabilities;
   }[]
 ): void {
   for (const template of templates) {
     const base = template.componentKey ? STUDIO_TEMPLATES[template.componentKey] : undefined;
-    const timeDriven = Boolean(base);
-    if (!template.componentKey || !base) continue; // templates « code » : hors timeline (Phase 2)
-    STUDIO_TEMPLATES[template.slug] = {
-      ...base,
-      // Clé propre au template custom (son slug) : distincte du composant de base,
-      // sinon il se confond avec le template intégré (même clé React, même choix).
-      // Le moteur retrouve le composant via `underlyingComponentKey`.
-      key: template.slug as import("@/types/animation").ComponentKey,
+
+    /* ---- source « composant » : pilotable par le builder du composant de base ---- */
+    if (template.sourceKind === "component" && template.componentKey && base) {
+      STUDIO_TEMPLATES[template.slug] = {
+        ...base,
+        // Clé propre au template custom (son slug) : distincte du composant de base,
+        // sinon il se confond avec le template intégré (même clé React, même choix).
+        // Le moteur retrouve le composant via `underlyingComponentKey`.
+        key: template.slug as import("@/types/animation").ComponentKey,
+        name: template.name,
+        studioCategory: (template.category as StudioCategory) ?? base.studioCategory,
+        timelineDuration: template.defaultConfig.duration,
+      };
+      const meta = STUDIO_TEMPLATES[template.slug] as CustomStudioTemplateMeta;
+      meta.underlyingComponentKey = template.componentKey as import("@/types/animation").ComponentKey;
+      meta.timeDriven = true;
+      meta.exportCompatible = true;
+      CUSTOM_STUDIO_KEYS.add(template.slug);
+      continue;
+    }
+
+    /* ---- source « code » : bac à sable déterministe (__MGS_TIMELINE__) ---- */
+    if (template.sourceKind === "code" && template.code) {
+      const caps = template.capabilities ?? { studioCompatible: true, exportCompatible: true, reasons: [] };
+      STUDIO_TEMPLATES[template.slug] = {
+        // Base structurelle : n'importe quelle méta (sans builder).
+        ...baseMetaScaffold(template),
+        key: template.slug as import("@/types/animation").ComponentKey,
+        name: template.name,
+        studioCategory: (template.category as StudioCategory) ?? "text-motion",
+        timelineDuration: template.capabilities?.contractDuration ?? template.defaultConfig.duration,
+      } as StudioTemplateMeta;
+      const meta = STUDIO_TEMPLATES[template.slug] as CustomStudioTemplateMeta;
+      meta.sandboxCode = template.code;
+      meta.timeDriven = caps.studioCompatible === true;
+      meta.exportCompatible = caps.studioCompatible === true;
+      meta.technologies = ["HTML", "CSS", "JavaScript"];
+      if (!caps.studioCompatible) meta.incompatibility = caps.reasons;
+      CUSTOM_STUDIO_KEYS.add(template.slug);
+      continue;
+    }
+
+    /* ---- entrée catalogue (ajout Studio désactivé, raison affichée) ---- */
+    STUDIO_CATALOG_ONLY[template.slug] = {
+      id: template.id,
+      slug: template.slug,
       name: template.name,
-      studioCategory: (template.category as StudioCategory) ?? base.studioCategory,
-      timelineDuration: template.defaultConfig.duration,
+      category: template.category,
+      reasons:
+        template.capabilities?.reasons ?? ["Ce template n'est pas pilotable par le temps (contrat déterministe absent)."],
     };
-    const meta = STUDIO_TEMPLATES[template.slug] as CustomStudioTemplateMeta;
-    meta.underlyingComponentKey = (template.componentKey as import("@/types/animation").ComponentKey) ?? base.key;
-    meta.timeDriven = timeDriven;
-    CUSTOM_STUDIO_KEYS.add(template.slug);
   }
 }
+
+/** Squelette complet de méta pour l'enregistrement runtime. */
+function baseMetaScaffold(template: { name: string; defaultConfig: AnimationConfig }): ComponentMeta {
+  return {
+    key: template.name.toLowerCase() as never,
+    name: template.name,
+    description: "",
+    technologies: ["HTML", "CSS", "JavaScript"],
+    defaultConfig: template.defaultConfig,
+  };
+}
+
+/** Templates publiés mais non pilotables : affichés désactivés avec raison. */
+export const STUDIO_CATALOG_ONLY: Record<string, { id: string; slug: string; name: string; category: string; reasons: string[] }> = {};
 
 /** Clés runtime des templates custom enregistrés (pour validateProject). */
 export const CUSTOM_STUDIO_KEYS = new Set<string>();

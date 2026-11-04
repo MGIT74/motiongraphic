@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "@/app/studio-fonts.css";
 import StageLayers from "@/components/studio/StageLayers";
 import { MediaRuntimeContext, pendingMediaWaits } from "@/components/studio/MediaLayer";
+import { pendingCodeWaits } from "@/components/studio/sandbox-frame";
 import { projectDuration, type StudioProject } from "@/lib/studio/project-model";
 import { registerCustomStudioTemplates } from "@/lib/studio/template-registry";
 import type { StudioCustomTemplateInput } from "@/lib/render/server-projects";
@@ -53,8 +54,10 @@ export default function RenderStage({
     void (async () => {
       await nextFrame();
       await nextFrame();
-      // Médias : attendre que chaque vidéo soit positionnée et chaque image chargée.
+      // Médias : chaque vidéo positionnée / image chargée.
       while (pendingMediaWaits.size > 0) await Promise.all(Array.from(pendingMediaWaits));
+      // Templates sandbox (contrat renderAt) : chaque SEEK acquitté.
+      while (pendingCodeWaits.size > 0) await Promise.all(Array.from(pendingCodeWaits));
       await nextFrame();
       pending.forEach((resolve) => resolve());
     })();

@@ -6,10 +6,11 @@ import type { AnimationConfig, ComponentKey } from "@/types/animation";
 import type { AnimationComponentProps } from "@/types/animation";
 import { ANIMATION_BUILDERS, type AnimationBuilder } from "@/lib/animations/builders";
 import { baseEngineKeyOf } from "@/lib/studio/project-model";
-import { isStudioTemplateKey } from "@/lib/studio/template-registry";
+import { getStudioTemplate, isStudioTemplateKey } from "@/lib/studio/template-registry";
 import { timelineTimeFor } from "@/lib/studio/timing";
 import type { ElementTiming } from "@/lib/studio/project-model";
 import { fontCss } from "@/lib/brand/fonts";
+import SandboxTimelineFrame from "./sandbox-frame";
 import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
 import { TextReveal01Frame } from "@/components/animations/TextReveal01";
 import { ElasticText01Frame } from "@/components/animations/ElasticText01";
@@ -65,6 +66,8 @@ export default function ControlledAnimation({
   });
 
   // Clé de moteurs : template intégré OU template custom (via composant de base).
+  const studioMeta = getStudioTemplate(templateKey);
+  const sandboxCode = studioMeta && "sandboxCode" in studioMeta ? (studioMeta as { sandboxCode?: string }).sandboxCode : undefined;
   const engineKey = isStudioTemplateKey(templateKey) ? baseEngineKeyOf(templateKey) : templateKey;
   const builder: AnimationBuilder | undefined = ANIMATION_BUILDERS[engineKey] ?? ANIMATION_BUILDERS[templateKey];
 
@@ -114,6 +117,31 @@ export default function ControlledAnimation({
   const Frame = STUDIO_FRAMES[engineKey as ComponentKey] ?? STUDIO_FRAMES[templateKey];
 
   if (!builder || !Frame) {
+    if (sandboxCode) {
+      // Templates « code » : le moteur du Studio est maître du temps via le
+      // contrat déterministe (SEEK) : l'iframe rend renderAt(time).
+      const sandboxMeta = studioMeta as { sandboxCode?: string; timeDriven?: boolean } | null;
+      return (
+        <div
+          className="absolute inset-0 h-full w-full overflow-hidden"
+          style={{ backgroundColor: config.backgroundColor, fontFamily: fontCss(config.fontFamily) }}
+          data-mgsi-element={preview ? undefined : ""}
+        >
+          <SandboxTimelineFrame
+            code={sandboxCode}
+            sessionId={`sbx-${templateKey}`}
+            params={config as import("@/components/studio/sandbox-frame").SandboxParams}
+            time={timelineTimeFor(localTime, {
+              total: sandboxMeta?.timeDriven ? (sandboxMeta as unknown as { timelineDuration: number }).timelineDuration : elementDuration ?? config.duration,
+              elementDuration: elementDuration ?? config.duration,
+              timing,
+              speed: 1,
+            })}
+            compatible={sandboxMeta?.timeDriven ?? false}
+          />
+        </div>
+      );
+    }
     return (
       <div
         className="absolute inset-0 flex items-center justify-center text-xs text-muted"
