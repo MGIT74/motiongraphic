@@ -184,9 +184,35 @@ function TemplateThumb({
   const restTime = Math.round(D * 0.55 * 30) / 30;
   const [time, setTime] = useState(restTime);
   const raf = useRef<number | null>(null);
+  const hostRef = useRef<HTMLSpanElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
-    if (!playing) {
+    const node = hostRef.current;
+    if (!node) return;
+    if (typeof IntersectionObserver === "undefined") {
+      const id = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(id);
+    }
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), {
+      rootMargin: "160px",
+      threshold: 0,
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!playing || !visible || reducedMotion) {
       // Retour à l'image de repos quand le survol se termine (après la fin de la boucle rAF).
       const id = requestAnimationFrame(() => setTime(restTime));
       return () => cancelAnimationFrame(id);
@@ -202,20 +228,20 @@ function TemplateThumb({
     return () => {
       if (raf.current) cancelAnimationFrame(raf.current);
     };
-  }, [playing, D, restTime]);
+  }, [playing, visible, reducedMotion, D, restTime]);
 
   const config = brandedConfig({ ...template.defaultConfig }, template.elementKind, project.brand);
   return (
-    <span className="relative block aspect-video w-full overflow-hidden bg-black" style={{ containerType: "size" }} aria-hidden="true">
+    <span ref={hostRef} className="relative block aspect-video w-full overflow-hidden bg-black" style={{ containerType: "size" }} aria-hidden="true">
       <span className="pointer-events-none absolute inset-0 block" style={{ transform: `scale(${template.elementKind === "text" || template.elementKind === "logo" ? 1.9 : 1.2})` }}>
-        <ControlledAnimation
+        {visible ? <ControlledAnimation
           templateKey={templateKey as ComponentKey}
           config={config}
           localTime={time}
           elementDuration={D}
           timing="fit"
           preview
-        />
+        /> : null}
       </span>
       {playing ? null : (
         <span className="absolute bottom-1 right-1 rounded-full bg-black/55 px-1.5 py-[1px] text-[8px] font-semibold uppercase tracking-wider text-white/80 opacity-0 transition-opacity group-hover:opacity-100">
