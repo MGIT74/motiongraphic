@@ -127,6 +127,36 @@ function ffmpeg(args, { input } = {}) {
     ok(t1s.length >= 100, `${format.name} : image à t=1s extractible`);
   }
 
+  // ---- COHERENCE prévisualisation Studio <-> MP4 (frame par frame) ----
+  // L'image du MP4 (16:9) à t=1.0 s et l'aperçu du moteur (même stage) à
+  // t=1.0 s sont extraits, normalisés (sharp) puis comparés (tolérance JPEG).
+  {
+    const sharp = (await import("sharp")).default;
+    const b = await launchBrowser({});
+    const page = await b.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1.92 });
+    await page.goto(`${BASE}/dev/render-stage?w=1920&h=1080`, { waitUntil: "networkidle", timeout: 60_000 });
+    await page.waitForFunction(() => window.__mgsiRender?.ready === true, undefined, { timeout: 30_000 });
+    await page.evaluate(() => window.__mgsiRender.seek(1.0));
+    await page.waitForTimeout(150);
+    const browserShot = await page.locator("[data-render-stage]").screenshot({ type: "jpeg", quality: 92 });
+    await b.close();
+    const framesDir = path.join(outDir, "coherence");
+    await mkdir(framesDir, { recursive: true });
+    const mp4 = path.join(outDir, "export-16x9.mp4");
+    await ffmpeg(["-i", mp4, "-vf", "select=eq(n\\,30)", "-frames:v", "1", path.join(framesDir, "t1s.png")]);
+    const mp4Frame = await readFile(path.join(framesDir, "t1s.png"));
+    const norm = async (buf) => await sharp(buf).resize(480, 270, { fit: "fill" }).ensureAlpha().raw().toBuffer();
+    const px1 = await norm(browserShot);
+    const px2 = await norm(mp4Frame);
+    let diff = 0;
+    const total = 480 * 270;
+    for (let i = 0; i < px1.length; i += 4) {
+      const d = Math.max(Math.abs(px1[i] - px2[i]), Math.abs(px1[i + 1] - px2[i + 1]), Math.abs(px1[i + 2] - px2[i + 2]));
+      if (d > 28) diff += 1;
+    }
+    ok(diff / total < 0.10, `Prévisualisation vs MP4 (t=1s) : ${((100 * diff) / total).toFixed(2)} % de pixels différents (seuil 10 %)`);
+  }
+
   // ---- REFUS si renderAt échoue à l'exécution (contract ok, rendu KO) ----
   {
     const b = await launchBrowser({});

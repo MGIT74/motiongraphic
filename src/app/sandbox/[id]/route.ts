@@ -43,7 +43,19 @@ export async function GET(request: NextRequest, { params: routeParams }: { param
 
   if (template.status !== "published") {
     if (!isSupabaseConfigured()) {
-      // Mode démo local : brouillons servis (pas de secret, serveur de dev).
+      // Mode démo : les brouillons NE SONT servis QUE depuis la machine locale
+      // (127.0.0.1 — un visiteur LAN/machine distante reçoit 404). Aucun secret
+      // en jeu en démo, mais le principe "un visiteur ne voit pas un brouillon"
+      // reste entier hors localhost.
+      const localAddr = request.headers.get("x-forwarded-host") ?? "";
+      const isLocal =
+        localAddr.startsWith("localhost") ||
+        localAddr.startsWith("127.0.0.1") ||
+        localAddr.startsWith("[::1]");
+      const proxiedLocal = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+      if (!isLocal && !["127.0.0.1", "::1", ""].includes(proxiedLocal)) {
+        return sandboxRedirectError("Ce template n'est pas publié (accès local requis).");
+      }
     } else {
       const client = await createSupabaseServerClient();
       const { data: { user } } = client ? ((await client.auth.getUser()) as { data: { user: { id: string } | null } }) : { data: { user: null } };

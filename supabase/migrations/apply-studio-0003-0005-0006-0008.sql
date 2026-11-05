@@ -11,6 +11,37 @@
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
+-- 0. Pré-requis (autonomie du lot) — fonctions définies aussi par 0001.
+-- Idempotent, ré-exécutable (create or replace) :
+-- ---------------------------------------------------------------------
+
+create or replace function public.touch_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and role = 'admin'
+  );
+$$;
+
+-- ---------------------------------------------------------------------
 -- 0003 — Studio : projets, médias, versions, rendus + RLS
 -- ---------------------------------------------------------------------
 
@@ -224,6 +255,14 @@ on conflict (id) do nothing;
 --   select column_name from information_schema.columns
 --   where table_schema='public' and table_name='custom_templates' and column_name='validation';
 
+-- NOTES D'AUDIT (concordance code <-> base) :
+-- - `studio_media` : la table existe au schéma, mais l'implémentation
+--   actuelle des médias stocke les métadonnées DANS le JSONB du projet
+--   (MediaAsset, src/lib/studio/project-model.ts + src/lib/media/server.ts)
+--   et les fichiers dans Storage. La table reste disponible/optionnelle.
+-- - `is_admin()` dépend de `public.profiles` (0001) — si cette table n'a
+--   pas encore été créée, la fonction est créée MAIS renverra false :
+--   exécuter 0001 AVANT d'inviter un administrateur.
 -- ---------------------------------------------------------------------
 -- Ce que ce lot NE FAIT PAS (à évaluer séparément) :
 -- - Aucun bucket Storage n'est créé en SQL : le serveur les crée au

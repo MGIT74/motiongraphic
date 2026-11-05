@@ -294,7 +294,7 @@ export default function SandboxTimelineFrame({
       SENT_PARAMS_SIG_BY_SESSION.set(sessionId, JSON.stringify(nextParams));
       win.postMessage({ type: "mgsi:set_params", session: sessionId, params: nextParams, id: seq }, "*");
     },
-    [sessionId, flushQueuedSeek]
+    [sessionId, seekNow]
   );
   useEffect(() => {
     sendParamsRef.current = sendParamsNow;

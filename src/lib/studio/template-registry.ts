@@ -159,11 +159,15 @@ export function registerCustomStudioTemplates(
     /* ---- source « code » : bac à sable déterministe (__MGS_TIMELINE__) ---- */
     if (template.sourceKind === "code" && template.code) {
       const caps = template.capabilities ?? { studioCompatible: true, exportCompatible: true, reasons: [] };
+      // Type d'élément dérivé de la catégorie (text-motion => text, etc.) :
+      // la compatibilité du remplacement N'EST JAMAIS « undefined == undefined ».
+      const kind = kindForCategory(template.category);
       STUDIO_TEMPLATES[template.slug] = {
         // Base structurelle : n'importe quelle méta (sans builder).
         ...baseMetaScaffold(template),
         key: template.slug as import("@/types/animation").ComponentKey,
         name: template.name,
+        elementKind: kind,
         studioCategory: (template.category as StudioCategory) ?? "text-motion",
         timelineDuration: template.capabilities?.contractDuration ?? template.defaultConfig.duration,
       } as StudioTemplateMeta;
@@ -190,6 +194,20 @@ export function registerCustomStudioTemplates(
       reasons:
         template.capabilities?.reasons ?? ["Ce template n'est pas pilotable par le temps (contrat déterministe absent)."],
     };
+  }
+}
+
+/** Type d'élément par catégorie Studio (les codes sandbox déclarent par catégorie) —
+ * la compatibilité ne peut pas reposer sur un `undefined` implicite. */
+function kindForCategory(category: string): ElementKind | "cards" {
+  switch (category) {
+    case "text-motion": return "text";
+    case "logo-motion": return "logo";
+    case "transitions": return "shape";
+    case "ui-motion":
+    case "app-showcase":
+    case "data-motion":
+    default: return "cards";
   }
 }
 
