@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { MCP_PROJECT_TOOLS, McpToolError, type McpToolOutput } from "@/lib/studio/mcp-server";
 import { rememberBaseUrl } from "@/lib/render/engine";
+import { authenticateMcpRequest, withMcpPrincipal } from "@/lib/studio/mcp-auth";
 
 export const runtime = "nodejs";
 
@@ -59,19 +60,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   /* ------------------------------ auth ------------------------------ */
-  const token = process.env.MCP_ACCESS_TOKEN;
-  if (!token) {
-    return errorResponse(null, INTERNAL_ERROR, "Serveur MCP non configuré : définissez MCP_ACCESS_TOKEN (serveur).");
-  }
-  // Token accepté dans `Authorization: Bearer <token>` OU dans `x-auth-token` /
-  // `x-api-key` : certains clients MCP (connecteurs claude.ai à en-têtes fixes)
-  // réservent `Authorization` à OAuth et n'envoient le token que dans un en-tête dédié.
-  const provided = extractToken(request);
-  const constantTimeEqual = safeEqual(provided, token);
-  if (!provided || !constantTimeEqual) {
-    return new NextResponse(
-      JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "Non autorisé : MCP_ACCESS_TOKEN requis (Authorization: Bearer, x-auth-token ou x-api-key)." } }),
-      { status: 401, headers: { ...CORS, "Content-Type": "application/json" } }
+  const principal = await authenticateMcpRequest(request);
+  if (!principal) {
+    return NextResponse.json(
+      { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Authentification MCP requise." } },
+      { status: 401, headers: { ...CORS, "WWW-Authenticate": 'Bearer realm="MotionGraphic MCP"' } }
     );
   }
 
@@ -145,7 +138,7 @@ export async function POST(request: NextRequest) {
           const proto = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
           const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host;
           rememberBaseUrl(`${proto}://${host}`);
-          const output = (await tool.run(input)) as McpToolOutput;
+          const output = (await withMcpPrincipal(principal, () => tool.run(input))) as McpToolOutput;
           return json(id, {
             content: typeof output === "string" ? [{ type: "text", text: output }] : output.content,
             isError: false,
@@ -174,26 +167,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Lit le token MCP depuis les en-têtes acceptés (le premier non vide l'emporte). */
-function extractToken(request: NextRequest): string {
-  const authorization = request.headers.get("authorization")?.trim() ?? "";
-  if (/^bearer\s+/i.test(authorization)) {
-    const bearer = authorization.replace(/^bearer\s+/i, "").trim();
-    if (bearer) return bearer;
-  }
-  for (const name of ["x-auth-token", "x-api-key"]) {
-    const value = request.headers.get(name)?.trim() ?? "";
-    if (value) return value.replace(/^bearer\s+/i, "").trim();
-  }
-  return "";
-}
-
-/** Comparaison de tokens en temps constant (timing-attack safe). */
-function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let result = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return result === 0;
-}
