@@ -100,6 +100,7 @@ export default function ProjectsMenu({
           className={`z-[200] rounded-2xl border border-line bg-surface p-2 shadow-2xl ${compact ? "fixed inset-x-2 top-14" : "absolute right-0 top-11 w-96"}`}
           data-projects-menu
         >
+          <a href="/settings/mcp" className="mb-2 block rounded-xl px-2 py-2 text-sm font-medium text-ink hover:bg-elevated">Connexions MCP</a>
           <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
             Mes projets{items?.[0]?.local ? " · sur ce navigateur" : ""}
           </p>
