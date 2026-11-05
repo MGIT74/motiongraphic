@@ -47,3 +47,6 @@ next-env.d.ts
 supabase/.temp*
 supabase/.branches*
 tests/templates/out/
+
+# store démo Template Lab (local)
+.mgsi-demo-store.json

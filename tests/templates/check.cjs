@@ -22,6 +22,11 @@ const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
 const { PNG } = require("pngjs");
+/** Navigateur : Chrome système si dispo, sinon Chromium Playwright. */
+async function launchBrowser(opts = {}) {
+  try { return await chromium.launch({ channel: "chrome", headless: true, ...opts }); }
+  catch { return await chromium.launch({ headless: true, ...opts }); }
+}
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 const ROOT = process.env.REPO_ROOT || path.join(__dirname, "..", "..");
@@ -86,7 +91,7 @@ function flickers(series) {
 (async () => {
   sourceChecks();
 
-  const browser = await chromium.launch();
+  const browser = await launchBrowser({});
   const page = await browser.newPage({ viewport: { width: 1100, height: 1000 } });
   let consoleErrors = [];
   page.on("pageerror", (e) => consoleErrors.push(e.message));
@@ -109,6 +114,36 @@ function flickers(series) {
     const key = t.key;
     const before = problems.length;
     consoleErrors = [];
+
+    /* ---- templates sandbox (contrat renderAt) : déterminisme ---- */
+    if (t.kind === "sandbox") {
+      if (!t.inStudio) fail(key, "not-in-studio", "code publié mais absent du registre Studio (registerCustomStudioTemplates).");
+      if (!t.compatible) fail(key, "sandbox-incompatible", "contrat __MGS_TIMELINE__/renderAt non déterministe (voir capacités admin).");
+
+      await page.evaluate(([k]) => window.__tc.load(k, "16:9", false), [key]);
+      await page.waitForTimeout(400); // prêt iframe (mgsi:ready)
+      const seek = async (x) => { await page.evaluate((v) => window.__tc.seek(v), x); };
+      await page.evaluate((x) => window.__tc.seek(x), 0.01);
+      await page.waitForTimeout(250);
+      await seek(1.2); const fA1 = await shot();
+      await seek(0.3); const fB = await shot();
+      await seek(1.2); const fA2 = await shot();
+      const detA = inkBetween(fA1, fA2);
+      const detB = inkBetween(fA1, fB);
+      if (detA > 0.004) fail(key, "sandbox-nondeterministic", `seek(1.2) ne redonne pas la même image (écart ${(detA * 100).toFixed(2)} %) : pas de renderAt déterministe.`);
+      if (detB <= 0.01) fail(key, "sandbox-static", "seek(0.3) identique à seek(1.2) : la durée/timeline n'est pas appliquée.");
+      // formats : le cadre produit une image exploitable en 9:16 et 1:1
+      for (const format of ["9:16", "1:1"]) {
+        await page.evaluate(([k, f]) => window.__tc.load(k, f, false), [key, format]);
+        await page.waitForTimeout(250);
+        await page.evaluate((x) => window.__tc.seek(x), 1.2);
+        const fX = await shot();
+        if (fX.length < 500) fail(key, "sandbox-format", `en ${format}, l'image sandboxée est vide.`);
+      }
+      if (consoleErrors.length) fail(key, "console", `erreurs dans la console : ${consoleErrors.slice(0, 2).join(" | ")}`);
+      summary.push({ key, ok: problems.length === before, note: `sandbox déterministe (écart ${detA ? (detA * 100).toFixed(3) : "0"} %, mouvement ${detB ? (detB * 100).toFixed(2) : "0"} %)` });
+      continue;
+    }
 
     // Enregistrement
     if (!t.inStudio) fail(key, "not-in-studio", "absent de STUDIO_TEMPLATES (src/lib/studio/template-registry.ts).");

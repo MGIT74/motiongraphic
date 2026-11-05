@@ -26,7 +26,8 @@ import {
 } from "@/lib/templates/custom-model";
 import TemplateDemoControls from "@/components/templates/TemplateDemoControls";
 import SandboxPreview, { type AnimationConfigLite } from "@/components/templates/SandboxPreview";
-import { SANDBOX_STARTER_CODE } from "@/lib/templates/sandbox-starter";
+import { SANDBOX_STARTER_CODE, SANDBOX_TIMELINE_STARTER_CODE } from "@/lib/templates/sandbox-starter";
+import { computeCodeCapabilities, type TemplateCapabilities } from "@/lib/templates/capabilities";
 import type { AnimationConfig } from "@/types/animation";
 
 /**
@@ -177,9 +178,12 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
   const runValidation = async () => {
     if (!editor) return;
     if (editor.sourceKind !== "code") {
-      setValidation({ ok: true, findings: [] });
+      setValidation({ ok: true, findings: [], capabilities: undefined });
       return;
     }
+    // Aperçu immédiat des capacités (client) — la validation RÉELLE reste
+    // autoritaire côté serveur (fetch ci-dessous).
+    const capabilities = computeCodeCapabilities(editor.code);
     setValidating(true);
     try {
       const res = await fetch("/api/templates/validate-code", {
@@ -192,11 +196,18 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
         report?: { ok: boolean; findings: ValidationSummary["findings"] };
         errors?: string[];
       };
-      if (data.report) setValidation(data.report);
+      const capsSummary = capabilities;
+      if (data.report)
+        setValidation({
+          ok: data.report.ok,
+          findings: data.report.findings,
+          capabilities: capsSummary,
+        });
       else
         setValidation({
           ok: false,
           findings: (data.errors ?? []).map((message) => ({ level: "error" as const, message })),
+          capabilities: capsSummary,
         });
     } catch {
       setValidation({
@@ -616,20 +627,30 @@ function Editor({
           <div className="sm:col-span-2">
             <div className="mb-1 flex items-center justify-between">
               <label htmlFor="tl-code" className={`${labelCls} !mb-0`}>
-                Code source (contrat MGSI_CONFIG)
+                Code source (HTML/CSS/JS/SVG)
               </label>
-              <button
-                type="button"
-                onClick={onValidate}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditor({ ...editor, code: SANDBOX_TIMELINE_STARTER_CODE(editor.name || "Template") })}
+                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-3 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+                  title="Insère un modèle déterministe : renderAt(time) = timeline + export MP4"
+                >
+                  Modèle renderAt (timeline + MP4)
+                </button>
+                <button
+                  type="button"
+                  onClick={onValidate}
                 className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-full border border-line px-3 text-xs font-medium text-muted transition-colors hover:text-ink"
               >
-                {validating ? (
-                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                ) : (
-                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                Valider
-              </button>
+                  {validating ? (
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  Valider
+                </button>
+              </div>
             </div>
             <textarea
               id="tl-code"
@@ -645,14 +666,45 @@ function Editor({
                   <p className={`text-xs font-semibold ${validation.ok ? "text-emerald-300" : "text-red-300"}`}>
                     {validation.ok ? "Validation : OK" : "Validation : refusé"}
                   </p>
+                  {validation.capabilities ? (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          validation.capabilities.studioCompatible
+                            ? "bg-emerald-500/10 text-emerald-300"
+                            : "bg-amber-500/10 text-amber-300"
+                        }`}
+                      >
+                        Studio/timeline : {validation.capabilities.studioCompatible ? "✓ pilotable" : "✗ non pilotable"}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          validation.capabilities.exportCompatible
+                            ? "bg-emerald-500/10 text-emerald-300"
+                            : "bg-amber-500/10 text-amber-300"
+                        }`}
+                      >
+                        MP4 : {validation.capabilities.exportCompatible ? "✓ exportable" : "✗ non exportable"}
+                      </span>
+                    </div>
+                  ) : null}
                   <ul className="mt-1.5 flex flex-col gap-1">
                     {validation.findings.map((f, i) => (
                       <li key={i} className={`text-[11px] ${f.level === "error" ? "text-red-300" : "text-amber-300"}`}>
                         • {f.message}
                       </li>
                     ))}
-                    {validation.findings.length === 0 && validation.ok ? (
-                      <li className="text-[11px] text-muted">Aucun motif interdit détecté.</li>
+                    {validation.capabilities && !validation.capabilities.studioCompatible
+                      ? validation.capabilities.reasons.map((r, i) => (
+                          <li key={`cap-${i}`} className="text-[11px] text-amber-300">
+                            • {r}
+                          </li>
+                        ))
+                      : null}
+                    {validation.findings.length === 0 && validation.capabilities?.studioCompatible ? (
+                      <li className="text-[11px] text-muted">
+                        Aucun motif interdit. Déterministe via renderAt(time) — timeline + export MP4.
+                      </li>
                     ) : null}
                   </ul>
                 </div>
@@ -728,7 +780,6 @@ function Editor({
                   code={editor.code}
                   config={previewConfig as AnimationConfigLite}
                   rerunKey={rerunKey}
-                  ariaLabel="Aperçu sandboxé du code en cours d'édition"
                 />
                 <span className="pointer-events-none absolute left-2 top-2 rounded-full border border-line bg-black/60 px-2 py-0.5 text-[9px] uppercase tracking-wider text-muted">
                   Sandbox isolé
@@ -785,6 +836,7 @@ interface EditorForm {
 interface ValidationSummary {
   ok: boolean;
   findings: { level: "error" | "warning"; message: string }[];
+  capabilities?: TemplateCapabilities;
 }
 
 function saveVersionLabel(version: number, status: string): string {

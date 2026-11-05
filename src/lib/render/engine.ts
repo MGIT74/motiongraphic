@@ -157,6 +157,13 @@ async function openStage(projectId: string, scale?: number) {
     throw new Error(`Page de rendu inaccessible (${response?.status() ?? "aucune réponse"}) : ${baseUrl()}`);
   }
   await page.waitForFunction(() => window.__mgsiRender?.ready === true, undefined, { timeout: 30_000 });
+  const incompatible = (await page.evaluate(() => window.__mgsiRender?.incompatible ?? [])) as string[];
+  if (incompatible.length > 0) {
+    await context.close();
+    throw new Error(
+      `Export impossible : templates non compatibles MP4 (contrat renderAt(time)) : ${incompatible.join(", ")}. Retirez ces éléments ou les remplacer par un style pilotable.`
+    );
+  }
   return { stored, context, page, size };
 }
 

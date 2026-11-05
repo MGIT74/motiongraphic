@@ -1,87 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import SandboxTimelineFrame, { type SandboxParams } from "@/components/studio/sandbox-frame";
 
-/**
- * Prévisualisation isolée d'un template « code source ».
- *
- * - iframe avec sandbox="allow-scripts" (PAS de allow-same-origin) :
- *   le code tourne sous origine nulle, sans accès cookies/DOM parent/stockage.
- * - Aucun code n'est jamais évalué dans l'application principale.
- * - Protocole (contrat documenté dans l'éditeur admin) :
- *     parent → iframe : { type: "mgsi:config", config } | { type: "mgsi:replay" }
- *     iframe → parent : { type: "mgsi:ready" } (optionnel)
- *
- * Le bootstrap injecté avant le code utilisateur expose :
- *   window.MGSI_CONFIG            — config actuelle (texte/couleurs/durée/vitesse)
- *   "mgsi:configchange" (event)   — émis à chaque changement de config
- *   "mgsi:replay" (event)         — émis quand l'utilisateur relance
- */
-export default function SandboxPreview({
-  code,
-  config,
-  rerunKey = 0,
-  ariaLabel = "Aperçu isolé de l'animation",
-}: {
-  code: string;
-  config: AnimationConfigLite;
-  /** Change de valeur pour recharger le document (relance). */
-  rerunKey?: number;
-  ariaLabel?: string;
-}) {
-  const [doc, setDoc] = useState(() => buildSandboxDocument(code));
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const [frameReady, setFrameReady] = useState(false);
-  const [lastSource, setLastSource] = useState({ code, rerunKey });
-
-  const configKey = JSON.stringify(config);
-
-  // Reconstruit le document sandboxé quand le code change — ou à la relance.
-  // Pattern "adjusted state during render" (React docs) : reset sans effet.
-  if (lastSource.code !== code || lastSource.rerunKey !== rerunKey) {
-    setLastSource({ code, rerunKey });
-    setFrameReady(false);
-    setDoc(buildSandboxDocument(code));
-  }
-
-  // Répond à « mgsi:ready » en envoyant la définition de config à jour.
-  const sendConfig = (win: Window) => {
-    win.postMessage({ type: "mgsi:config", config: JSON.parse(configKey) }, "*");
-  };
-
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== iframeRef.current?.contentWindow) return;
-      const data = event.data as { type?: string } | null;
-      if (data?.type === "mgsi:ready") {
-        setFrameReady(true);
-        sendConfig(event.source as Window);
-      }
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [configKey]);
-
-  // Config à jour après each changement (trop de postMessage si chaque rendu).
-  useEffect(() => {
-    if (!frameReady) return;
-    const target = iframeRef.current?.contentWindow;
-    if (target) sendConfig(target);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frameReady, configKey]);
-
-  return (
-    <iframe
-      ref={iframeRef}
-      title={ariaLabel}
-      sandbox="allow-scripts"
-      className="absolute inset-0 h-full w-full border-0"
-      srcDoc={doc}
-    />
-  );
-}
-
+/** Réglages d'aperçu partagés (le contrat du sandbox en mode prévisualisation). */
 export interface AnimationConfigLite {
   text: string;
   primaryColor: string;
@@ -91,39 +13,62 @@ export interface AnimationConfigLite {
   speed: number;
 }
 
-const PRELUDE = `
-<script>
-(function () {
-  "use strict";
-  window.MGSI_CONFIG = window.MGSI_CONFIG || {};
-  window.addEventListener("message", function (message) {
-    var data = message && message.data;
-    if (data && data.type === "mgsi:config" && data.config) {
-      window.MGSI_CONFIG = data.config;
-      try {
-        window.dispatchEvent(new CustomEvent("mgsi:configchange", { detail: data.config }));
-      } catch (e) {}
-    } else if (data && data.type === "mgsi:replay") {
-      try {
-        window.dispatchEvent(new CustomEvent("mgsi:replay"));
-      } catch (e) {}
-    }
-  });
-  try { window.parent.postMessage({ type: "mgsi:ready" }, "*"); } catch (e) {}
-})();
-</script>
-`;
+/**
+ * Aperçu SANDBOXÉ d'un template « code » (fiches publiques, cartes, Lab).
+ *
+ * - Mode ROUTE : `sourceTemplate` -> iframe pointe sur /sandbox/<id> (la CSP
+ *   réelle est délivrée en en-tête HTTP par la route) ;
+ * - Mode srcDoc : `code` (aperçu live de l'éditeur uniquement) — origine
+ *   opaque + calquage (la CSP par en-tête n'est pas possible dans ce mode).
+ *
+ * Runtime identique : SEEK piloté par l'hôte (boucle + pause), relance via
+ * `rerunKey`, réglages = SET_PARAMS (contrat postMessage).
+ */
+export default function SandboxPreview({
+  sourceTemplate,
+  code,
+  config,
+  rerunKey = 0,
+}: {
+  sourceTemplate?: { templateId: string; version?: number };
+  code?: string;
+  config: AnimationConfigLite;
+  /** Relance : recharge le document / repart de 0. */
+  rerunKey?: number;
+}) {
+  const [time, setTime] = useState(0);
+  const durationMs = Math.max(800, Math.min(20000, (config.duration || 3) * 1000 + 900));
+  const pausedMs = 700;
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const sessionId = `pv-${uid}`;
+  const params = config as SandboxParams;
 
-export function buildSandboxDocument(code: string): string {
-  return [
-    "<!doctype html><html><head><meta charset=\"utf-8\" />",
-    "<style>",
-    "html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent}",
-    "*{box-sizing:border-box}",
-    "</style>",
-    PRELUDE,
-    "</head><body>",
-    `<script>\n${code}\n</script>`,
-    "</body></html>",
-  ].join("");
+  useEffect(() => {
+    let raf = 0;
+    const cycleMs = durationMs + pausedMs;
+    const startMs = performance.now();
+    const tick = (now: number) => {
+      const offsetSec = ((now - startMs) % cycleMs) / 1000;
+      setTime(Math.min(offsetSec, durationMs / 1000));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [durationMs, pausedMs, rerunKey, code?.length, sourceTemplate?.templateId, sourceTemplate?.version]);
+
+  const frameBase = {
+    preview: true,
+    params,
+    time,
+    sessionId,
+  };
+
+  return sourceTemplate ? (
+    <SandboxTimelineFrame
+      sourceTemplate={{ templateId: sourceTemplate.templateId, version: sourceTemplate.version }}
+      {...frameBase}
+    />
+  ) : code ? (
+    <SandboxTimelineFrame code={code} {...frameBase} />
+  ) : null;
 }

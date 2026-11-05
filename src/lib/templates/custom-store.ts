@@ -1,7 +1,10 @@
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sanitizeCustomTemplate, fromCustomTemplateRow, validateCustomTemplate, type CustomTemplate } from "./custom-model";
 import type { AnimationConfig } from "@/types/animation";
+import { PULSE_GRID_TEMPLATE, SANDBOX_PROBE_TEMPLATE, PULSE_GRID_TEMPLATE_ID, BROKEN_TEMPLATE } from "@/lib/testing/sandbox-fixture";
 
 /**
  * Store des templates personnalisés.
@@ -100,15 +103,72 @@ function demoSeedCTA(): CustomTemplate | null {
 interface GlobalCustomStore {
   __mgsiCustomTemplates?: Map<string, CustomTemplate>;
   __mgsiCustomSeeded?: boolean;
+  __mgsiCustomFileMtime?: number;
 }
 const globalStore = globalThis as GlobalCustomStore;
 const memory: Map<string, CustomTemplate> = (globalStore.__mgsiCustomTemplates ??= new Map());
 
+function demoSeedPulseGrid(): CustomTemplate | null {
+  return sanitizeCustomTemplate({ ...PULSE_GRID_TEMPLATE });
+}
+
+const DEMO_STORE_FILE = path.join(process.cwd(), ".mgsi-demo-store.json");
+
 function ensureDemoSeed() {
+  const fileMtime = existsSync(DEMO_STORE_FILE) ? statSync(DEMO_STORE_FILE).mtimeMs : 0;
+
+  // Fichier modifié par un AUTRE processus serveur (dev multi-instances) :
+  // rechargement (le contenu validé vient toujours du disque).
+  if (fileMtime > 0 && globalStore.__mgsiCustomFileMtime !== undefined && fileMtime > globalStore.__mgsiCustomFileMtime) {
+    try {
+      const parsed = JSON.parse(readFileSync(DEMO_STORE_FILE, "utf8")) as unknown[];
+      memory.clear();
+      (parsed ?? [])
+        .map(sanitizeCustomTemplate)
+        .filter((t): t is CustomTemplate => t !== null)
+        .forEach((t) => memory.set(t.id, t));
+      globalStore.__mgsiCustomFileMtime = fileMtime;
+      return;
+    } catch {
+      // fichier en cours d'écriture : on garde la mémoire courante
+    }
+  }
+
   if (globalStore.__mgsiCustomSeeded) return;
   globalStore.__mgsiCustomSeeded = true;
+  globalStore.__mgsiCustomFileMtime = fileMtime;
+  try {
+    if (existsSync(DEMO_STORE_FILE)) {
+      const parsed = JSON.parse(readFileSync(DEMO_STORE_FILE, "utf8")) as unknown[];
+      (parsed ?? [])
+        .map(sanitizeCustomTemplate)
+        .filter((t): t is CustomTemplate => t !== null)
+        .forEach((t) => memory.set(t.id, t));
+    }
+  } catch {
+    // fichier corrompu/illisible : reseed
+  }
+  // Seeds de démonstration systématiquement garantis (les brouillons du
+  // fichier sont préservés ; les démo ne sont jamais écrasées si modifiés).
   const cta = demoSeedCTA();
-  if (cta) memory.set(cta.id, cta);
+  if (cta && !memory.has(cta.id)) memory.set(cta.id, cta);
+  const grid = demoSeedPulseGrid();
+  if (grid && !memory.has(PULSE_GRID_TEMPLATE_ID)) memory.set(grid.id, grid);
+  const probe = sanitizeCustomTemplate({ ...SANDBOX_PROBE_TEMPLATE });
+  if (probe && !memory.has(probe.id)) memory.set(probe.id, probe);
+  const broken = sanitizeCustomTemplate({ ...BROKEN_TEMPLATE });
+  if (broken && !memory.has(broken.id)) memory.set(broken.id, broken);
+}
+
+/** Persiste le store démo (git-ignoré) : les brouillons survivent au restart. */
+function flushDemoStore(): void {
+  try {
+    if (!globalStore.__mgsiCustomSeeded) return;
+    writeFileSync(DEMO_STORE_FILE, JSON.stringify(Array.from(memory.values())), "utf8");
+    globalStore.__mgsiCustomFileMtime = statSync(DEMO_STORE_FILE).mtimeMs;
+  } catch {
+    // disque non disponible : la session en cours garde l'état en mémoire
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -163,6 +223,7 @@ export async function upsertCustomTemplate(input: unknown): Promise<CustomTempla
   if (!isSupabaseConfigured()) {
     ensureDemoSeed();
     memory.set(template.id, template);
+    flushDemoStore();
     return { ok: true, template };
   }
   const client = await createSupabaseServerClient();
@@ -176,6 +237,7 @@ export async function deleteCustomTemplate(id: string): Promise<CustomTemplateWr
   if (!isSupabaseConfigured()) {
     ensureDemoSeed();
     memory.delete(id);
+    flushDemoStore();
     return { ok: true };
   }
   const client = await createSupabaseServerClient();

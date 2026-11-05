@@ -108,7 +108,11 @@ export default async function TemplateDetailPage({
             templateKey={template.componentKey}
             defaultConfig={template.meta.defaultConfig}
             configFromTemplate={template.meta.defaultConfig}
-            sourceCode={template.custom?.sourceKind === "code" ? template.custom?.code : undefined}
+            sourceTemplate={
+              template.custom?.sourceKind === "code"
+                ? { templateId: template.templateId, version: template.custom?.version }
+                : undefined
+            }
           />
           <PromptPanel prompts={prompts} animationId={template.templateId} />
         </div>

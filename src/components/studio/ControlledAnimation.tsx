@@ -6,10 +6,11 @@ import type { AnimationConfig, ComponentKey } from "@/types/animation";
 import type { AnimationComponentProps } from "@/types/animation";
 import { ANIMATION_BUILDERS, type AnimationBuilder } from "@/lib/animations/builders";
 import { baseEngineKeyOf } from "@/lib/studio/project-model";
-import { isStudioTemplateKey } from "@/lib/studio/template-registry";
+import { getStudioTemplate, isStudioTemplateKey } from "@/lib/studio/template-registry";
 import { timelineTimeFor } from "@/lib/studio/timing";
 import type { ElementTiming } from "@/lib/studio/project-model";
 import { fontCss } from "@/lib/brand/fonts";
+import SandboxTimelineFrame from "./sandbox-frame";
 import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
 import { TextReveal01Frame } from "@/components/animations/TextReveal01";
 import { ElasticText01Frame } from "@/components/animations/ElasticText01";
@@ -44,6 +45,7 @@ export default function ControlledAnimation({
   elementDuration,
   timing,
   preview = false,
+  renderStage = false,
 }: {
   templateKey: ComponentKey;
   config: AnimationConfig;
@@ -54,6 +56,8 @@ export default function ControlledAnimation({
   timing?: ElementTiming;
   /** Vignette (bibliothèque) : pas un calque du projet. */
   preview?: boolean;
+  /** Côté rendu MP4 : pas d'overlay (sinon la capture l'inclut). */
+  renderStage?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
@@ -65,6 +69,8 @@ export default function ControlledAnimation({
   });
 
   // Clé de moteurs : template intégré OU template custom (via composant de base).
+  const studioMeta = getStudioTemplate(templateKey);
+  const sandboxCode = studioMeta && "sandboxCode" in studioMeta ? (studioMeta as { sandboxCode?: string }).sandboxCode : undefined;
   const engineKey = isStudioTemplateKey(templateKey) ? baseEngineKeyOf(templateKey) : templateKey;
   const builder: AnimationBuilder | undefined = ANIMATION_BUILDERS[engineKey] ?? ANIMATION_BUILDERS[templateKey];
 
@@ -114,6 +120,47 @@ export default function ControlledAnimation({
   const Frame = STUDIO_FRAMES[engineKey as ComponentKey] ?? STUDIO_FRAMES[templateKey];
 
   if (!builder || !Frame) {
+    if (sandboxCode) {
+      // Templates « code » : le moteur du Studio est maître du temps via le
+      // contrat déterministe (SEEK) ; le code est servi par /sandbox/<id>
+      // (CSP par en-tête HTTP).
+      const sandboxMeta = studioMeta as
+        | {
+            sandboxCode?: string;
+            timeDriven?: boolean;
+            timelineDuration?: number;
+            version?: number;
+            sandboxVersion?: number;
+            sandboxContract?: { duration: number; outAt?: number };
+          }
+        | null;
+      const total = sandboxMeta?.sandboxContract?.duration ?? sandboxMeta?.timelineDuration ?? elementDuration ?? config.duration;
+      return (
+        <div
+          className="absolute inset-0 h-full w-full overflow-hidden"
+          style={{ backgroundColor: config.backgroundColor, fontFamily: fontCss(config.fontFamily) }}
+          data-mgsi-element={preview ? undefined : ""}
+        >
+          <SandboxTimelineFrame
+            preview={preview}
+            hideOverlay={renderStage}
+            /* STUDIO/RENDU : mode doc (srcdoc) — les iframes opaques servies
+             * par URL sont ÉTRANGLÉES par Chromium (acks ~2.5 s) ; en srcdoc
+             * les acks sont immédiats et la CSP reste réelle (via <meta>). */
+            code={(sandboxCode ?? "") + ""}
+            params={config as import("@/components/studio/sandbox-frame").SandboxParams}
+            time={timelineTimeFor(localTime, {
+              total,
+              outAt: sandboxMeta?.sandboxContract?.outAt,
+              elementDuration: elementDuration ?? config.duration,
+              timing,
+              speed: 1,
+            })}
+            compatible={sandboxMeta?.timeDriven ?? false}
+          />
+        </div>
+      );
+    }
     return (
       <div
         className="absolute inset-0 flex items-center justify-center text-xs text-muted"

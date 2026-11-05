@@ -18,12 +18,15 @@ export default function TemplateDemoControls({
   templateKey,
   defaultConfig,
   sourceCode,
+  sourceTemplate,
   configFromTemplate,
 }: {
   /** Clé du composant approuvé (undefined pour les templates « code »). */
   templateKey?: ComponentKey;
   defaultConfig: AnimationConfig;
-  /** Code source (template « code ») : prévisualisation sandboxée au lieu du composant React. */
+  /** Mode route : le code PUBLIÉ est servi par /sandbox/<id> (CSP en en-tête). */
+  sourceTemplate?: { templateId: string; version?: number };
+  /** Mode srcdoc (éditeur live uniquement). */
   sourceCode?: string;
   /** Départ depuis la config du template (custom) plutôt que les défauts du registre. */
   configFromTemplate?: AnimationConfig;
@@ -46,12 +49,16 @@ export default function TemplateDemoControls({
     <section aria-label="Aperçu interactif personalisable" className="flex flex-col gap-4">
       <div className="relative overflow-hidden rounded-3xl border border-line bg-surface">
         <div className="relative aspect-video w-full">
-          {sourceCode ? (
+          {sourceTemplate ? (
+            <SandboxPreview
+              sourceTemplate={sourceTemplate}
+              config={config as AnimationConfigLite}
+            />
+          ) : sourceCode ? (
             <SandboxPreview
               code={sourceCode}
               rerunKey={rerunKey}
               config={config as AnimationConfigLite}
-              ariaLabel="Aperçu isolé de l'animation"
             />
           ) : templateKey ? (
             <AnimationPlayer

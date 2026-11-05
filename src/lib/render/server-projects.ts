@@ -1,9 +1,8 @@
 import "server-only";
 import { validateProject, type StudioProject } from "@/lib/studio/project-model";
 import { registerCustomStudioTemplates } from "@/lib/studio/template-registry";
-import { listPublishedCustomTemplates } from "@/lib/templates/custom-store";
-import { customElementKind } from "@/lib/templates/custom-model";
-import type { AnimationConfig } from "@/types/animation";
+import { listStudioCustomTemplates, type StudioCustomTemplateInput } from "@/lib/templates/published-studio";
+export type { StudioCustomTemplateInput };
 
 /** Client Supabase service_role (serveur uniquement — jamais exposé au navigateur). */
 export async function adminSupabase() {
@@ -14,33 +13,10 @@ export async function adminSupabase() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-export interface StudioCustomTemplateInput {
-  id: string;
-  slug: string;
-  name: string;
-  category: string;
-  sourceKind: string;
-  componentKey?: string;
-  elementKind: string;
-  defaultConfig: AnimationConfig;
-}
-
-/** Templates custom publiés (source « composant »), au format attendu par le registre Studio. */
+/** Templates custom publiés (composants + codes) au format registre Studio. */
 export async function publishedStudioCustomTemplates(): Promise<StudioCustomTemplateInput[]> {
   try {
-    const published = await listPublishedCustomTemplates();
-    return published
-      .filter((t) => t.sourceKind === "component" && t.componentKey)
-      .map((t) => ({
-        id: t.id,
-        slug: t.slug,
-        name: t.name,
-        category: t.category,
-        sourceKind: t.sourceKind,
-        componentKey: t.componentKey,
-        elementKind: customElementKind(t),
-        defaultConfig: t.defaultConfig,
-      }));
+    return await listStudioCustomTemplates();
   } catch {
     return [];
   }

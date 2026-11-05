@@ -111,14 +111,17 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
 
 
   // Enregistre les templates custom PUBLIÉS dans le registre runtime
-  // (une fois par liste ; les temps pilotés passent par le composant de base).
+  // (une fois par liste) puis force un re-rendu : la bibliothèque lit le
+  // registre module (muté) — le signal la resynchronise même au repos.
   const registeredRef = useRef<string>("");
+  const [templatesVersion, bumpTemplatesVersion] = useState(0);
   useEffect(() => {
     if (!customTemplates.length) return;
     const signature = customTemplates.map((t) => t.slug).join("|");
     if (registeredRef.current === signature) return;
     registeredRef.current = signature;
     registerCustomStudioTemplates(customTemplates);
+    bumpTemplatesVersion((v) => v + 1);
   }, [customTemplates]);
 
   const toasts = useToasts();
@@ -126,6 +129,9 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
   useEffect(() => {
     toastsRef.current = toasts;
   }, [toasts]);
+  // La version des templates (bumpé à l'enregistrement) force le re-rendu
+  // des panneaux qui lisent le registre module.
+  void templatesVersion;
   const cloudErrorShownRef = useRef(false);
   const saveNowRef = useRef<(target: StudioProject) => Promise<void>>(async () => {});
 
