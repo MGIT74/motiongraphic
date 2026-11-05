@@ -212,7 +212,7 @@ async function persistProject(project: StudioProject, userId: string, base: Stud
 
 /** Lien pour ouvrir le projet dans le Studio (réservé aux admins connectés en mode construction). */
 function studioUrl(projectId: string): string {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://motiongraphic.si").replace(/\/+$/, "");
+  const base = (process.env.STUDIO_PUBLIC_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://studio.motiongraphic.si").replace(/\/+$/, "");
   return `${base}/studio?project=${encodeURIComponent(projectId)}`;
 }
 
