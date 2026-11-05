@@ -376,6 +376,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
             className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${tab === "lab" ? "admin-nav-active" : "text-muted hover:bg-elevated hover:text-ink"}`}>
             <Code2 className="h-4 w-4" /> Template Lab
           </button>
+          <a href="/admin/users" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-muted transition-colors hover:bg-elevated hover:text-ink">Gestion des utilisateurs</a>
           <a href="/settings/mcp" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-muted transition-colors hover:bg-elevated hover:text-ink">Connexions MCP</a>
           <a href="/explore" target="_blank" rel="noopener noreferrer" className="mt-5 flex items-center gap-3 border-t border-line px-3 py-4 text-sm text-muted hover:text-ink">
             <ExternalLink className="h-4 w-4" /> Voir le site
