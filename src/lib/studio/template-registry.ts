@@ -38,6 +38,11 @@ export function extendMeta(base: ComponentMeta, overrides: Partial<StudioTemplat
 }
 
 export const STUDIO_TEMPLATES: Record<string, StudioTemplateMeta> = {
+  "chat-conversation-reveal-01": extendMeta(getComponentMeta("chat-conversation-reveal-01"), {
+    elementKind: "cards",
+    studioCategory: "ui-motion",
+    timelineDuration: 5.8,
+  }),
   "kinetic-type-01": extendMeta(getComponentMeta("kinetic-type-01"), {
     elementKind: "text",
     studioCategory: "text-motion",

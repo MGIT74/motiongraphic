@@ -289,8 +289,31 @@ export function buildLogoReveal(
   return tl;
 }
 
+/** Bounce entrances for complete chat messages; seekable GSAP timeline. */
+export function buildChatConversationReveal(root: HTMLElement, config: AnimationConfig, opts: BuilderOptions = {}): gsap.core.Timeline | void {
+  const stage = root.querySelector<HTMLElement>("[data-chat-stage]");
+  if (!stage) return;
+  const header = root.querySelector<HTMLElement>("[data-chat-header]");
+  const question = root.querySelector<HTMLElement>("[data-chat-question]");
+  const answer = root.querySelector<HTMLElement>("[data-chat-answer]");
+  const input = root.querySelector<HTMLElement>("[data-chat-input]");
+  const carets = root.querySelectorAll<HTMLElement>("[data-chat-question-caret], [data-chat-answer-caret]");
+  const k = Math.max(0.5, config.duration / 5.8);
+  const tl = gsap.timeline(tlOptions(opts.loop ?? true, 0.6));
+  if (header) tl.fromTo(header, { opacity: 0, yPercent: -25 }, { opacity: 1, yPercent: 0, duration: 0.45 * k, ease: "power3.out" }, 0);
+  // Complete messages appear at once, with a spring-like overshoot.
+  if (question) tl.fromTo(question, { opacity: 0, xPercent: 22, yPercent: 12, scale: 0.72 }, { opacity: 1, xPercent: 0, yPercent: 0, scale: 1, duration: 0.85 * k, ease: "back.out(2.1)" }, 0.65 * k);
+  if (answer) tl.fromTo(answer, { opacity: 0, xPercent: -22, yPercent: 12, scale: 0.72 }, { opacity: 1, xPercent: 0, yPercent: 0, scale: 1, duration: 0.85 * k, ease: "back.out(2.1)" }, 2.1 * k);
+  if (carets.length) tl.set(carets, { display: "none" }, 0);
+  if (input) tl.fromTo(input, { opacity: 0, yPercent: 15 }, { opacity: 0.7, yPercent: 0, duration: 0.45 * k, ease: "power3.out" }, 3.25 * k);
+  tl.addLabel("out", 5.05 * k);
+  tl.to(stage, { opacity: 0, yPercent: -5, duration: 0.45 * k, ease: "power2.in" }, "out");
+  return tl;
+}
+
 /** Registre des builders, par clé de template. */
 export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
+  "chat-conversation-reveal-01": buildChatConversationReveal,
   "kinetic-type-01": buildKineticType,
   "text-reveal-01": buildTextReveal,
   "elastic-text-01": buildElasticText,

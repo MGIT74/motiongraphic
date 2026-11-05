@@ -17,6 +17,7 @@ const CATEGORY_IDS = {
 } as const;
 
 const ANIM_IDS = {
+  chatReveal: "00000000-0000-4000-8000-000000000026",
   kinetic: "00000000-0000-4000-8000-000000000011",
   reveal: "00000000-0000-4000-8000-000000000012",
   elastic: "00000000-0000-4000-8000-000000000013",
@@ -68,6 +69,23 @@ interface DemoTemplateInput {
 }
 
 const TEMPLATES: DemoTemplateInput[] = [
+  {
+    id: ANIM_IDS.chatReveal,
+    title: "Chat Conversation Reveal 01",
+    slug: "chat-conversation-reveal-01",
+    description: "Conversation IA originale avec texte saisi progressivement et réponse animée.",
+    categoryId: "interface",
+    componentKey: "chat-conversation-reveal-01",
+    config: {
+      text: "How can I simplify my workflow?\nStart with one clear idea, then bring it to life.",
+      primaryColor: "#192033",
+      accentColor: "#6D5EF7",
+      backgroundColor: "#F7F8FC",
+      duration: 5.8,
+      speed: 1,
+    },
+    duration: 5.8,
+  },
   {
     id: ANIM_IDS.kinetic,
     title: "Kinetic Typography",

@@ -140,6 +140,7 @@ export function validateCustomTemplate(
 }
 
 export const RESERVED_SLUGS: string[] = [
+  "chat-conversation-reveal-01",
   "kinetic-type-01",
   "text-reveal-01",
   "elastic-text-01",
