@@ -1,4 +1,5 @@
 import type { AnimationConfig } from "@/types/animation";
+import { requireMcpPrincipal } from "./mcp-auth";
 
 import { isSupabaseConfigured, supabaseUrl } from "@/lib/supabase/config";
 import { listAllPublishedTemplates } from "@/lib/templates/registry";
@@ -71,9 +72,6 @@ function mcpConfigCheck(): { ok: true } | { ok: false; reason: string } {
   }
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return { ok: false, reason: "SUPABASE_SERVICE_ROLE_KEY absente (env serveur) — requise pour les outils MCP." };
-  }
-  if (!process.env.MCP_USER_ID) {
-    return { ok: false, reason: "MCP_USER_ID absent — identifiant de l'utilisateur propriétaire des projets MCP." };
   }
   return { ok: true };
 }
@@ -369,7 +367,7 @@ function needScene(input: McpInput, project: StudioProject): number {
 async function needProject(input: McpInput): Promise<{ project: StudioProject; projectId: string; userId: string }> {
   const conf = mcpConfigCheck();
   if (!conf.ok) throw new McpToolError(conf.reason);
-  const userId = process.env.MCP_USER_ID as string;
+  const userId = requireMcpPrincipal().userId;
   const projectId = needString(input, "project_id", "project_id");
   const project = await loadProjectRow(projectId, userId);
   if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
@@ -427,7 +425,7 @@ export const MCP_PROJECT_TOOLS = [
     run: async (input: McpInput) => {
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
-      const userId = process.env.MCP_USER_ID as string;
+      const userId = requireMcpPrincipal().userId;
       const name = typeof input.name === "string" ? input.name.trim().slice(0, 120) : undefined;
       const format = (Object.keys(PROJECT_FORMATS) as ProjectFormat[]).includes(input.format as ProjectFormat)
         ? (input.format as ProjectFormat)
@@ -461,7 +459,7 @@ export const MCP_PROJECT_TOOLS = [
     run: async (input: McpInput) => {
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
-      const userId = process.env.MCP_USER_ID as string;
+      const userId = requireMcpPrincipal().userId;
       const client = await adminClient();
       const { data, error } = await client
         .from("studio_projects")
@@ -545,7 +543,7 @@ export const MCP_PROJECT_TOOLS = [
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
       const projectId = needString(input, "project_id", "project_id");
-      const userId = process.env.MCP_USER_ID as string;
+      const userId = requireMcpPrincipal().userId;
       const project = await loadProjectRow(projectId, userId);
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
       const name = typeof input.name === "string" ? input.name.trim().slice(0, 80) || "Scène" : `Scène ${project.scenes.length + 1}`;
@@ -582,7 +580,7 @@ export const MCP_PROJECT_TOOLS = [
       if (!conf.ok) throw new McpToolError(conf.reason);
       const projectId = needString(input, "project_id", "project_id");
       const templateKey = needString(input, "template_key", "template_key");
-      const userId = process.env.MCP_USER_ID as string;
+      const userId = requireMcpPrincipal().userId;
       const project = await loadProjectRow(projectId, userId);
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
       const sceneIdx = needIndex(input, project);
@@ -646,7 +644,7 @@ export const MCP_PROJECT_TOOLS = [
     run: async (input: McpInput) => {
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
-      const userId = process.env.MCP_USER_ID as string;
+      const userId = requireMcpPrincipal().userId;
       const projectId = needString(input, "project_id", "project_id");
       const elementId = needString(input, "element_id", "element_id");
       const project = await loadProjectRow(projectId, userId);
@@ -695,7 +693,7 @@ export const MCP_PROJECT_TOOLS = [
     run: async (input: McpInput) => {
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
-      const userId = process.env.MCP_USER_ID as string;
+      const userId = requireMcpPrincipal().userId;
       const projectId = needString(input, "project_id", "project_id");
       const elementId = needString(input, "element_id", "element_id");
       const newKey = needString(input, "new_template_key", "new_template_key");
@@ -724,7 +722,7 @@ export const MCP_PROJECT_TOOLS = [
     run: async (input: McpInput) => {
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
-      const userId = process.env.MCP_USER_ID as string;
+      const userId = requireMcpPrincipal().userId;
       const projectId = needString(input, "project_id", "project_id");
       const project = await loadProjectRow(projectId, userId);
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId}.`);
@@ -751,7 +749,7 @@ export const MCP_PROJECT_TOOLS = [
     run: async (input: McpInput) => {
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
-      const userId = process.env.MCP_USER_ID as string;
+      const userId = requireMcpPrincipal().userId;
       const projectId = needString(input, "project_id", "project_id");
       const project = await loadProjectRow(projectId, userId);
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
@@ -772,7 +770,7 @@ export const MCP_PROJECT_TOOLS = [
     run: async (input: McpInput) => {
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
-      const userId = process.env.MCP_USER_ID as string;
+      const userId = requireMcpPrincipal().userId;
       const projectId = needString(input, "project_id", "project_id");
       const project = await loadProjectRow(projectId, userId);
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId}.`);
@@ -946,6 +944,7 @@ export const MCP_PROJECT_TOOLS = [
       },
     },
     run: async (input: McpInput): Promise<McpToolOutput> => {
+      if (requireMcpPrincipal().kind !== "legacy") throw new McpToolError("Aperçu MCP multi-utilisateur temporairement désactivé en attente de validation du moteur.");
       const { projectId } = await needProject(input);
       const { previewFrame } = await import("@/lib/render/engine");
       const time = optNumber(input, "time") ?? 0;
@@ -965,6 +964,7 @@ export const MCP_PROJECT_TOOLS = [
       "Lance l'export MP4 (H.264, 30 i/s, 1920×1080 / 1080×1920 / 1080×1080 selon le format). Asynchrone : renvoie render_id, à suivre avec get_render (environ 3 à 6 s de calcul par seconde de vidéo).",
     inputSchema: { type: "object", required: ["project_id"], properties: { project_id: { type: "string" } } },
     run: async (input: McpInput) => {
+      if (requireMcpPrincipal().kind !== "legacy") throw new McpToolError("Export MCP multi-utilisateur temporairement désactivé en attente de validation du pipeline de rendu.");
       const { projectId, project } = await needProject(input);
       const { startRender } = await import("@/lib/render/engine");
       const job = await startRender(projectId);
@@ -980,7 +980,7 @@ export const MCP_PROJECT_TOOLS = [
       if (!conf.ok) throw new McpToolError(conf.reason);
       const { getRender } = await import("@/lib/render/engine");
       const job = await getRender(needString(input, "render_id", "render_id"));
-      if (!job || job.userId !== process.env.MCP_USER_ID) throw new McpToolError("Rendu introuvable.");
+      if (!job || job.userId !== requireMcpPrincipal().userId) throw new McpToolError("Rendu introuvable.");
       return JSON.stringify({
         render_id: job.id,
         project_id: job.projectId,
