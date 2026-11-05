@@ -144,7 +144,10 @@ export default function ControlledAnimation({
           <SandboxTimelineFrame
             preview={preview}
             hideOverlay={renderStage}
-            sourceTemplate={{ templateId: templateKey, version: sandboxMeta?.sandboxVersion }}
+            /* STUDIO/RENDU : mode doc (srcdoc) — les iframes opaques servies
+             * par URL sont ÉTRANGLÉES par Chromium (acks ~2.5 s) ; en srcdoc
+             * les acks sont immédiats et la CSP reste réelle (via <meta>). */
+            code={(sandboxCode ?? "") + ""}
             params={config as import("@/components/studio/sandbox-frame").SandboxParams}
             time={timelineTimeFor(localTime, {
               total,

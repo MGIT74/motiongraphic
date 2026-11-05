@@ -296,11 +296,8 @@ export default function TemplateCheck() {
   const Frame = loaded ? STUDIO_FRAMES[loaded.key as ComponentKey] : null;
   const size = loaded ? SIZES[loaded.format] : SIZES["16:9"];
   const sandboxEntry = sandboxTemplates.find((t) => t.key === loaded?.key) ?? null;
-  /* Ack du seek sandbox : promesse exposée via __tc.seek (résolution ci-dessous). */
-  useEffect(() => {
-    API_REF.seekWaiters.current.forEach((resolve) => resolve());
-    API_REF.seekWaiters.current = [];
-  }, [sandboxTime]);
+  /* Ack du seek sandbox : la promesse résout UNIQUEMENT sur FRAME_READY
+   * (l'ordonnancement SET_PARAMS -> ack -> SEEK -> frame) + secours 4 s. */
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2147483000, background: "#808080" }}>
       <div
@@ -317,11 +314,13 @@ export default function TemplateCheck() {
           >
             <SandboxTimelineFrame
               preview
-              sourceTemplate={{ templateId: sandboxEntry.key, version: sandboxEntry.version }}
+              code={sandboxEntry.code}
               params={loaded.config as import("@/components/studio/sandbox-frame").SandboxParams}
               time={sandboxTime}
               compatible={sandboxEntry.compatible}
-              onFrame={() => {
+              onFrame={(info) => {
+                // Acquittement RÉEL : dépile les seek en attente.
+                void info;
                 API_REF.seekWaiters.current.forEach((resolve) => resolve());
                 API_REF.seekWaiters.current = [];
               }}

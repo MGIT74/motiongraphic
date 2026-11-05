@@ -66,6 +66,7 @@ export async function GET(request: NextRequest, { params: routeParams }: { param
     return sandboxRedirectError("Code source absent pour ce template.");
   }
 
+  const isPublicReady = template.status === "published";
   const html = buildSandboxDocumentV2(template.code, sessionId, {
     text: template.defaultConfig.text,
     primaryColor: template.defaultConfig.primaryColor,
@@ -81,7 +82,12 @@ export async function GET(request: NextRequest, { params: routeParams }: { param
       "Content-Security-Policy": SANDBOX_CSP_FALLBACK_HEADER,
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+      // PUBLIÉ UNIQUEMENT : cache court (la dépublication reste effective
+      // ~90s après les caches partagés — limite documentée). Les brouillons
+      // passent par `private, no-store` (jamais de cache partagé).
+      "Cache-Control": isPublicReady
+        ? "public, max-age=30, stale-while-revalidate=60"
+        : "private, no-store",
       "X-Robots-Tag": "noindex, nofollow",
     },
   });
@@ -95,6 +101,10 @@ function sandboxRedirectError(message: string): NextResponse {
   ].join("");
   return new NextResponse(html, {
     status: 404,
-    headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": SANDBOX_CSP_FALLBACK_HEADER },
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy": SANDBOX_CSP_FALLBACK_HEADER,
+      "Cache-Control": "private, no-store",
+    },
   });
 }

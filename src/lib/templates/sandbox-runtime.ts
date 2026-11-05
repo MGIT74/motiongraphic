@@ -27,12 +27,19 @@ export const SANDBOX_CSP_HEADER =
 /** Alias historique (srcdoc : mode aperçu live de l'éditeur). */
 export const SANDBOX_CSP_FALLBACK_HEADER = SANDBOX_CSP_HEADER;
 
+/** Version META de la CSP (pour les documents srcdoc) : sans frame-ancestors. */
+export const SANDBOX_CSP_META =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; worker-src 'none'; form-action 'none'; media-src 'none'; object-src 'none'; child-src 'none'; base-uri 'none'";
+
 /** Prelude v2 : neutralisation + SEEK/ACK (sans balise script : l'hôte emball). */
 const PRELUDE_V2_SOURCE = `
 (function () {
   "use strict";
   var SESSION = window.__MGS_SESSION__;
   var metrics = { received: 0, ignored: 0, frames: 0, degraded: 0, errors: 0, neutered: [] };
+  var lastSeekedT = 0;
+  // Charge id du document : l'hôte distingue initialisation et pong (ping).
+  var LOAD_ID = Math.random().toString(36).slice(2) + "-" + Math.floor(performance.now());
 
   function neuter(name, body) {
     Object.defineProperty(window, name, {
@@ -93,6 +100,7 @@ const PRELUDE_V2_SOURCE = `
     var contract = window.__MGS_TIMELINE__;
     post({
       type: "mgsi:ready",
+      loadId: LOAD_ID,
       mode: contract && typeof contract.renderAt === "function" ? "timeline" : "free",
       duration: contract ? Number(contract.duration) || 0 : 0,
       outAt: contract && Number(contract.outAt) > 0 ? Number(contract.outAt) : undefined,
@@ -100,6 +108,7 @@ const PRELUDE_V2_SOURCE = `
     });
   }
   function handleSeek(data) {
+    lastSeekedT = data.t;
     var contract = window.__MGS_TIMELINE__;
     if (!contract || typeof contract.renderAt !== "function") {
       post({ type: "mgsi:error", code: "CONTRACT_MISSING" });
@@ -126,6 +135,9 @@ const PRELUDE_V2_SOURCE = `
     metrics.received++;
     if (!data || typeof data !== "object" || data.session !== SESSION || typeof data.type !== "string") {
       metrics.ignored++;
+      // Journalisé vers l'hôte : le compteur des messages hostiles reste à jour
+      // côté Studio (les tests lit ignored).
+      post({ type: "mgsi:metrics", metrics: metrics });
       return;
     }
     if (data.type === "mgsi:ping") {
@@ -135,8 +147,27 @@ const PRELUDE_V2_SOURCE = `
     if (data.type === "mgsi:seek" && typeof data.t === "number" && typeof data.id !== "undefined") {
       handleSeek(data);
     } else if (data.type === "mgsi:set_params" && data.params && typeof data.params === "object") {
+      // Params appliqués PUIS re-rendu du dernier instant demandé : l'ack
+      // porte l'IMAGE rendue avec les paramètres FRAIS (aucun aller-retour
+      // séparé) — cohérence garanti pour le Studio et l'export MP4.
       applyParams(data.params);
-      nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: null, metrics: metrics }); });
+      var contract = window.__MGS_TIMELINE__;
+      var tNow = lastSeekedT;
+      if (contract && typeof contract.renderAt === "function") {
+        var contractDuration = Number(contract.duration) || 0;
+        tNow = contractDuration > 0 ? Math.max(0, Math.min(contractDuration, tNow)) : Math.max(0, tNow);
+        Promise.resolve()
+          .then(function () { return contract.renderAt(tNow, window.MGSI_CONFIG || {}); })
+          .then(function () {
+            nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: tNow, metrics: metrics }); });
+          }, function (err) {
+            metrics.errors++;
+            post({ type: "mgsi:error", seq: data.id, message: String(err && err.message || err) });
+            nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: tNow, degraded: true, metrics: metrics }); });
+          });
+      } else {
+        nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: tNow, metrics: metrics }); });
+      }
     } else {
       metrics.ignored++;
     }
@@ -161,6 +192,9 @@ export function buildSandboxDocumentV2(
   const safeCode = code.replace(/<\/script/gi, "<\\/script");
   return [
     '<!doctype html><html><head><meta charset="utf-8" /><meta name="referrer" content="no-referrer" />',
+    // CSP RÉELLE : Chromium ignore l'attribut csp des iframes ; en srcdoc, la
+    // <meta http-equiv> EST appliquée. (La route l'ajoute aussi en en-tête.)
+    `<meta http-equiv="Content-Security-Policy" content="${SANDBOX_CSP_META}">`,
     "<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent}*{box-sizing:border-box}</style>",
     "<script>window.__MGS_SESSION__ = " + sessionJson + ";</script>",
     params ? "<script>window.MGSI_CONFIG = " + paramsJson + ";</script>" : "",

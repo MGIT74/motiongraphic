@@ -16,6 +16,8 @@ declare global {
       metrics: () => { received: number; ignored: number; errors: number; degraded: number };
       sendHostile: () => number;
       boundsProbe: () => Promise<Bounds>;
+      /** Changement de paramètres (ordonnancement SET_PARAMS -> ack -> SEEK). */
+      setParams: (params: Partial<SandboxParams>) => Promise<void>;
     };
   }
 }
@@ -37,23 +39,24 @@ interface Bounds {
  * - messages hostiles ignorés + comptés.
  * Utilisée par tests/security/sandbox.security.cjs.
  */
+const BASE_PARAMS: SandboxParams = {
+  text: "SECURITE",
+  primaryColor: "#F5F5F7",
+  accentColor: "#0A84FF",
+  backgroundColor: "#000000",
+  duration: 3,
+  speed: 1,
+};
+
 export default function SandboxCheck() {
   const [mode, setMode] = useState<"timeline" | "free">("free");
   const [incompatible, setIncompatible] = useState<string[]>([]);
   const [time, setTime] = useState(0);
+  const [liveParams, setLiveParams] = useState<SandboxParams>(BASE_PARAMS);
   const frameRef = useRef<HTMLDivElement | null>(null);
-  const frameAckRef = useRef<(() => void) | null>(null);
+  const frameHandlerRef = useRef<((info: { seq: number; degraded: boolean; t: number | null }) => void) | null>(null);
   const boundsRef = useRef<((results: Bounds) => void) | null>(null);
   const sessionRef = useRef<string | null>(null);
-
-  const params: SandboxParams = {
-    text: "SECURITE",
-    primaryColor: "#F5F5F7",
-    accentColor: "#0A84FF",
-    backgroundColor: "#000000",
-    duration: 3,
-    speed: 1,
-  };
 
   // API : instance unique, stable.
   useEffect(() => {
@@ -65,8 +68,20 @@ export default function SandboxCheck() {
       seek: (t: number) => {
         setTime(t);
         return new Promise<void>((resolve) => {
-          frameAckRef.current = resolve;
-          setTimeout(() => resolve(), 4000);
+          // Corrélation stricte : la promesse résout sur l'acquittement de
+          // CET instant (t rendu) — pas sur un ack d'une autre image ou d'un
+          // SET_PARAMS (t:null). Secours : 5 s (dépassement = dégradé).
+          const ack = (info: { seq: number; degraded: boolean; t: number | null }) => {
+            if (info.degraded) return;
+            if (info.t === null || Math.abs(info.t - t) > 1e-6) return;
+            frameHandlerRef.current = null;
+            resolve();
+          };
+          frameHandlerRef.current = ack;
+          setTimeout(() => {
+            frameHandlerRef.current = null;
+            resolve();
+          }, 5000);
         });
       },
       metrics: () => {
@@ -82,6 +97,11 @@ export default function SandboxCheck() {
         win.postMessage({ type: "mgsi:seek", t: "not-a-number" }, "*");
         win.postMessage({ type: "mgsi:gibberish", session }, "*");
         return 4;
+      },
+      setParams: (next) => {
+        setLiveParams((current) => ({ ...current, ...next }));
+        // Résolution après le cycle SET_PARAMS -> ACK -> SEEK -> FRAME_READY.
+        return new Promise<void>((resolve) => setTimeout(resolve, 800));
       },
       boundsProbe: () => {
         const win = winOfStage();
@@ -139,12 +159,10 @@ export default function SandboxCheck() {
         <SandboxTimelineFrame
           preview
           sourceTemplate={{ templateId: "sandbox-check-probe" }}
-          params={params}
+          params={liveParams}
           time={time}
-          onFrame={() => {
-            const ack = frameAckRef.current;
-            frameAckRef.current = null;
-            ack?.();
+          onFrame={(info) => {
+            frameHandlerRef.current?.(info);
           }}
           onSession={(session) => {
             sessionRef.current = session;

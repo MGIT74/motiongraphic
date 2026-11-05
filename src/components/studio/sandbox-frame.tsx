@@ -42,6 +42,19 @@ export function drainDegradedFrames(): DegradedFrameInfo[] {
   return drained;
 }
 
+/** seekNow courant par session (module, hors refs React) : SET_PARAMS ack ->
+ * SEEK défilé sans détenir une fonction de rendu périmée. */
+const SEEK_NOW_BY_SESSION = new Map<string, (t: number, degraded?: boolean) => void>();
+
+/** Dernière signature de paramètres ENVOYÉE par session (module) : les
+ * changements de params post-ready déclenchent SET_PARAMS (un seul vol). */
+const SENT_PARAMS_SIG_BY_SESSION = new Map<string, string>();
+function enqueueSeekForSession(sessionId: string, t: number): () => void {
+  return () => {
+    SEEK_NOW_BY_SESSION.get(sessionId)?.(t);
+  };
+}
+
 // Quotas : iframes sandboxées simultanées (timeline vs vignettes/aperçus).
 const MAX_SANDBOX_FRAMES = 8;
 const MAX_SANDBOX_PREVIEWS = 4;
@@ -96,9 +109,13 @@ export { SANDBOX_CSP_FALLBACK_HEADER as SANDBOX_CSP };
 /* ------------------------------------------------------------------ */
 
 interface PendingSeek {
-  resolve: () => void;
+  resolve: (frameT?: number | null) => void;
   timer?: ReturnType<typeof setTimeout>;
+  t?: number;
 }
+
+/** Id de charge par document (l'initialisation ne re-courra pas aux pings). */
+const lastLoadIdBySession = new Map<string, string>();
 
 export default function SandboxTimelineFrame({
   code,
@@ -118,7 +135,7 @@ export default function SandboxTimelineFrame({
   sourceTemplate?: { templateId: string; version?: number };
   /** Mode srcdoc brut : UNIQUEMENT l'aperçu live de l'éditeur (code en cours
    * de saisie). L'origine reste opaque + calquage ; la CSP n'est pas
-   * applicable dans ce mode (documenté). */
+   * applicable au srcdoc (documenté). */
   code?: string;
   params: SandboxParams;
   /** Temps moteur (déjà converti par timelineTimeFor) — SEEK à chaque changement. */
@@ -129,128 +146,179 @@ export default function SandboxTimelineFrame({
   preview?: boolean;
   /** Rendu MP4 : pas d'overlay incompatible (sinon capturé dans la vidéo). */
   hideOverlay?: boolean;
-  /** Ack rendu : résolu à chaque FRAME_READY (ou timeout dégradé). */
-  onFrame?: (info: { seq: number; degraded: boolean }) => void;
+  /** Ack rendu : résolu à chaque FRAME_READY (ou timeout dégradé) ;
+   * `t` = l'instant réellement rendu (null pour un ack set_params). */
+  onFrame?: (info: { seq: number; degraded: boolean; t: number | null }) => void;
   /** Signale une incompatibilité détectée au runtime (badge éditeur). */
   onIncompatible?: (reason: string | null) => void;
   /** Session établie (tests : métriques par session). */
   onSession?: (sessionId: string) => void;
   backgroundColor?: string;
 }) {
-  // Session UNIQUE par instance (cross-talk impossible ; route : ?s=<session>).
+  /* ------------------------------------------------------------------ */
+  /* Réfs : session, acks, ordonnancement SET_PARAMS -> SEEK             */
+  /* ------------------------------------------------------------------ */
+
+  // Session UNIQUE par instance (aucun cross-talk ; route : ?s=<session>).
+  const invalidFrame = !code && !sourceTemplate;
   const sessionUid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const sessionId = `sbx-${sessionUid}`;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const seqRef = useRef(0);
+  const pendingRef = useRef<Map<number, PendingSeek>>(new Map());
+  const currentTimeRef = useRef(0);
+  const paramsSettledRef = useRef(true);
+  const queuedSeekRef = useRef<number | null>(null);
+  const lastParamsSeqRef = useRef<number | null>(null);
+  const lastParamsSentRef = useRef<SandboxParams | null>(null);
+  const [runtimeIncompatible, setRuntimeIncompatible] = useState(false);
+  const [quotaReached, setQuotaReached] = useState(() => sandboxQuotaExceeded(Boolean(preview)));
   const [doc, setDoc] = useState(() =>
     code ? buildSandboxDocumentV2(code, sessionId, params) : ""
   );
-  const seqRef = useRef(0);
-  const pendingRef = useRef<Map<number, PendingSeek>>(new Map());
-  const [runtimeIncompatible, setRuntimeIncompatible] = useState(false);
-  const [quotaReached, setQuotaReached] = useState(() => sandboxQuotaExceeded(Boolean(preview)));
 
-  // Callbacks parents (stabilisés) : valeurs lues via les refs dans les
-  // effets only (l'assignation dans un effet est validée par le linter React).
+  // Callbacks parents (stabilisés : assignation en effet, jamais en rendu).
   const onIncompatibleRef = useRef(onIncompatible);
   const onFrameRef = useRef(onFrame);
   const sendParamsRef = useRef<(params: SandboxParams) => void>(() => {});
-
-  // Paramètres courants (injectés par SET_PARAMS en mode route).
+  const onSessionRef = useRef(onSession);
   const paramsRef = useRef<SandboxParams>(params);
   useEffect(() => {
+    currentTimeRef.current = time;
     paramsRef.current = params;
     onIncompatibleRef.current = onIncompatible;
     onFrameRef.current = onFrame;
+    onSessionRef.current = onSession;
   });
 
-  /** SET_PARAMS + ACK : envoi + promesse partagée (résolue par l'ack). */
-  const sendParamsNow = useCallback((nextParams: SandboxParams) => {
-    const win = iframeRef.current?.contentWindow;
-    if (!win) return;
-    const seq = seqRef.current + 1;
-    seqRef.current = seq;
-    const pendingRef2 = pendingRef.current;
-    const pending: PendingSeek = { resolve: () => {} };
-    pendingRef2.set(seq, pending);
-    const wait = new Promise<void>((resolve) => {
-      pending.resolve = resolve;
-    });
-    pending.timer = setTimeout(() => {
-      pendingRef2.delete(seq);
-      pending.resolve();
-    }, 2500);
-    const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
-    pendingCodeWaits.add(wrapped);
-    win.postMessage({ type: "mgsi:set_params", session: sessionId, params: nextParams, id: seq }, "*");
-  }, [sessionId]);
-
-  // Liaison (dans un effet, jamais pendant le rendu) :
-  useEffect(() => {
-    sendParamsRef.current = sendParamsNow;
-  }, [sendParamsNow]);
-
-
   const isRouteMode = Boolean(sourceTemplate);
-  const docKey = keyOf(code ?? `route:${sourceTemplate?.templateId}:${sourceTemplate?.version ?? ""}`, sessionId, JSON.stringify(params));
-  const [lastDocKey, setLastDocKey] = useState(docKey);
-  if (lastDocKey !== docKey && !isRouteMode) {
-    // Reconstruction pendant le rendu (pattern React « adjusted state »).
-    setLastDocKey(docKey);
-    setDoc(buildSandboxDocumentV2(code ?? "", sessionId, params));
-    setRuntimeIncompatible(false);
-  }
-  // Mode route : src calculé (cohérent avec la méta enregistrée au rendu) ;
-  // chaque changement de PARAMÈTRES passe par SET_PARAMS (postMessage).
   const sandboxSrc = isRouteMode
     ? `/sandbox/${encodeURIComponent(sourceTemplate?.templateId ?? "")}?s=${encodeURIComponent(sessionId)}${
         sourceTemplate?.version ? `&v=${sourceTemplate.version}` : ""
       }`
     : null;
-  // Quota (module global, non-réactif) : suivi au rendu (le canvas re-rendu
-  // à chaque instant : le quota est réévalué régulièrement).
+
+  /** Expose la session (métriques par session pour les tests). */
+  useEffect(() => {
+    onSessionRef.current?.(sessionId);
+  }, [sessionId]);
+
+  /** Enfile le SEEK (le DERNIER demandé gagne) — module map, pas de ref. */
+  const flushQueuedSeek = useCallback(() => {
+    if (!paramsSettledRef.current) return;
+    const queued = queuedSeekRef.current;
+    if (queued === null) return;
+    queuedSeekRef.current = null;
+    enqueueSeekForSession(sessionId, queued)();
+  }, [sessionId]);
+
+  /* SEEK + ACK : envoi + promesse partagée + journal des échecs. */
+  const seekNow = useCallback(
+    (t: number, fromIncompatible = runtimeIncompatible) => {
+      const win = iframeRef.current?.contentWindow;
+      if (!win) return;
+      if (fromIncompatible) return; // jamais de faux ACK
+      const seq = seqRef.current + 1;
+      seqRef.current = seq;
+      const pending: PendingSeek = { resolve: () => {} };
+      pendingRef.current.set(seq, pending);
+      const wait = new Promise<void>((resolve) => {
+        pending.resolve = () => resolve();
+      });
+      pending.timer = setTimeout(() => {
+        pendingRef.current.delete(seq);
+        pending.resolve();
+        onFrameRef.current?.({ seq, degraded: true, t: null });
+        degradedFrames.push({ sessionId, seq, reason: "timeout" });
+        if (degradedFrames.length > 200) degradedFrames.splice(0, degradedFrames.length - 200);
+      }, 2500);
+      const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
+      pendingCodeWaits.add(wrapped);
+      win.postMessage({ type: "mgsi:seek", session: sessionId, t, id: seq }, "*");
+    },
+    [sessionId, runtimeIncompatible]
+  );
+  // Enregistrement du seekNow courant (nettoyé au démontage / changement).
+  useEffect(() => {
+    SEEK_NOW_BY_SESSION.set(sessionId, seekNow);
+    return () => {
+      if (SEEK_NOW_BY_SESSION.get(sessionId) === seekNow) SEEK_NOW_BY_SESSION.delete(sessionId);
+    };
+  }, [sessionId, seekNow]);
+
+  /* Changement de PARAMÈTRES après le chargement : SET_PARAMS (un seul en
+   * vol ; son acquittement débloque le SEEK éventuellement en file). */
+  useEffect(() => {
+    const docLoaded = lastLoadIdBySession.has(sessionId);
+    const sentSig = SENT_PARAMS_SIG_BY_SESSION.get(sessionId);
+    const sig = JSON.stringify(params);
+    if (!docLoaded || sentSig === sig || !paramsSettledRef.current) return;
+    sendParamsRef.current(paramsRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(params), sessionId]);
+
+  /* SET_PARAMS + ACK : l'acquittement débloque les SEEK en file ; l'attente
+   * d'acquittement vit dans pendingCodeWaits -> le rendu MP4 ne peut PAS
+   * capturer une image rendue avec d'anciens paramètres. */
+  const sendParamsNow = useCallback(
+    (nextParams: SandboxParams) => {
+      const win = iframeRef.current?.contentWindow;
+      if (!win) return;
+      const seq = seqRef.current + 1;
+      seqRef.current = seq;
+      paramsSettledRef.current = false;
+      const pending: PendingSeek = { resolve: () => {} };
+      /** ACK set_params (porte l'image rendue à t) : le queued SEEK ne part
+       * que s'il demande un instant DIFFÉRENT de celui déjà rendu. */
+      const settle = new Promise<void>((resolve) => {
+        pending.resolve = (frameT) => {
+          paramsSettledRef.current = true;
+          const queued = queuedSeekRef.current;
+          if (queued !== null) {
+            queuedSeekRef.current = null;
+            if (frameT === null || frameT === undefined || Math.abs(queued - frameT) > 1e-6) {
+              seekNow(queued);
+            }
+          }
+          resolve();
+        };
+      });
+      pending.timer = setTimeout(() => {
+        paramsSettledRef.current = true;
+        degradedFrames.push({ sessionId, seq, reason: "timeout" });
+        if (degradedFrames.length > 200) degradedFrames.splice(0, degradedFrames.length - 200);
+        pending.resolve(undefined);
+      }, 2500);
+      const wrapped = settle.finally(() => pendingCodeWaits.delete(wrapped));
+      pendingCodeWaits.add(wrapped);
+      SENT_PARAMS_SIG_BY_SESSION.set(sessionId, JSON.stringify(nextParams));
+      win.postMessage({ type: "mgsi:set_params", session: sessionId, params: nextParams, id: seq }, "*");
+    },
+    [sessionId, flushQueuedSeek]
+  );
+  useEffect(() => {
+    sendParamsRef.current = sendParamsNow;
+  }, [sendParamsNow]);
+
+  /* Reconstruction srcdoc (éditeur live : params inline -> settled). */
+  const docKey = keyOf(code ?? `route:${sourceTemplate?.templateId}:${sourceTemplate?.version ?? ""}`, sessionId, JSON.stringify(params));
+  const [lastDocKey, setLastDocKey] = useState(docKey);
+  if (lastDocKey !== docKey && !isRouteMode) {
+    setLastDocKey(docKey);
+    setDoc(buildSandboxDocumentV2(code ?? "", sessionId, params));
+    setRuntimeIncompatible(false);
+  }
+
+  /* Quota (suivi au rendu : le canvas re-rend à chaque instant). */
   if (sandboxQuotaExceeded(Boolean(preview)) !== quotaReached) {
     setQuotaReached(!quotaReached);
   }
 
-  /* Temps courant + SEEK/ACK (le handler mgsi:ready et les effets d'instant s'en servent). */
-  const currentTimeRef = useRef(0);
-  useEffect(() => {
-    currentTimeRef.current = time;
-  });
+  /* ------------------------------------------------------ */
+  /* Effets : session/acks, ping, temps                     */
+  /* ------------------------------------------------------ */
 
-  /** SEEK + ACK : envoi, promesse partagée, ack résolu par FRAME_READY. */
-  const seekNow = useCallback((t: number, fromIncompatible = runtimeIncompatible) => {
-    const win = iframeRef.current?.contentWindow;
-    if (!win) return;
-    if (fromIncompatible) return; // jamais de faux ACK
-    const seq = seqRef.current + 1;
-    seqRef.current = seq;
-    const pending: PendingSeek = { resolve: () => {} };
-    pendingRef.current.set(seq, pending);
-    const wait = new Promise<void>((resolve) => {
-      pending.resolve = resolve;
-    });
-    pending.timer = setTimeout(() => {
-      pendingRef.current.delete(seq);
-      pending.resolve();
-      onFrameRef.current?.({ seq, degraded: true });
-      degradedFrames.push({ sessionId, seq, reason: "timeout" });
-    if (degradedFrames.length > 200) degradedFrames.splice(0, degradedFrames.length - 200);
-    }, 2500);
-    const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
-    pendingCodeWaits.add(wrapped);
-    win.postMessage({ type: "mgsi:seek", session: sessionId, t, id: seq }, "*");
-  }, [sessionId, runtimeIncompatible]);
-
-  /* Session exposée (tests) : l'API de check lit les métriques par session. */
-  const onSessionRef = useRef(onSession);
-  useEffect(() => {
-    onSessionRef.current = onSession;
-    onSessionRef.current?.(sessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
-
-  /* Libération des acks au démontage (protège le rendu d'un blocage). */
+  /* Libération des acks au démontage (sans blocage du rendu MP4). */
   const isPreview = Boolean(preview);
   useEffect(() => {
     const pendingMap = pendingRef.current;
@@ -260,14 +328,17 @@ export default function SandboxTimelineFrame({
       pendingMap.forEach((pending) => {
         if (pending.timer) clearTimeout(pending.timer);
         pending.resolve();
-      onFrameRef.current?.({ seq: 0, degraded: true });
+        onFrameRef.current?.({ seq: 0, degraded: true, t: null });
+        degradedFrames.push({ sessionId, seq: 0, reason: "unmount" });
+        if (degradedFrames.length > 200) degradedFrames.splice(0, degradedFrames.length - 200);
       });
       pendingMap.clear();
+      lastLoadIdBySession.delete(sessionId);
     };
-  }, [isPreview]);
+  }, [sessionId, isPreview]);
 
+  /* Ping/pong + messages (session stricte, formes validées). */
   useEffect(() => {
-    // Ping/pong : certains READY partent avant l'écoute (srcdoc déjà chargé).
     const pingTimer = setInterval(() => {
       if (runtimeIncompatible) {
         clearInterval(pingTimer);
@@ -290,30 +361,74 @@ export default function SandboxTimelineFrame({
             degraded?: boolean;
             mode?: string;
             code?: string;
+            message?: string;
             metrics?: SandboxHostMetrics;
           }
         | null;
       if (!data || typeof data.type !== "string") return;
       if (data.session !== sessionId) return;
 
-      const local = metricsFor(sessionId);
-      recordMetrics(local, data.metrics ?? null);
+      recordMetrics(metricsFor(sessionId), data.metrics ?? null);
       if (data.type === "mgsi:ready") {
+        // Pong du MÊME document (même loadId) : PAS de réinitialisation ;
+        // mais si le SET_PARAMS partait avant l'écoute du sandbox (doc en
+        // chargement), le pong REJOUE le même seq (pas de nouvelle promesse).
+        const loadId = (data as { loadId?: string }).loadId ?? "";
+        const seenLoadId = lastLoadIdBySession.get(sessionId);
+        if (seenLoadId && seenLoadId === loadId) {
+          const win = iframeRef.current?.contentWindow;
+          if (!win) return;
+          // SET_PARAMS non encore acquitté : re-jeu du même seq.
+          if (!paramsSettledRef.current && lastParamsSeqRef.current !== null && lastParamsSentRef.current) {
+            win.postMessage(
+              { type: "mgsi:set_params", session: sessionId, params: lastParamsSentRef.current, id: lastParamsSeqRef.current },
+              "*"
+            );
+          }
+          // SEEK non acquitté : re-jeu du même seq (perte possible pendant le
+          // chargement du document ; la promesse/son timer ne changent pas).
+          const outstanding = Array.from(pendingRef.current.entries());
+          if (outstanding.length > 0) {
+            const [seqOutstanding, pendingOutstanding] = outstanding[outstanding.length - 1];
+            if (seqOutstanding !== lastParamsSeqRef.current) {
+              win.postMessage({ type: "mgsi:seek", session: sessionId, t: pendingOutstanding.t ?? 0, id: seqOutstanding }, "*");
+            }
+          }
+          return;
+        }
+        if (loadId) lastLoadIdBySession.set(sessionId, loadId);
+
         const incompatible = data.mode === "free" || !compatible;
         setRuntimeIncompatible(incompatible);
-        onIncompatibleRef.current?.(incompatible ? "Contrat __MGS_TIMELINE__ / renderAt(time) manquant ou non déterministe." : null);
-        // Mode route : les params initiaux passent par SET_PARAMS (CSP = doc
-        // sans params inline), puis premier SEEK au temps courant.
-        if (!incompatible && sourceTemplate) {
+        onIncompatibleRef.current?.(
+          incompatible ? "Contrat __MGS_TIMELINE__ / renderAt(time) manquant ou non déterministe." : null
+        );
+        if (incompatible) return;
+        // Route : SET_PARAMS d'abord (les paramètres inline ne sont pas dans
+        // le document servi) ; le premier SEEK part au flush.
+        if (isRouteMode) {
+          queuedSeekRef.current = queuedSeekRef.current ?? currentTimeRef.current;
           sendParamsRef.current(paramsRef.current);
+          return;
+        } else {
+          // srcdoc : params inline -> SEEK direct au temps courant.
+          queuedSeekRef.current = currentTimeRef.current;
+          flushQueuedSeek();
         }
-        seekNow(currentTimeRef.current, incompatible);
         return;
       }
       if (data.type === "mgsi:error") {
         if (data.code === "CONTRACT_MISSING") setRuntimeIncompatible(true);
-        else degradedFrames.push({ sessionId, seq: Number(data.seq) || 0, reason: "render-at-failed" });
-      if (degradedFrames.length > 200) degradedFrames.splice(0, degradedFrames.length - 200);
+        else {
+          degradedFrames.push({ sessionId, seq: Number(data.seq) || 0, reason: "render-at-failed" });
+          if (degradedFrames.length > 200) degradedFrames.splice(0, degradedFrames.length - 200);
+        }
+        if (onIncompatibleRef.current)
+          onIncompatibleRef.current?.(
+            data.code === "CONTRACT_MISSING"
+              ? "Contrat __MGS_TIMELINE__ / renderAt(time) manquant."
+              : `renderAt en échec : ${data.message ?? "erreur"}`
+          );
         return;
       }
       if (data.type === "mgsi:frame" && typeof data.seq === "number") {
@@ -324,7 +439,8 @@ export default function SandboxTimelineFrame({
         pending.resolve();
         onFrameRef.current?.({
           seq: data.seq,
-          degraded: Boolean(data.degraded) || Number(data.t) === null,
+          degraded: Boolean(data.degraded) || data.t === null,
+          t: data.t === null || data.t === undefined ? null : Number(data.t),
         });
         return;
       }
@@ -335,22 +451,36 @@ export default function SandboxTimelineFrame({
       clearInterval(pingTimer);
       clearTimeout(stopPing);
     };
-  }, [sessionId, compatible, runtimeIncompatible, sendParamsNow, sourceTemplate, seekNow]);
+  }, [sessionId, compatible, runtimeIncompatible, isRouteMode, flushQueuedSeek]);
 
-  // Chaque changement d'instant (lecture, scrub, export) -> SEEK.
-  // Mode gratuit : aucun ACK (l'animation n'est pas déterministe ; l'export
-  // sera refusé — jamais de faux rendu promis frame-exact).
-  const quotaBlock = quotaReached ? (
-    <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-4 text-center text-[10px] uppercase tracking-wider text-muted">
-      Quota d&apos;aperçus sandboxés atteint
-    </div>
-  ) : null;
+  /* Chaque changement d'instant (lecture, scrub, export) -> SEEK —
+   * mis en file si un SET_PARAMS attend son acquittement. */
   useEffect(() => {
-    if (quotaReached || runtimeIncompatible) return;
+    const win = iframeRef.current?.contentWindow;
+    if (!win || quotaReached || runtimeIncompatible) return;
+    if (!paramsSettledRef.current) {
+      queuedSeekRef.current = time;
+      return;
+    }
     seekNow(time);
   }, [time, doc, sessionId, quotaReached, runtimeIncompatible, seekNow]);
 
-  if (quotaBlock) return <div className="absolute inset-0" style={{ background: backgroundColor }}>{quotaBlock}</div>;
+  if (invalidFrame) {
+    return (
+      <div
+        className="absolute inset-0 flex items-center justify-center bg-black px-4 text-center text-[11px] leading-relaxed text-muted"
+      >
+        Aucun code ni template sandbox fourni.
+      </div>
+    );
+  }
+  if (quotaReached) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-4 text-center text-[10px] uppercase tracking-wider text-muted">
+        Quota d&apos;aperçus sandboxés atteint
+      </div>
+    );
+  }
 
   return (
     <div className="absolute inset-0" style={{ background: backgroundColor }}>
@@ -384,3 +514,4 @@ function recordMetrics(local: SandboxHostMetrics, data: SandboxHostMetrics | nul
   local.errors = data.errors;
   local.degraded = data.degraded;
 }
+
