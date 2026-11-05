@@ -30,6 +30,8 @@ export async function authenticateMcpRequest(request: Request): Promise<McpPrinc
   if (legacy && safeEqual(candidate, legacy) && process.env.MCP_USER_ID) {
     return { userId: process.env.MCP_USER_ID, kind: "legacy" };
   }
+  // Activation explicite après revue sécurité et tests d’isolation des ressources.
+  if (process.env.MCP_ENABLE_USER_TOKENS !== "true") return null;
   // En mode multi-utilisateur, seuls les Bearer JWT vérifiés sont acceptés.
   if (!bearer || !supabaseUrl() || !supabaseAnonKey()) return null;
   const client = createClient(supabaseUrl()!, supabaseAnonKey()!, { auth: { persistSession: false, autoRefreshToken: false } });
