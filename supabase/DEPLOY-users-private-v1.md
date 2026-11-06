@@ -69,7 +69,21 @@ manuellement sans garde. Exporter les données ci-dessus AVANT rollback.
 - Le dossier « profil utilisateur » (modifier prénom/email/mot de passe,
   déconnexion) n'est PAS dans cette PR (hors périmètre V1).
 
-## 5. Sécurité — récapitulatif des gardes
+## 5. Script d"auto-vérification SUR VOTRE Supabase (non destructif)
+
+`supabase/tests/rls-selfcheck.sql` — conçu pour un Supabase
+AUTO-HÉBERGÉ SANS clone : chaque scénario est une transaction terminée
+par **ROLLBACK**, identifiants dédiés (7e57/7f57 + rls-selfcheck-*@
+selftest.invalid), prévol anti-collision (abort si les identifiants
+existent), preuve finale **zéro ligne résiduelle** + résumé anonyme des
+administrateurs. Couvertures : création/lecture/créations personnelles,
+isolation A↔B, suspension (écritures refusées, lecture conservée,
+service exempté), self-service interdit, admin suspendu sans
+privilèges, jetons MCP (grants révoqués), invitations (rôle, révocable,
+expirée, consommation atomique). Syntaxe vérifiée par le parseur
+PostgreSQL réel (libpg_query).
+
+## 6. Sécurité — récapitulatif des gardes
 
 - Invitation : 409 sur compte actif, ré-invitation sur compte invité non
   activé (lien régénéré), expiration **appliquée côté serveur**
