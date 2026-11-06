@@ -10,7 +10,6 @@
  *   BASE_URL=http://localhost:3000 npm run test:parcours
  */
 const { chromium } = require("playwright");
-const { PNG } = require("pngjs");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const TMP = process.env.TEMP_DIR || "/tmp/mgsi-parcours";
@@ -28,9 +27,6 @@ async function pixelsDifferRaw(a, b, tolerance = 28) {
     if (d > tolerance) diff += 1;
   }
   return diff / (W * H) > 0.004;
-}
-function pixelsDiffer(aBuf, bBuf, tolerance = 28) {
-  return pixelsDifferRaw(aBuf, bBuf, tolerance);
 }
 
 /** Contrat déterministe renderAt(time, params) : cascade + sortie (fit/hold). */

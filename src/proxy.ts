@@ -2,37 +2,49 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 /**
- * Proxy (ex-middleware Next 16), trois rôles (mode construction actif sauf si
- * la variable d'environnement CONSTRUCTION_MODE vaut "off") :
- * 1. Mode construction : toute page publique est redirigée vers /construction ;
- *    /admin, /login, /api, /.well-known, robots.txt et sitemap.xml restent accessibles.
- * 2. Studio réservé aux admins pendant la construction : /studio s'ouvre
- *    uniquement pour un utilisateur connecté dont `profiles.role = 'admin'`
- *    (vérifié côté serveur via la session Supabase + RLS) ; sinon /construction.
- * 3. Rafraîchissement de la session Supabase pour les routes autorisées,
- *    uniquement quand Supabase est configuré (sinon : mode démo, requête inchangée).
+ * Proxy (ex-middleware Next 16) — application privée :
+ * 
+ * Rôles :
+ * 1. Rafraîchissement de la session Supabase (quand configuré).
+ * 2. Contrôle d'accès serveur (le masquage d'UI ne remplace jamais ceci) :
+ *    - sans session  : /login (les pages privées et la galerie) ;
+ *    - administrateur : tout ;
+ *    - utilisateur connecté : /studio, /settings/mcp, les API Studio ;
+ *    - visiteur        : /login, /api/mcp (auth MCP propre), /render (jeton
+ *      signé), /.well-known (découverte MCP), robots/sitemap.
+ *
+ * Le legacy MCP_ACCESS_TOKEN / la découverte MCP ne passent PAS par la
+ * session Supabase : /api/mcp continue d'authentifier par ses propres jetons.
  */
-export async function proxy(request: NextRequest) {
-  const path = request.nextUrl.pathname;
-  const publicAllowed = path === "/construction" || path.startsWith("/admin") ||
-    path === "/login" ||
-    path.startsWith("/api/") || path === "/api" ||
-    path === "/robots.txt" || path === "/sitemap.xml" ||
-    // Découverte OAuth des clients MCP : répondre 404, pas la page HTML de construction.
-    path.startsWith("/.well-known/") ||
-    // Page de rendu vidéo interne : protégée par son propre jeton signé.
-    path.startsWith("/render/");
-  // Interrupteur : CONSTRUCTION_MODE=off ouvre tout le site (et le Studio) au public.
-  const construction = process.env.CONSTRUCTION_MODE !== "off";
-  const adminOnly = construction && (path === "/studio" || path.startsWith("/studio/"));
+const PUBLIC_EXACT = ["/login", "/api/mcp", "/robots.txt", "/sitemap.xml"];
+const PUBLIC_PREFIXES = ["/render/", "/.well-known/"];
 
-  if (construction && !publicAllowed && !adminOnly) return redirectToConstruction(request);
+/** Pages et API privées (session utilisateur requise ; RLS/roles ensuite). */
+const PRIVATE_PREFIXES = ["/admin", "/studio", "/settings", "/explore", "/templates/", "/api/studio/", "/api/templates/"];
+
+function isPrivate(path: string): boolean {
+  return PRIVATE_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix));
+}
+
+/** Chemins non privés (auth propre : MCP/render, ou publics sans données). */
+function isExemptFromSession(path: string): boolean {
+  return PUBLIC_EXACT.includes(path) || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+export async function proxy(request: NextRequest) {
+  console.log("[PROXY]", request.nextUrl.pathname, "| privé:", request.nextUrl.pathname.startsWith("/admin"));
+  const path = request.nextUrl.pathname;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {
-    // Sans Supabase, impossible de vérifier un admin : le Studio reste fermé.
-    return adminOnly ? redirectToConstruction(request) : NextResponse.next();
+    // MODE DÉMONSTRATION (Supabase non configuré, développement local) :
+    // pas d'utilisateurs en base — l'éditeur reste accessible en local
+    // pour les tests ; les pages privées exigent l'hôte local.
+    if (isPrivate(path) && !isLocalHost(request)) {
+      return redirectToLogin(request);
+    }
+    return NextResponse.next();
   }
 
   let response = NextResponse.next({ request });
@@ -59,27 +71,54 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (adminOnly) {
-    let isAdmin = false;
+  /* --------------------- contrôle d'accès serveur ----------------------- */
+
+  if (isExemptFromSession(path)) return response;
+
+  if (isPrivate(path)) {
+    let role: string | null = null;
     if (user) {
       const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-      isAdmin = (data as { role?: string } | null)?.role === "admin";
+      role = (data as { role?: string } | null)?.role ?? "user";
     }
-    if (!isAdmin) {
-      const redirect = redirectToConstruction(request);
+    if (!user) {
+      const redirect = redirectToLogin(request);
       // Conserve les cookies de session éventuellement rafraîchis.
       response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
       return redirect;
     }
+    // Administrateur : seul à passer /admin* (Template Lab, utilisateurs).
+    if (path.startsWith("/admin") && role !== "admin") {
+      return response;
+    }
+    // Les API de templates (Lab) sont réservées à l'administrateur ; les API
+    // Studio (projets/médias/rendus propres à l'utilisateur) restent ouvertes
+    // aux utilisateurs connectés ; le filtrage détaillé est appliqué par RLS.
+    if (path.startsWith("/api/templates/") && role !== "admin") {
+      const blocked = NextResponse.json(
+        { ok: false, errors: ["Administration requise."] },
+        { status: 403 }
+      );
+      response.cookies.getAll().forEach((cookie) => blocked.cookies.set(cookie));
+      return blocked;
+    }
+    return response;
   }
 
   return response;
 }
 
-function redirectToConstruction(request: NextRequest): NextResponse {
+function isLocalHost(request: NextRequest): boolean {
+  const host = (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "").toLowerCase();
+  return host.startsWith("localhost") || host.startsWith("127.0.0.1") || host.startsWith("[::1]");
+}
+
+function redirectToLogin(request: NextRequest): NextResponse {
   const destination = request.nextUrl.clone();
-  destination.pathname = "/construction";
-  destination.search = "";
+  destination.pathname = "/login";
+  if (request.nextUrl.pathname !== "/" && request.nextUrl.pathname !== "/login") {
+    destination.searchParams.set("next", request.nextUrl.pathname);
+  }
   return NextResponse.redirect(destination, 307);
 }
 

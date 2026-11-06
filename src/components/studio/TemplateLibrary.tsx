@@ -32,7 +32,16 @@ export default function TemplateLibrary({
         </span>
       </p>
       {STUDIO_CATEGORIES.map((category) => {
-        const templates = Object.entries(STUDIO_TEMPLATES).filter(([, t]) => t.studioCategory === category.id);
+        // Bibliothèque d'ajout : SEULEMENT les templates pilotables par la
+        // timeline (contrat renderAt / builder GSAP). Les non-pilotables
+        // restent diagnosables dans le Template Lab (admin) — jamais perdus.
+        const templates = Object.entries(STUDIO_TEMPLATES).filter(
+          ([, t]) => {
+            const custom = t as Partial<CustomStudioTemplateMeta>;
+            if (custom.timeDriven === false) return false;
+            return t.studioCategory === category.id;
+          }
+        );
         if (templates.length === 0) return null;
         return (
           <div key={category.id}>

@@ -7,7 +7,6 @@ import Footer from "@/components/layout/Footer";
 export default function SiteChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const appShell =
-    pathname === "/construction" ||
     pathname === "/admin" ||
     pathname.startsWith("/admin/") ||
     pathname === "/studio" ||
