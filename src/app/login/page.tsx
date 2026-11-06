@@ -9,6 +9,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 export default function LoginPage() {
   const router = useRouter();
   const configured = isSupabaseConfigured();
+  // ?next= : l'instant de connexion ramène précisément où l'utilisateur allait.
+  const nextPath = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,8 +34,9 @@ export default function LoginPage() {
         setBusy(false);
         return;
       }
-      // Garde d'acceptation (côté serveur) : l'invitation doit être valide
-      // (non révoquée, non expirée) et le compte actif — sinon déconnexion.
+      // Garde d"acceptation serveur (toutes les connexions passent ici) :
+      // l"invitation doit être valide (non révoquée/non expirée) et le
+      // compte activé — sinon déconnexion immédiate.
       const consume = await fetch("/api/auth/consume", { method: "POST", cache: "no-store" });
       const consumePayload = (await consume.json().catch(() => ({}))) as { ok?: boolean; errors?: string[]; role?: string };
       if (!consume.ok || !consumePayload.ok) {
@@ -43,7 +46,12 @@ export default function LoginPage() {
         setBusy(false);
         return;
       }
-      router.push(consumePayload.role === "admin" ? "/admin" : "/studio");
+      const role = consumePayload.role ?? "user";
+      // Identité : admin -> /admin, utilisateur -> la destination prévue ou /studio.
+      let destination = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") && !nextPath.includes("\\") && !nextPath.includes("\r") && !nextPath.includes("\n") ? nextPath : "/studio";
+      if (destination.startsWith("/admin") && role !== "admin") destination = "/studio";
+      if (role === "admin" && !nextPath) destination = "/admin";
+      router.push(destination);
       router.refresh();
     } catch {
       setError("Erreur inattendue pendant la connexion.");
@@ -58,8 +66,8 @@ export default function LoginPage() {
           <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface/70">
             <Lock className="h-5 w-5 text-accent" aria-hidden="true" />
           </span>
-          <h1 className="mt-5 text-2xl font-bold tracking-tight">Connexion MotionGraphic</h1>
-          <p className="mt-2 text-sm text-muted">Réservé aux administrateurs MotionGraphic.si.</p>
+          <h1 className="mt-5 text-2xl font-bold tracking-tight">Connexion</h1>
+          <p className="mt-1 text-xs text-muted">MotionGraphic Studio — accès privé</p>
         </div>
 
         {!configured ? (
