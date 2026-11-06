@@ -17,6 +17,9 @@
 --      contrôles de structure et des agrégats anonymes (counts).
 --   4. Fin de script : preuve (lecture seule) que ZÉRO ligne de test
 --      subsiste + compte d'administrateurs affiché anonymement.
+--   5. P7 vérifie la consommation CONDITIONNELLE (idempotente) inline ;
+--      l"épreuve de course SIMULTANÉE (6 connexions Promise.all) reste
+--      dans `auth-invite-cycle.mjs` (séparé, aucune prétention ici).
 --
 -- Si une connexion est coupée en plein scénario : transaction annulée
 -- par le serveur (aucun résidu) ; la purge d'urgence facultative ci-
@@ -81,7 +84,8 @@ begin
     raise exception 'SELFCHECK : % invitations de test déjà présentes.', v_collisions;
   end if;
   raise notice 'P0 OK : migration 0009 présente, périmètre de test strictement libre.';
-end $preflight$;
+end;
+$preflight$;
 
 do $structure$
 declare
@@ -110,17 +114,29 @@ begin
     raise exception 'SELFCHECK : % politiques RLS (15 attendues au minimum).', v_policies;
   end if;
   raise notice 'P0 OK : structure vérifiée (% triggers de garde, % politiques).', v_triggers, v_policies;
-end $structure$;
+end;
+$structure$;
 
 -- ---------------------------------------------------------------------
 -- P1 — A crée et consulte SES ressources (projets, médias, versions, rendus).
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
+-- INSERT Auth → handle_new_user crée le profil (suspended) : vérifié, puis
+-- activé par UPDATE ciblé (jamais à l'aveugle).
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7e570000-0000-7e57-8000-000000000001','authenticated','authenticated','rls-selfcheck-a@selftest.invalid','selfcheck', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
-insert into public.profiles (id, display_name, role, status)
-values ('7e570000-0000-7e57-8000-000000000001','SELFTEST-A','user','active');
+do $p1trigger$
+declare v_status text; v_role text;
+begin
+  select status, role into v_status, v_role from public.profiles where id = '7e570000-0000-7e57-8000-000000000001';
+  if not found then raise exception 'P1 ÉCHEC : handle_new_user n''a pas créé le profil de test.'; end if;
+  if v_status <> 'suspended' or v_role <> 'user' then
+    raise exception 'P1 ÉCHEC : profil inattendu (attends suspended/user, lu %/%).', v_role, v_status;
+  end if;
+end;
+$p1trigger$;
+update public.profiles set status = 'active', display_name = 'SELFTEST-A' where id = '7e570000-0000-7e57-8000-000000000001';
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7e570000-0000-7e57-8000-000000000001","role":"authenticated","email":"rls-selfcheck-a@selftest.invalid"}';
@@ -148,7 +164,8 @@ begin
   select count(*) into n from public.studio_renders;
   if n <> 1 then raise exception 'P1 ÉCHEC : A voit % rendus (attendu 1).', n; end if;
   raise notice 'P1 OK : A crée, met à jour et consulte ses propres ressources.';
-end $p1$;
+end;
+$p1$;
 rollback;
 
 -- ---------------------------------------------------------------------
@@ -158,12 +175,19 @@ begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7e570000-0000-7e57-8000-000000000001','authenticated','authenticated','rls-selfcheck-a@selftest.invalid','selfcheck', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
-insert into public.profiles (id, display_name, role, status)
-values ('7e570000-0000-7e57-8000-000000000001','SELFTEST-A','user','active');
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7e570000-0000-7e57-8000-000000000002','authenticated','authenticated','rls-selfcheck-b@selftest.invalid','selfcheck', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
-insert into public.profiles (id, display_name, role, status)
-values ('7e570000-0000-7e57-8000-000000000002','SELFTEST-B','user','active');
+update public.profiles set status = 'active', display_name = 'SELFTEST-A' where id = '7e570000-0000-7e57-8000-000000000001';
+update public.profiles set status = 'active', display_name = 'SELFTEST-B' where id = '7e570000-0000-7e57-8000-000000000002';
+do $p2setup$
+declare a2 int; b2 int;
+begin
+  select count(*) into a2 from public.profiles where id = '7e570000-0000-7e57-8000-000000000001' and status = 'active';
+  select count(*) into b2 from public.profiles where id = '7e570000-0000-7e57-8000-000000000002' and status = 'active';
+  if a2 <> 1 or b2 <> 1 then raise exception 'P2 ÉCHEC : profils de test absent/suspendus (trigger + update).' end if;
+  raise notice 'P2 setup : profils créés par handle_new_user puis activés par UPDATE.';
+end;
+$p2setup$;
 insert into public.studio_projects (id, user_id, name, schema_version, fps, width, height, data)
 values ('7e570000-0000-7e57-8000-000000010001','7e570000-0000-7e57-8000-000000000001','SELFTEST-PROJET-A',1,30,1920,1080,'{}'::jsonb);
 
@@ -179,7 +203,8 @@ begin
     when insufficient_privilege then
       raise notice 'P2 OK : insertion croisée refusée par RLS (42501).';
   end;
-end $p2a$;
+end;
+$p2a$;
 do $p2b$
 declare maj int; n int;
 begin
@@ -190,13 +215,26 @@ begin
   get diagnostics maj = row_count;
   if maj <> 0 then raise exception 'P2 ÉCHEC : B a supprimé % projets de A (attendu 0).', maj; end if;
   select count(*) into n from public.studio_projects;
+  if n <> 1 then raise exception 'P2 ÉCHEC : B voit % projets (attendu 1 : le sien).', n; end if;
+  update public.studio_projects set name = 'SELFTEST-PROJET-B (maj)' where id = '7e570000-0000-7e57-8000-000000010006';
+  get diagnostics maj = row_count;
+  if maj <> 1 then raise exception 'P2 ÉCHEC : B ne peut pas MAJ son propre projet (%).', maj; end if;
+  select count(*) into n from public.studio_projects where user_id = '7e570000-0000-7e57-8000-000000000001';
   if n <> 0 then raise exception 'P2 ÉCHEC : B voit % projets de A.', n; end if;
   select count(*) into n from public.studio_media;
   if n <> 0 then raise exception 'P2 ÉCHEC : B voit % médias de A.', n; end if;
   select count(*) into n from public.studio_renders;
   if n <> 0 then raise exception 'P2 ÉCHEC : B voit % rendus de A.', n; end if;
-  raise notice 'P2 OK : B ne voit, ne modifie ni ne supprime RIEN de A.';
-end $p2b$;
+  raise notice 'P2 OK : B gère SES ressources et ne voit, ni ne modifie RIEN de A.';
+  -- retournement : A ne voit que son projet (B invisible)
+  set local request.jwt.claims = '{"sub":"7e570000-0000-7e57-8000-000000000001","role":"authenticated","email":"rls-selfcheck-a@selftest.invalid"}';
+  select count(*) into n from public.studio_projects;
+  if n <> 1 then raise exception 'P2 ÉCHEC : A voit % projets (attendu 1 : le sien).', n; end if;
+  select count(*) into n from public.studio_projects where user_id = '7e570000-0000-7e57-8000-000000000002';
+  if n <> 0 then raise exception 'P2 ÉCHEC : A voit % projets de B.', n; end if;
+  raise notice 'P2 OK : symétrie — A et B isolés chacun de l\'autre.';
+end;
+$p2b$;
 rollback;
 
 -- ---------------------------------------------------------------------
@@ -207,8 +245,7 @@ begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7e570000-0000-7e57-8000-000000000003','authenticated','authenticated','rls-selfcheck-s@selftest.invalid','selfcheck', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
-insert into public.profiles (id, display_name, role, status)
-values ('7e570000-0000-7e57-8000-000000000003','SELFTEST-SUSPENDU','user','active');
+update public.profiles set status = 'active', display_name = 'SELFTEST-SUSPENDU' where id = '7e570000-0000-7e57-8000-000000000003';
 insert into public.studio_projects (id, user_id, name, schema_version, fps, width, height, data)
 values ('7e570000-0000-7e57-8000-000000010003','7e570000-0000-7e57-8000-000000000003','SELFTEST-S-PROJET',1,30,1920,1080,'{}'::jsonb);
 update public.profiles set status = 'suspended' where id = '7e570000-0000-7e57-8000-000000000003';
@@ -222,7 +259,8 @@ begin
   select count(*) into n from public.studio_projects where id = '7e570000-0000-7e57-8000-000000010004';
   if n <> 1 then raise exception 'P3 ÉCHEC : service_role bloqué à tort par la suspension.'; end if;
   raise notice 'P3 OK : chemin service (API admin/MCP/migrations) non bloqué.';
-end $p3a$;
+end;
+$p3a$;
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7e570000-0000-7e57-8000-000000000003","role":"authenticated","email":"rls-selfcheck-s@selftest.invalid"}';
@@ -239,7 +277,8 @@ begin
       end if;
       raise notice 'P3 OK : écriture refusée pour compte suspendu (P0001 COMPTE_SUSPENDU).';
   end;
-end $p3b$;
+end;
+$p3b$;
 do $p3c$
 declare maj int; n int;
 begin
@@ -249,7 +288,8 @@ begin
   select count(*) into n from public.studio_projects;
   if n <> 2 then raise exception 'P3 ÉCHEC : lecture de SES lignes cassée (% projets, attendu 2).', n; end if;
   raise notice 'P3 OK : écriture suspendue, lecture de ses propres données conservée.';
-end $p3c$;
+end;
+$p3c$;
 rollback;
 
 -- ---------------------------------------------------------------------
@@ -259,8 +299,7 @@ begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7e570000-0000-7e57-8000-000000000002','authenticated','authenticated','rls-selfcheck-b@selftest.invalid','selfcheck', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
-insert into public.profiles (id, display_name, role, status)
-values ('7e570000-0000-7e57-8000-000000000002','SELFTEST-B','user','active');
+update public.profiles set status = 'active', display_name = 'SELFTEST-B' where id = '7e570000-0000-7e57-8000-000000000002';
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7e570000-0000-7e57-8000-000000000002","role":"authenticated","email":"rls-selfcheck-b@selftest.invalid"}';
@@ -274,7 +313,8 @@ begin
       if sqlstate <> 'P0001' then raise exception 'P4 ÉCHEC : SQLSTATE % (attendu P0001).', sqlstate; end if;
       raise notice 'P4 OK : changement de rôle en libre-service refusé.';
   end;
-end $p4a$;
+end;
+$p4a$;
 do $p4b$
 begin
   begin
@@ -285,7 +325,8 @@ begin
       if sqlstate <> 'P0001' then raise exception 'P4 ÉCHEC : SQLSTATE % (auto-statut).', sqlstate; end if;
       raise notice 'P4 OK : auto-suspension refusée.';
   end;
-end $p4b$;
+end;
+$p4b$;
 rollback;
 
 -- ---------------------------------------------------------------------
@@ -295,8 +336,7 @@ begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7e570000-0000-7e57-8000-000000000004','authenticated','authenticated','rls-selfcheck-admin@selftest.invalid','selfcheck', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
-insert into public.profiles (id, display_name, role, status)
-values ('7e570000-0000-7e57-8000-000000000004','SELFTEST-ADMIN-SUSPENDU','admin','suspended');
+update public.profiles set role = 'admin', status = 'suspended', display_name = 'SELFTEST-ADMIN-SUSPENDU' where id = '7e570000-0000-7e57-8000-000000000004';
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7e570000-0000-7e57-8000-000000000004","role":"authenticated","email":"rls-selfcheck-admin@selftest.invalid"}';
@@ -309,7 +349,8 @@ begin
   select count(*) into n from public.user_invitations;
   if n > 0 then raise exception 'P5 ÉCHEC : admin suspendu lit % invitations.', n; end if;
   raise notice 'P5 OK : admin suspendu sans aucun privilège administrateur.';
-end $p5$;
+end;
+$p5$;
 rollback;
 
 -- ---------------------------------------------------------------------
@@ -332,7 +373,8 @@ begin
     when insufficient_privilege then
       raise notice 'P6 OK : écriture jeton par le navigateur refusée (grants révoqués).';
   end;
-end $p6a$;
+end;
+$p6a$;
 do $p6b$
 declare n int;
 begin
@@ -341,10 +383,16 @@ begin
 exception
   when insufficient_privilege then
     raise notice 'P6 OK : lecture jetons par navigateur refusée.';
-end $p6b$;
+end;
+$p6b$;
 rollback;
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
+-- FK mcp_user_tokens → auth.users : le compte est créé DANS CETTE
+-- transaction (la précédente s'est terminée par ROLLBACK, rien n'a
+-- persisté) ; handle_new_user crée le profil suspendu associé.
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+values ('00000000-0000-0000-0000-000000000000','7e570000-0000-7e57-8000-000000000002','authenticated','authenticated','rls-selfcheck-b@selftest.invalid','selfcheck', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 insert into public.mcp_user_tokens (user_id, name, token_hash) values
   ('7e570000-0000-7e57-8000-000000000002','api-server','selfcheck-a1b2c3d4e5f6a1b2');
 do $p6c$
@@ -354,7 +402,8 @@ begin
   if n <> 1 then raise exception 'P6 ÉCHEC : le serveur ne peut pas émettre (%).', n; end if;
   delete from public.mcp_user_tokens where token_hash = 'selfcheck-a1b2c3d4e5f6a1b2';
   raise notice 'P6 OK : serveur émet et révoque.';
-end $p6c$;
+end;
+$p6c$;
 rollback;
 
 -- ---------------------------------------------------------------------
@@ -382,7 +431,8 @@ begin
   if v_role <> 'admin' then raise exception 'P7 ÉCHEC : rôle % (attendu admin — invitation valide).', v_role; end if;
   if v_status <> 'suspended' then raise exception 'P7 ÉCHEC : statut % (attendu suspended avant 1re connexion).', v_status; end if;
   raise notice 'P7 OK : invitation valide → rôle admin attribué, compte en attente.';
-end $p7a$;
+end;
+$p7a$;
 
 -- (2) invitation révoquée acceptée → profil fail-closed suspendu
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
@@ -393,7 +443,8 @@ begin
   select status into v_status from public.profiles where id = '7e570000-0000-7e57-8000-000000000012';
   if v_status <> 'suspended' then raise exception 'P7 ÉCHEC : invitation révoquée → % (attendu suspended).', v_status; end if;
   raise notice 'P7 OK : invitation révoquée → fail-closed, aucun accès.';
-end $p7b$;
+end;
+$p7b$;
 
 -- (3) invitation expirée acceptée → profil fail-closed suspendu
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
@@ -404,9 +455,12 @@ begin
   select status into v_status from public.profiles where id = '7e570000-0000-7e57-8000-000000000013';
   if v_status <> 'suspended' then raise exception 'P7 ÉCHEC : invitation expirée → % (attendu suspended).', v_status; end if;
   raise notice 'P7 OK : invitation expirée → fail-closed, aucun accès.';
-end $p7c$;
+end;
+$p7c$;
 
--- (4) consommation atomique : la garde refuse une invitation expirée
+-- (4) garde CONDITIONNELLE : refus d"une invitation expirée — test
+--     SÉQUENTIEL (pas une course simulée ; la course simultanée réelle
+--     est dans auth-invite-cycle.mjs, cf. entête).
 do $p7d$
 declare gagne int;
 begin
@@ -416,9 +470,10 @@ begin
   get diagnostics gagne = row_count;
   if gagne <> 0 then raise exception 'P7 ÉCHEC : une invitation EXPIRÉE a été consommée (%).', gagne; end if;
   raise notice 'P7 OK : invitation expirée non consommable (guard expires_at > now).';
-end $p7d$;
+end;
+$p7d$;
 
--- (5) consommation atomique de la valide : 1 gagne, aucun double
+-- (5) idempotence de la consommation : 1er appel gagne, 2e appel 0 ligne
 update public.user_invitations set used_at = now()
   where id = '7f570000-0000-7f57-8000-000000000001'
     and used_at is null and revoked_at is null and expires_at > now();
@@ -433,8 +488,9 @@ begin
       and used_at is null and revoked_at is null and expires_at > now();
   get diagnostics double1 = row_count;
   if double1 <> 0 then raise exception 'P7 ÉCHEC : double activation possible (% lignes).', double1; end if;
-  raise notice 'P7 OK : consommation atomique — used_at consommé une seule fois.';
-end $p7e$;
+  raise notice 'P7 OK : consommation idempotente — used_at consommé une seule fois (course réelle : auth-invite-cycle.mjs).';
+end;
+$p7e$;
 rollback;
 
 -- ---------------------------------------------------------------------
@@ -457,7 +513,8 @@ begin
     raise exception 'PROUVE ÉCHEC : % lignes de test persistantes — purge manuelle requise (entête du script).', restantes;
   end if;
   raise notice 'PROUVE OK : aucune ligne de test persistante ; données existantes jamais touchées.';
-end $proof$;
+end;
+$proof$;
 
 -- Résumé (lecture seule, aucune donnée personnelle affichée).
 do $summary$
