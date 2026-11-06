@@ -8,6 +8,14 @@ import { createServerClient } from "@supabase/ssr";
  */
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  // Dérogation strictement réservée aux tests navigateur sur le runner CI local.
+  // Ne jamais configurer cette variable sur XCloud ou sur un serveur exposé.
+  if (process.env.STUDIO_CI_TEST_BYPASS === "local-only" &&
+      process.env.CI === "true" &&
+      request.nextUrl.hostname === "localhost" &&
+      !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return NextResponse.next();
+  }
   const isHome = path === "/";
   const isLogin = path === "/login";
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
