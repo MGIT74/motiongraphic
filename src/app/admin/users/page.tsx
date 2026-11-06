@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import AdminUsersPanel from "@/components/admin/AdminUsersPanel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Gestion des utilisateurs — MotionGraphic", robots: { index: false, follow: false } };
@@ -10,17 +11,19 @@ export default async function UsersAdminPage() {
   if (!client) redirect("/login");
   const { data: { user } } = await client.auth.getUser();
   if (!user) redirect("/login");
-  const { data: profile } = await client.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  if (profile?.role !== "admin") redirect("/studio");
+  const { data: profileData } = await client.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+  const profile = profileData as { role?: string; status?: string } | null;
+  if (profile?.role !== "admin" || profile?.status === "suspended") redirect("/studio");
   return (
-    <main className="mx-auto min-h-screen max-w-3xl px-5 pb-20 pt-32 text-ink">
+    <main className="mx-auto min-h-screen max-w-5xl px-5 pb-20 pt-32 text-ink">
       <Link href="/admin" className="text-sm text-muted hover:text-ink">← Administration</Link>
       <h1 className="mt-8 text-3xl font-bold">Gestion des utilisateurs</h1>
-      <div className="mt-8 rounded-2xl border border-line bg-surface p-6">
-        <h2 className="font-semibold">Accès privé</h2>
-        <p className="mt-2 text-sm text-muted">L’inscription publique n’est pas proposée dans l’interface MotionGraphic. Les comptes autorisés doivent être créés par un administrateur dans Supabase Auth. Aucun formulaire de création publique n’est disponible ici.</p>
-        <p className="mt-4 text-xs text-muted">La gestion et l’invitation des utilisateurs depuis cette page seront ajoutées après sécurisation des opérations d’administration.</p>
-      </div>
+      <p className="mt-2 max-w-3xl text-sm text-muted">
+        Comptes privés MotionGraphic. Les invitations partent par email (expiration 14 jours),
+        les rôles et les suspensions sont appliqués côté serveur. La clé d&apos;administration
+        ne quitte jamais le serveur.
+      </p>
+      <AdminUsersPanel />
     </main>
   );
 }

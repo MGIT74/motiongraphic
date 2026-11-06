@@ -50,9 +50,17 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
   let admin = false;
-  if (user && (isAdmin || isHome || isLogin)) {
-    const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-    admin = (data as { role?: string } | null)?.role === "admin";
+  let suspended = false;
+  if (user && (isAdmin || isHome || isLogin || isPrivate)) {
+    const { data } = await supabase.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+    const profile = data as { role?: string; status?: string } | null;
+    admin = profile?.role === "admin";
+    suspended = profile?.status === "suspended";
+    if (suspended && !isHome) {
+      // Un compte suspendu ne garde qu'une vue d'information : aucune
+      // opération possible (les API renvoient 423, RLS bloque les écritures).
+      return suspendedPage();
+    }
   }
 
   let destination: string | null = null;
@@ -64,6 +72,22 @@ export async function proxy(request: NextRequest) {
   const result = redirect(request, destination);
   response.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
   return result;
+}
+
+/** Page statique de suspension (aucune donnée, pas de navigation privée). */
+function suspendedPage(): NextResponse {
+  const body = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Compte suspendu — MotionGraphic</title>
+<style>body{font-family:system-ui,sans-serif;background:#0b0c10;color:#e5e7eb;display:grid;place-items:center;min-height:100vh;margin:0}
+main{max-width:32rem;padding:2rem;text-align:center}h1{font-size:1.5rem}p{color:#9ca3af;line-height:1.6}</style></head>
+<body><main><h1>Compte suspendu</h1>
+<p>Ce compte est désactivé. Vos projets restent enregistrés, mais aucune opération n'est possible actuellement.</p>
+<p>Contactez un administrateur de MotionGraphic pour réactiver l'accès.</p></main></body></html>`;
+  return new NextResponse(body, {
+    status: 403,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
 }
 
 function redirect(request: NextRequest, path: string): NextResponse {
