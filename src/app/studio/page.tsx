@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import StudioApp from "@/components/studio/StudioApp";
 import { listStudioCustomTemplates } from "@/lib/templates/published-studio";
+import { requireUser } from "@/lib/auth/guards";
 
 // Lecture à CHAQUE requête : un template publié dans le Lab apparaît
   // immédiatement (aucun rebuild nécessaire). Sans cela le page était
@@ -33,6 +34,7 @@ export const viewport: Viewport = {
  * (via `registerCustomStudioTemplates`) et affiche les raisons.
  */
 export default async function StudioPage() {
+  await requireUser("/studio");
   let customTemplates: StudioCustomTemplateInput[] = [];
   try {
     customTemplates = await listStudioCustomTemplates();

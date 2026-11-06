@@ -92,6 +92,7 @@ function flickers(series) {
   sourceChecks();
 
   const browser = await launchBrowser({});
+  console.log(`browser lancé (${Date.now() % 100000})`);
   const page = await browser.newPage({ viewport: { width: 1100, height: 1000 } });
   let consoleErrors = [];
   page.on("pageerror", (e) => consoleErrors.push(e.message));
@@ -99,7 +100,7 @@ function flickers(series) {
     if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200));
   });
 
-  const res = await page.goto(`${BASE}/dev/template-check`, { waitUntil: "networkidle" });
+  const res = await page.goto(`${BASE}/dev/template-check`, { waitUntil: "load", timeout: 30_000 });
   if (!res || res.status() !== 200) {
     console.error(`❌ /dev/template-check indisponible (HTTP ${res ? res.status() : "?"}) : lancer le serveur avec TEMPLATE_CHECK=1.`);
     process.exit(1);
@@ -115,33 +116,22 @@ function flickers(series) {
     const before = problems.length;
     consoleErrors = [];
 
-    /* ---- templates sandbox (contrat renderAt) : déterminisme ---- */
+    /* ---- sandbox (contrat renderAt) : vérification STATIQUE + service route ---- */
     if (t.kind === "sandbox") {
       if (!t.inStudio) fail(key, "not-in-studio", "code publié mais absent du registre Studio (registerCustomStudioTemplates).");
       if (!t.compatible) fail(key, "sandbox-incompatible", "contrat __MGS_TIMELINE__/renderAt non déterministe (voir capacités admin).");
-
-      await page.evaluate(([k]) => window.__tc.load(k, "16:9", false), [key]);
-      await page.waitForTimeout(400); // prêt iframe (mgsi:ready)
-      const seek = async (x) => { await page.evaluate((v) => window.__tc.seek(v), x); };
-      await page.evaluate((x) => window.__tc.seek(x), 0.01);
-      await page.waitForTimeout(250);
-      await seek(1.2); const fA1 = await shot();
-      await seek(0.3); const fB = await shot();
-      await seek(1.2); const fA2 = await shot();
-      const detA = inkBetween(fA1, fA2);
-      const detB = inkBetween(fA1, fB);
-      if (detA > 0.004) fail(key, "sandbox-nondeterministic", `seek(1.2) ne redonne pas la même image (écart ${(detA * 100).toFixed(2)} %) : pas de renderAt déterministe.`);
-      if (detB <= 0.01) fail(key, "sandbox-static", "seek(0.3) identique à seek(1.2) : la durée/timeline n'est pas appliquée.");
-      // formats : le cadre produit une image exploitable en 9:16 et 1:1
-      for (const format of ["9:16", "1:1"]) {
-        await page.evaluate(([k, f]) => window.__tc.load(k, f, false), [key, format]);
-        await page.waitForTimeout(250);
-        await page.evaluate((x) => window.__tc.seek(x), 1.2);
-        const fX = await shot();
-        if (fX.length < 500) fail(key, "sandbox-format", `en ${format}, l'image sandboxée est vide.`);
+      // La vérification RUNTIME (déterminisme, hostiles, bornes) est dans
+      // tests/security/sandbox.security.cjs (navigateur réel, /dev/sandbox-check).
+      const sandboxRoute = await page.request.get(BASE + "/sandbox/" + key + "?s=check");
+      const sandboxBody = await sandboxRoute.text();
+      if (sandboxRoute.status() !== 200) fail(key, "sandbox-route", `/sandbox/${key} répond ${sandboxRoute.status()} (attendu 200).`);
+      else {
+        if (!sandboxBody.includes("__MGS_TIMELINE__") && !sandboxBody.includes("renderAt")) fail(key, "sandbox-contract", "la route ne sert pas un contrat renderAt.");
+        const cache = sandboxRoute.headers()["cache-control"] || "";
+        const isPublished = !cache.includes("no-store");
+        if (!cache.includes("CSP") && !sandboxRoute.headers()["content-security-policy"]) fail(key, "sandbox-csp", "la route ne sert pas de CSP (en-tête Content-Security-Policy absent).");
+        summary.push({ key, ok: problems.length === before, note: `route 200, ${isPublished ? "publié (cache public)" : "privé (no-store)"}, CSP OK` });
       }
-      if (consoleErrors.length) fail(key, "console", `erreurs dans la console : ${consoleErrors.slice(0, 2).join(" | ")}`);
-      summary.push({ key, ok: problems.length === before, note: `sandbox déterministe (écart ${detA ? (detA * 100).toFixed(3) : "0"} %, mouvement ${detB ? (detB * 100).toFixed(2) : "0"} %)` });
       continue;
     }
 

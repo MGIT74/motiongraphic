@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth/guards";
 import { ArrowLeft, Clock3, PenTool, ShieldCheck, WandSparkles } from "lucide-react";
 import { getSimilarTemplates, getTemplateDetail } from "@/lib/data";
 import { resolveTemplate } from "@/lib/templates/registry";
@@ -53,6 +54,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  await requireUser(`/templates/${slug}`);
   const template = await loadTemplate(slug);
   if (!template) return { title: "Template introuvable" };
   return {
@@ -67,6 +69,7 @@ export default async function TemplateDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  await requireUser(`/templates/${slug}`);
   const template = await loadTemplate(slug);
   if (!template) notFound();
 

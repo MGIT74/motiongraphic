@@ -9,6 +9,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 export default function LoginPage() {
   const router = useRouter();
   const configured = isSupabaseConfigured();
+  // ?next= : l'instant de connexion ramène précisément où l'utilisateur allait.
+  const nextPath = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,19 @@ export default function LoginPage() {
         setBusy(false);
         return;
       }
-      router.push("/admin");
+      // Identité : admin -> /admin, utilisateur -> la destination prévue ou /studio.
+      const authResult = (await client.auth.getUser()) as unknown as { data?: { user?: { id: string } | null } | null };
+      const loggedInUser = authResult.data?.user ?? null;
+      let destination = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") && !nextPath.includes("\\") && !nextPath.includes("\r") && !nextPath.includes("\n") ? nextPath : "/studio";
+      if (loggedInUser && destination.startsWith("/admin")) {
+        const { data: profile } = await client.from("profiles").select("role").eq("id", loggedInUser.id).maybeSingle();
+        if (profile?.role !== "admin") destination = "/studio";
+      }
+      if (loggedInUser && destination === "/studio") {
+        const { data: profile } = await client.from("profiles").select("role").eq("id", loggedInUser.id).maybeSingle();
+        if (profile?.role === "admin" && !nextPath) destination = "/admin";
+      }
+      router.push(destination);
       router.refresh();
     } catch {
       setError("Erreur inattendue pendant la connexion.");
@@ -47,8 +61,9 @@ export default function LoginPage() {
           <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface/70">
             <Lock className="h-5 w-5 text-accent" aria-hidden="true" />
           </span>
-          <h1 className="mt-5 text-2xl font-bold tracking-tight">Espace administration</h1>
-          <p className="mt-2 text-sm text-muted">Réservé aux administrateurs MotionGraphic.si.</p>
+          <h1 className="mt-5 text-2xl font-bold tracking-tight">Connexion</h1>
+          <p className="mt-1 text-xs text-muted">MotionGraphic Studio — accès privé</p>
+
         </div>
 
         {!configured ? (

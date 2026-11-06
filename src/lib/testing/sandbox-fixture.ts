@@ -138,6 +138,40 @@ export const SANDBOX_PROBE_TEMPLATE = {
   status: "candidate",
 } as const;
 
+/** Modèle LIBRE publié (sans contrat renderAt) : masqué de la bibliothèque
+ * Studio, diagnosable au Template Lab, export MP4 refusé. */
+export const FREE_CODE_TEMPLATE = {
+  id: "00000000-0000-4000-8000-000000000097",
+  slug: "free-code-demo",
+  name: "Free Code (non pilotable)",
+  category: "ui-motion",
+  description: "Template libre sans contrat renderAt(time) : visible au catalogue mais masqué de la timeline.",
+  sourceKind: "code",
+  code: [
+    "// sans contrat __MGS_TIMELINE__ : jamais pilotable",
+    "(function () {",
+    '  var el = document.createElement("div");',
+    "  el.style.cssText = \"position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(24px,6vw,64px);color:#F5F5F7\";",
+    "  var render = function () { el.textContent = (window.MGSI_CONFIG || {}).text || \"MOTION\"; };",
+    "  window.addEventListener(\"mgsi:configchange\", render);",
+    "  document.body.appendChild(el);",
+    "  render();",
+    "})();",
+  ].join("\n"),
+  defaultConfig: {
+    text: "LIBRE",
+    primaryColor: "#F5F5F7",
+    accentColor: "#0A84FF",
+    backgroundColor: "#000000",
+    duration: 3,
+    speed: 1,
+  } as AnimationConfig,
+  promptWeb: "",
+  promptAfterEffects: "",
+  version: 1,
+  status: "published",
+} as const;
+
 export const PULSE_GRID_TEMPLATE = {
   id: "b0000000-0000-4000-8000-000000000022",
   slug: "pulse-grid-demo",

@@ -63,7 +63,7 @@ function ffmpeg(args, { input } = {}) {
     });
 
     const url = `${BASE}/dev/render-stage?w=${format.width}&h=${format.height}`;
-    const response = await page.goto(url, { waitUntil: "networkidle", timeout: 60_000 });
+    const response = await page.goto(url, { waitUntil: "load", timeout: 60_000 });
     if (!response || response.status() >= 400) { ok(false, `${format.name} : page inaccessible (${response?.status()})`); await b.close(); continue; }
     await page.waitForFunction(() => window.__mgsiRender?.ready === true, undefined, { timeout: 30_000 });
     const incompatible = await page.evaluate(() => window.__mgsiRender?.incompatible ?? []);
@@ -134,7 +134,7 @@ function ffmpeg(args, { input } = {}) {
     const sharp = (await import("sharp")).default;
     const b = await launchBrowser({});
     const page = await b.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1.92 });
-    await page.goto(`${BASE}/dev/render-stage?w=1920&h=1080`, { waitUntil: "networkidle", timeout: 60_000 });
+    await page.goto(`${BASE}/dev/render-stage?w=1920&h=1080`, { waitUntil: "load", timeout: 60_000 });
     await page.waitForFunction(() => window.__mgsiRender?.ready === true, undefined, { timeout: 30_000 });
     await page.evaluate(() => window.__mgsiRender.seek(1.0));
     await page.waitForTimeout(150);
@@ -161,7 +161,7 @@ function ffmpeg(args, { input } = {}) {
   {
     const b = await launchBrowser({});
     const page = await b.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 });
-    await page.goto(`${BASE}/dev/render-stage?w=1080&h=1080&broken=1`, { waitUntil: "networkidle", timeout: 60_000 });
+    await page.goto(`${BASE}/dev/render-stage?w=1080&h=1080&broken=1`, { waitUntil: "load", timeout: 60_000 });
     await page.waitForFunction(() => window.__mgsiRender?.ready === true, undefined, { timeout: 30_000 });
     const incompatible = await page.evaluate(() => window.__mgsiRender?.incompatible ?? []);
     // Ici le contrat EST déclaré (pas d'incompatibilité statique) : le refus
@@ -180,7 +180,7 @@ function ffmpeg(args, { input } = {}) {
     const b = await launchBrowser({});
     const page = await b.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 });
     const url = `${BASE}/dev/render-stage?w=1920&h=1080&degraded=1`;
-    await page.goto(url, { waitUntil: "networkidle", timeout: 60_000 });
+    await page.goto(url, { waitUntil: "load", timeout: 60_000 });
     await page.waitForFunction(() => window.__mgsiRender?.ready === true, undefined, { timeout: 30_000 });
     const incompatible = await page.evaluate(() => window.__mgsiRender?.incompatible ?? []);
     const refused = incompatible.length > 0;

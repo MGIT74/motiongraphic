@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireUser } from "@/lib/auth/guards";
 import GalleryGrid from "@/components/gallery/GalleryGrid";
 import DemoBanner from "@/components/gallery/DemoBanner";
 import { getPublishedTemplates, isDemoMode } from "@/lib/data";
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ExplorePage() {
+  await requireUser("/explore");
   const templates = await getPublishedTemplates();
   const demo = isDemoMode();
 

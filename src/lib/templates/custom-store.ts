@@ -4,7 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sanitizeCustomTemplate, fromCustomTemplateRow, validateCustomTemplate, type CustomTemplate } from "./custom-model";
 import type { AnimationConfig } from "@/types/animation";
-import { PULSE_GRID_TEMPLATE, SANDBOX_PROBE_TEMPLATE, PULSE_GRID_TEMPLATE_ID, BROKEN_TEMPLATE } from "@/lib/testing/sandbox-fixture";
+import { PULSE_GRID_TEMPLATE, SANDBOX_PROBE_TEMPLATE, PULSE_GRID_TEMPLATE_ID, BROKEN_TEMPLATE, FREE_CODE_TEMPLATE } from "@/lib/testing/sandbox-fixture";
 
 /**
  * Store des templates personnalisés.
@@ -158,6 +158,10 @@ function ensureDemoSeed() {
   if (probe && !memory.has(probe.id)) memory.set(probe.id, probe);
   const broken = sanitizeCustomTemplate({ ...BROKEN_TEMPLATE });
   if (broken && !memory.has(broken.id)) memory.set(broken.id, broken);
+  // Non pilotable, PUBLIÉ : vérifie le masquage de la bibliothèque Studio
+  // (le code libre sans contrat renderAt) — reste visible au Template Lab.
+  const free = sanitizeCustomTemplate({ ...FREE_CODE_TEMPLATE });
+  if (free && !memory.has(free.id)) memory.set(free.id, free);
 }
 
 /** Persiste le store démo (git-ignoré) : les brouillons survivent au restart. */
