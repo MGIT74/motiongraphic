@@ -46,11 +46,11 @@ const password = `Cyc!e-${Date.now().toString(36)}-${Date.now().toString(36)}`;
 /** Consommation atomique — RÉPLIQUE exacte du serveur (activation.ts) :
  * conditions portées sur la ligne : used_at is null, revoked_at is null,
  * expires_at > maintenant (un seul appel simultané gagne). */
-async function consumeAtomically(invitationId) {
+async function consumeAtomically(invitationId, targetEmail) {
   const update = admin.from("user_invitations")
     .update({ used_at: new Date().toISOString() })
     .eq("id", invitationId)
-    .eq("email", email)
+    .eq("email", targetEmail)
     .is("used_at", null)
     .is("revoked_at", null)
     .gt("expires_at", new Date().toISOString())
@@ -87,10 +87,10 @@ async function main() {
   }
 
   /* 4. Consommation ATOMIQUE + course (2 appels). */
-  const first = await consumeAtomically(invitation.id);
+  const first = await consumeAtomically(invitation.id, email);
   const firstRows = (first?.data ?? []) as Array<{ id: string }>;
   ok(!first.error && firstRows.length === 1, `4a. consommation atomique → ${firstRows.length} ligne (${first.error?.message ?? "ok"})`);
-  const second = await consumeAtomically(invitation.id);
+  const second = await consumeAtomically(invitation.id, email);
   const secondRows = (second?.data ?? []) as Array<{ id: string }>;
   ok(!second.error && secondRows.length === 0, `4b. double activation impossible → ${secondRows.length} ligne (attendu 0)`);
 
@@ -101,7 +101,8 @@ async function main() {
     const raceInvite = await admin.from("user_invitations").insert({ email: raceEmail, role: "user" }).select("id").single();
     if (raceInvite.error || !raceInvite.data) { ok(false, `   course ${round} : invitation non créée`); continue; }
     const raceId = (raceInvite.data as { id: string }).id;
-    const outcomes = await Promise.all(Array.from({ length: 6 }, () => consumeAtomically(raceId)));
+    const racePromises = Array.from({ length: 6 }, () => consumeAtomically(raceId, raceEmail));
+    const outcomes = await Promise.all(racePromises);
     const winners = (outcomes ?? []).filter((o) => ((o?.data ?? []) as Array<{ id: string }>).length === 1);
     const losers = (outcomes ?? []).filter((o) => ((o?.data ?? []) as Array<{ id: string }>).length === 0);
     ok(winners.length === 1 && losers.length === 5, `   course ${round} : 6 connexions simultanées → ${winners.length} gagnant(s) (attendu 1)`);
@@ -137,9 +138,14 @@ async function main() {
     expires_at: new Date(Date.now() - 86_400_000).toISOString(),
   }).select("id").single();
   if (!expired.error && expired.data) {
-    const consumeExpired = await admin.from("user_invitations").update({ used_at: new Date().toISOString() }).eq("id", expired.data.id).lt("expires_at", new Date().toISOString()).select("id");
+    const consumeExpired = await admin.from("user_invitations")
+      .update({ used_at: new Date().toISOString() })
+      .eq("id", (expired.data as { id: string }).id)
+      .gt("expires_at", new Date().toISOString())
+      .select("id");
+    if (consumeExpired?.error) { ok(false, `8. lecture erreur : ${consumeExpired.error.message}`); }
     const rows = (consumeExpired?.data ?? []) as Array<{ id: string }>;
-    ok(rows.length === 0, "8. invitation expirée → consommation (atomique) impossible");
+    ok(rows.length === 0, "8. invitation expirée → consommation impossible (0 ligne, garde réelle)");
   } else {
     ok(false, `8. insertion invitation expirée impossible (${expired.error?.message ?? "?"})`);
   }

@@ -115,10 +115,13 @@ export async function requireAdminPrincipal(): Promise<AdminPrincipal> {
   }
   const { data: { user } } = await client.auth.getUser();
   if (!user) return { ok: false, status: 401, reason: "Connexion requise." };
-  const { data: profile } = await client.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+  // Fail-closed : SEUL un profil admin et explicitement actif passe ;
+  // toute erreur de lecture (ou profil absent) est un refus.
+  const { data: profile, error: profileError } = await client.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
   const row = (profile as { role?: string; status?: string } | null) ?? null;
-  if (row?.role !== "admin") return { ok: false, status: 403, reason: "Administration requise." };
-  if (row?.status === "suspended") {
+  if (profileError || !row) return { ok: false, status: 403, reason: "Administration requise (profil illisible)." };
+  if (row.role !== "admin") return { ok: false, status: 403, reason: "Administration requise." };
+  if (row.status !== "active") {
     return { ok: false, status: 423, reason: "COMPTE_SUSPENDU : contactez un autre administrateur." };
   }
   return { ok: true, userId: user.id, adminClient: await adminServiceClient() };
