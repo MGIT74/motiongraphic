@@ -9,7 +9,13 @@ export const metadata: Metadata = {
   },
   description:
     "Découvrez des animations de motion design exécutées en direct dans votre navigateur, copiez les prompts Web (GSAP, SVG, React) ou After Effects et reproduisez-les avec ChatGPT ou Claude.",
-  metadataBase: new URL("https://motiongraphic.si"),
+  metadataBase: new URL("https://studio.motiongraphic.si"),
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: { index: false, follow: false, noimageindex: true },
+  },
   openGraph: {
     title: "MotionGraphic.si",
     description:
