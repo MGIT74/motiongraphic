@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      # Mode démo (sans Supabase) et site ouvert : le Studio est testable sans compte.
-      CONSTRUCTION_MODE: "off"
+      # Exception de test strictement locale au runner CI ; jamais en production XCloud.
+      STUDIO_CI_TEST_BYPASS: "local-only"
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
