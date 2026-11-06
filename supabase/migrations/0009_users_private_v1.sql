@@ -35,6 +35,24 @@ alter table public.profiles
   text not null default 'active'
   check (status in ('active', 'suspended'));
 
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and role = 'admin'
+      and coalesce(status, 'active') = 'active'
+  );
+$$;
+-- Supersede 0001 : un admin suspendu n'a PLUS de privilèges admin
+-- (toutes les politiques RLS et les gardes utilisent cette fonction).
+
 create or replace function public.account_is_active(uid uuid)
 returns boolean
 language sql
@@ -110,25 +128,72 @@ set search_path = public
 as $$
 declare
   v_owner uuid;
-  v_is_service boolean;
 begin
-  v_is_service := public.request_is_service_role();
-  if v_is_service then
-    return coalesce(NEW, OLD); -- chemin d'administration/migration
+  -- Chemin privilégié (API d'administration, MCP admin, migrations) :
+  -- exempté de la garde applicative.
+  if public.request_is_service_role() then
+    if TG_OP = 'DELETE' then return OLD; else return NEW; end if;
   end if;
   if TG_OP = 'DELETE' then
-    v_owner := OLD.user_id;
-  else
-    v_owner := NEW.user_id;
+    -- DELETE : le propriétaire AVANT suppression doit être actif.
+    if not public.account_is_active(OLD.user_id) then
+      raise exception 'COMPTE_SUSPENDU : opération réservée aux comptes actifs.'
+        using hint = 'Contactez un administrateur.', errcode = 'P0001';
+    end if;
+    return OLD;
   end if;
-  if v_owner is null then
-    return coalesce(NEW, OLD); -- données historiques sans propriétaire
-  end if;
-  if not public.account_is_active(v_owner) then
+  -- INSERT / UPDATE : le propriétaire visé (NEW) ET l'ancien (OLD sur
+  -- UPDATE) doivent être actifs — impossible de contourner la suspension
+  -- en changeant le propriétaire d'une ressource.
+  if not public.account_is_active(NEW.user_id) then
     raise exception 'COMPTE_SUSPENDU : opération réservée aux comptes actifs.'
       using hint = 'Contactez un administrateur.', errcode = 'P0001';
   end if;
-  return coalesce(NEW, OLD);
+  if TG_OP = 'UPDATE' and OLD.user_id is distinct from NEW.user_id then
+    if not public.account_is_active(OLD.user_id) then
+      raise exception 'COMPTE_SUSPENDU : le propriétaire initial est suspendu.'
+        using hint = 'Contactez un administrateur.', errcode = 'P0001';
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+
+-- Variante created_by (custom_templates — colonne nullable 0005) :
+-- définie AVANT le bloc de création des triggers (PostgreSQL exige que
+-- la fonction existe avant create trigger).
+create or replace function public.assert_account_active_for_write_created_by()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Chemin privilégié : exempté.
+  if public.request_is_service_role() then
+    if TG_OP = 'DELETE' then return OLD; else return NEW; end if;
+  end if;
+  if TG_OP = 'DELETE' then
+    if OLD.created_by is not null and not public.account_is_active(OLD.created_by) then
+      raise exception 'COMPTE_SUSPENDU : opération réservée aux comptes actifs.'
+        using hint = 'Contactez un administrateur.', errcode = 'P0001';
+    end if;
+    return OLD;
+  end if;
+  if NEW.created_by is null then
+    return NEW; -- données admin/migration sans propriétaire applicatif
+  end if;
+  if not public.account_is_active(NEW.created_by) then
+    raise exception 'COMPTE_SUSPENDU : opération réservée aux comptes actifs.'
+      using hint = 'Contactez un administrateur.', errcode = 'P0001';
+  end if;
+  if TG_OP = 'UPDATE' and OLD.created_by is distinct from NEW.created_by then
+    if OLD.created_by is not null and not public.account_is_active(OLD.created_by) then
+      raise exception 'COMPTE_SUSPENDU : le propriétaire initial est suspendu.'
+        using hint = 'Contactez un administrateur.', errcode = 'P0001';
+    end if;
+  end if;
+  return NEW;
 end;
 $$;
 
@@ -136,7 +201,7 @@ do $$
 declare
   t text;
 begin
-  -- studio_* : colonne user_id ; custom_templates : created_by (0005).
+  -- studio_* : colonne user_id.
   foreach t in array array['studio_projects',
                            'studio_media',
                            'studio_project_versions',
@@ -150,8 +215,7 @@ begin
     );
   end loop;
 
-  -- custom_templates : colonne owner = created_by (0005, nullable) —
-  -- un déclencheur dédié couvre insert/update/delete.
+  -- custom_templates : owner = created_by (0005, nullable).
   execute format('drop trigger if exists guard_active_created_by on public.%I', 'custom_templates');
   execute format(
     'create trigger guard_active_created_by before insert or update or delete
@@ -159,36 +223,6 @@ begin
        for each row
        execute function public.assert_account_active_for_write_created_by();'
   );
-end;
-$$;
-
--- Variante created_by (custom_templates — colonne nullable, jamais
--- bloquée quand null : données admin/migration).
-create or replace function public.assert_account_active_for_write_created_by()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_owner uuid;
-begin
-  if public.request_is_service_role() then
-    return coalesce(NEW, OLD);
-  end if;
-  if TG_OP = 'DELETE' then
-    v_owner := OLD.created_by;
-  else
-    v_owner := NEW.created_by;
-  end if;
-  if v_owner is null then
-    return coalesce(NEW, OLD);
-  end if;
-  if not public.account_is_active(v_owner) then
-    raise exception 'COMPTE_SUSPENDU : opération réservée aux comptes actifs.'
-      using hint = 'Contactez un administrateur.', errcode = 'P0001';
-  end if;
-  return coalesce(NEW, OLD);
 end;
 $$;
 

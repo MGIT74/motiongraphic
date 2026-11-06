@@ -9,7 +9,9 @@ NE PAS fusionner ni déployer sans validation ChatGPT finale.
 
 1. **Clone de test Supabase** (obligatoire avant production) :
    - exécuter `supabase/migrations/0009_users_private_v1.sql` sur le clone
-     (idempotent, re-exécutable) ;
+     (idempotent, re-exécutable ; série 2 : fonctions définies AVANT les
+     triggers, RETURN OLD/NEW explicites, is_admin durci admin+actif,
+     service_role exempté via double détection, consommation atomique) ;
    - exécuter `supabase/tests/rls-users.sql` (S1..S7) — les scénarios
      doivent tous afficher « OK » ;
    - exécuter `node supabase/tests/auth-invite-cycle.mjs` avec les
@@ -69,8 +71,10 @@ manuellement sans garde. Exporter les données ci-dessus AVANT rollback.
   (`/api/auth/consume` refuse toute invitation passée/révoquée),
   révocation → ban Auth du compte non activé (le lien email ne peut plus
   créer de session) : *garde réelle prouvée par scripts (clone à exécuter).*
-- Suspension : proxy (pages 403), API (423), RLS+trigger (P0001), ban Auth.
+- Suspension : proxy (pages 403 + validation d"invitation centrale pour toute session), API (423), RLS+trigger (P0001), ban Auth ; réactivation impossible en changeant le propriétaire d"une ressource (OLD/NEW vérifiés).
 - Rôles : self-service impossible (trigger), API admin avec garde
-  « dernier admin actif » + compensation Auth↔profiles.
+  « dernier admin actif » (pré + post-écriture), compensation Auth↔profiles attendue ET vérifiée.
+- is_admin() (0009) = role admin ET statut actif : un admin suspendu
+  n" bénéficie d"aucun privilège (toutes les politiques RLS).
 - MCP perso : dormant par défaut (`MCP_USER_TOKENS` absent), aucune
   permission navigateur (revoke), fail-closed sur profil, expiration 90 j.

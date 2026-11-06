@@ -108,3 +108,23 @@ export function checkAdminChange(
   }
   return { ok: true };
 }
+
+
+/* ------------------------------------------------------------------ */
+/* Lecture des résultats Supabase (format {data, error})                */
+/* ------------------------------------------------------------------ */
+
+export interface SupabaseResultLike { data?: unknown; error?: { message: string } | null }
+
+/** Lit {data, error} : renvoie tableau[], ou null en cas d"erreur. */
+export function asRows<T>(result: SupabaseResultLike | null | undefined): T[] | null {
+  if (result === undefined) return [];
+  if (!result || result.error) return null;
+  const data = result.data;
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === "object" && "length" in (data as object)) {
+    return Array.from(data as ArrayLike<T>) as T[];
+  }
+  if (data && typeof data === "object") return [data as T]; // ligne unique
+  return [];
+}

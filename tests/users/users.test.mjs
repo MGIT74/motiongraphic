@@ -10,7 +10,7 @@ const { chromium } = require2("playwright");
 const { createHash } = await import("node:crypto");
 const { mintUserToken, hashToken, looksLikeUserToken } = await import("../../src/lib/studio/mcp-tokens.ts");
 const {
-  invitationState, invitationGrantsAccess, canInvite, accountIsActivated, checkAdminChange,
+  invitationState, invitationGrantsAccess, canInvite, accountIsActivated, checkAdminChange, asRows,
 } = await import("../../src/lib/admin/invitation-state.ts");
 
 let failures = 0;
@@ -75,6 +75,18 @@ async function main() {
     ok(guard(lastAdmin, { status: "suspended" }).code === "last-admin", "dernier admin : suspension refusée");
     ok(guard(lastAdmin, { status: "active" }).ok, "dernier admin : réactivation autorisée");
     ok(guard(base, { role: "boss" }).code === "unknown-role" && guard(base, { status: "paused" }).code === "unknown-status", "valeurs non canoniques refusées");
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* 1ter. Unité : lecture du format Supabase {data, error}            */
+  /* ---------------------------------------------------------------- */
+  {
+    ok(asRows?.name === "asRows", "helper asRows exporté");
+    ok(JSON.stringify(asRows({ data: [{ id: "a" }, { id: "b" }], error: null })) === '[{"id":"a"},{"id":"b"}]', "lecture {data:[...]} → tableau");
+    ok(asRows({ data: null, error: { message: "x" } }) === null, "erreur → null (propagée)");
+    ok(JSON.stringify(asRows({ data: null, error: null })) === "[]", "donnée absente → []");
+    ok(JSON.stringify(asRows({ data: { id: "a" }, error: null })) === '[{"id":"a"}]', "ligne unique → tableau");
+    ok(JSON.stringify(asRows(undefined)) === "[]", "résultat indéfini → []");
   }
 
   /* ---------------------------------------------------------------- */

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { accountIsActivated, checkAdminChange, canInvite, invitationState } from "./invitation-state";
+import { accountIsActivated, asRows, checkAdminChange, canInvite, invitationState } from "./invitation-state";
 
 /* ------------------------------------------------------------------ */
 /* Accès administrateur (session requise) — clé service_role           */
@@ -74,6 +74,23 @@ async function soft<T>(promise: PromiseLike<T>): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Compensation Auth ATTENDUE ET VÉRIFIÉE (cf audit #8) : l'erreur
+ * éventuelle est lue et renvoyée ; une compensation échouée n'est jamais
+ * déclarée réussie (le message final décrit l'état à réconcilier).
+ */
+async function compensateAuth(
+  admin: AdminSupabase,
+  targetId: string,
+  attrs: Record<string, unknown>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = toResult(await soft(admin.auth.updateUserById(targetId, attrs)));
+  if (!result || result.error) {
+    return { ok: false, error: result?.error?.message ?? "aucune réponse" };
+  }
+  return { ok: true };
 }
 
 async function adminServiceClient(): Promise<AdminSupabase> {
@@ -156,9 +173,8 @@ export async function listUsersWithProfiles(admin: AdminSupabase): Promise<{ use
     for (let start = 0; start < ids.length; start += PAGE_SIZE) {
       const slice = ids.slice(start, start + PAGE_SIZE);
       const listed = await admin.from("profiles").select("id, role, status").in("id", slice);
-      const result = toResult(await listed);
-      if (result.error) return { users: [], error: result.error.message };
-      const rows = (result.data ?? []) as Array<{ id: string; role?: string; status?: string }>;
+      const rows = asRows<{ id: string; role?: string; status?: string }>(toResult(await listed));
+      if (rows === null) return { users: [], error: "Lecture des profils impossible." };
       for (const row of rows) profiles[row.id] = row;
     }
   }
@@ -181,9 +197,9 @@ export async function listInvitations(admin: AdminSupabase): Promise<{ invitatio
     .select("id, email, role, invited_at, expires_at, used_at, revoked_at")
     .order("invited_at", { ascending: false })
     .limit(100);
-  const result = toResult(await listed);
-  if (result.error) return { invitations: [], error: result.error.message };
-  return { invitations: (result.data ?? []) as InvitationRow[], error: null };
+  const rows = asRows<InvitationRow>(toResult(await listed));
+  if (rows === null) return { invitations: [], error: "Lecture des invitations impossible (migration 0009 requise ?)." };
+  return { invitations: rows, error: null };
 }
 
 /* ------------------------------------------------------------------ */
@@ -362,7 +378,7 @@ async function countOtherActiveAdmins(admin: AdminSupabase, excludeId: string): 
     .eq("role", "admin")
     .eq("status", "active");
   const result = toResult(await listed);
-  const rows = (result.data ?? []) as Array<{ id: string }>;
+  const rows = asRows<{ id: string; role?: string; status?: string }>(result) ?? [];
   return rows.filter((row) => row.id !== excludeId).length;
 }
 
@@ -401,6 +417,7 @@ async function runRoleChange(
   if (!guard.ok) return { ok: false, status: 400, reason: guard.reason };
 
   const prevRole = currentRow.role ?? "user";
+  const losesPrivileges = currentRow.role === "admin" && (role === "user" || status === "suspended");
   // 1. Auth d'abord.
   const authUpdate = await admin.auth.updateUserById(targetId, { app_metadata: { role: role ?? prevRole } });
   const authResult = toResult(await authUpdate);
@@ -411,9 +428,25 @@ async function runRoleChange(
   const profile = await admin.from("profiles").upsert(profileRow, { onConflict: "id" });
   const profileResult = toResult(await profile);
   if (profileResult.error) {
-    // Compensation : annuler l'écriture Auth.
-    soft(admin.auth.updateUserById(targetId, { app_metadata: { role: prevRole } }));
-    return { ok: false, status: 500, reason: `profiles : ${profileResult.error.message} (Auth compensé, état ${prevRole})` };
+    // Compensation VÉRIFIÉE : annuler l'écriture Auth.
+    const compensation = await compensateAuth(admin, targetId, { app_metadata: { role: prevRole } });
+    const note = compensation.ok ? `Auth compensé (état ${prevRole})` : `COMPENSATION ÉCHOUÉE : ${compensation.error} — réconcilier Auth (rôle ${prevRole})`;
+    return { ok: false, status: 500, reason: `profiles : ${profileResult.error.message} (${note})` };
+  }
+  // 3. Concurrence : si le cible perdait des privilèges admin, il doit
+  // rester AU MOINS un autre admin actif après l'écriture (TOCTOU fermé).
+  if (losesPrivileges) {
+    const remaining = await countOtherActiveAdmins(admin, targetId);
+    if (remaining < 1) {
+      // Restauration de l'état antérieur (Auth + profiles).
+      const revertProfile = await admin.from("profiles").upsert({ id: targetId, role: prevRole, status: currentRow.status ?? "active" }, { onConflict: "id" });
+      const revertResult = toResult(await revertProfile);
+      const compensation = await compensateAuth(admin, targetId, { app_metadata: { role: prevRole } });
+      if (revertResult.error || !compensation.ok) {
+        return { ok: false, status: 500, reason: "Concurrence : dernier admin atteint ; restauration partielle — VERIFIER Auth manually." };
+      }
+      return { ok: false, status: 409, reason: "Concurrence : c'est de nouveau le dernier administrateur actif — refusé." };
+    }
   }
   return { ok: true, status: 200 };
 }
@@ -449,6 +482,7 @@ async function runStatusChange(
   const banned = status === "suspended";
   const prevStatus = currentRow.status ?? "active";
   const banDuration = banned ? "876000h" : "none";
+  const losesPrivileges = currentRow.role === "admin" && banned;
   // 1. Auth d'abord (les sessions/futures connexions sont coupées).
   const authUpdate = await admin.auth.updateUserById(targetId, { ban_duration: banDuration });
   const authResult = toResult(await authUpdate);
@@ -457,9 +491,23 @@ async function runStatusChange(
   const profile = await admin.from("profiles").upsert({ id: targetId, status }, { onConflict: "id" });
   const profileResult = toResult(await profile);
   if (profileResult.error) {
-    // compensation Auth
-    soft(admin.auth.updateUserById(targetId, { ban_duration: prevStatus === "suspended" ? "876000h" : "none" }));
-    return { ok: false, status: 500, reason: `profiles : ${profileResult.error.message} (Auth compensé)` };
+    // Compensation VÉRIFIÉE.
+    const compensation = await compensateAuth(admin, targetId, { ban_duration: prevStatus === "suspended" ? "876000h" : "none" });
+    const note = compensation.ok ? "Auth compensé" : `COMPENSATION ÉCHOUÉE : ${compensation.error} — réconcilier le ban Auth`;
+    return { ok: false, status: 500, reason: `profiles : ${profileResult.error.message} (${note})` };
+  }
+  // 3. Concurrence : la suspension d'un admin ne doit jamais laisser 0 admin actif.
+  if (losesPrivileges) {
+    const remaining = await countOtherActiveAdmins(admin, targetId);
+    if (remaining < 1) {
+      const revertProfile = await admin.from("profiles").upsert({ id: targetId, role: currentRow.role, status: prevStatus }, { onConflict: "id" });
+      const revertResult = toResult(await revertProfile);
+      const compensation = await compensateAuth(admin, targetId, { ban_duration: "none" });
+      if (revertResult.error || !compensation.ok) {
+        return { ok: false, status: 500, reason: "Concurrence : dernier admin atteint ; restauration partielle — VERIFIER le ban Auth." };
+      }
+      return { ok: false, status: 409, reason: "Concurrence : c'est de nouveau le dernier administrateur actif — refusé." };
+    }
   }
   return { ok: true, status: 200 };
 }
@@ -485,60 +533,40 @@ export async function consumeInvitationOnFirstLogin(): Promise<ConsumeOutcome> {
   if (!client || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return { ok: false, status: 503, reason: "Supabase non configuré." };
   }
-  const admin = await adminServiceClient();
   const { data: { user } } = await client.auth.getUser();
   if (!user || !user.email) return { ok: false, status: 401, reason: "Connexion requise." };
 
-  const profile = await admin.from("profiles").select("id, role, status").eq("id", user.id).maybeSingle();
-  const profileResult = toResult(await profile);
-  const profileRow = (profileResult.data as { role?: string; status?: string } | null) ?? null;
-
-  const invitation = await admin.from("user_invitations")
-    .select("id, email, role, invited_at, expires_at, used_at, revoked_at")
-    .eq("email", user.email.toLowerCase())
-    .order("invited_at", { ascending: false })
-    .limit(1);
-  const invitationResult = toResult(await invitation);
-  const invitations = (invitationResult.data ?? []) as InvitationRow[];
-  const applicable = invitations[0] ?? null;
-  const state = applicable ? invitationState(applicable, Date.now()) : "expired";
-
-  if (state === "pending") {
-    // Première connexion validée : consommation + activation.
-    const consumed = await admin.from("user_invitations").update({ used_at: new Date().toISOString() })
-      .eq("id", applicable.id).select("id").single();
-    const consumedResult = toResult(await consumed);
-    if (consumedResult.error) return { ok: false, status: 500, reason: consumptionError(applicable), };
-    const role = applicable.role;
-    const activated = await admin.from("profiles")
-      .upsert({ id: user.id, role, status: "active" }, { onConflict: "id" });
-    const activatedResult = toResult(await activated);
-    if (activatedResult.error) {
-      return { ok: false, status: 500, reason: `Activation impossible : ${activatedResult.error.message}` };
-    }
-    // Cohérence Auth (app_metadata) — best effort, le référentiel de
-    // vérité côté serveur reste profiles + RLS.
-    soft(admin.auth.updateUserById(user.id, { app_metadata: { role } }));
+  // Garde centrale partagée avec le proxy (activation.ts) : toute
+  // connexion — formulaire, API directe, lien, renouvellement — passe
+  // par la même vérification d"invitation.
+  const { tryActivateSuspendedUser, isAccountActiveCheck } = await import("./activation");
+  const active = await isAccountActiveCheck(user.id);
+  if (active) {
+    // Compte actif : rôle courant (profils = vérité serveur).
+    const admin = await adminServiceClient();
+    const current = toResult(await admin.from("profiles").select("id, role, status").eq("id", user.id).maybeSingle());
+    const currentRow = (current.data as { role?: string; status?: string } | null) ?? null;
+    return { ok: true, role: currentRow?.role ?? "user", firstLogin: false };
+  }
+  const outcome = await tryActivateSuspendedUser(user.id, user.email);
+  if (outcome === "activated") {
+    const admin = await adminServiceClient();
+    const activated = toResult(await admin.from("profiles").select("id, role, status").eq("id", user.id).maybeSingle());
+    const role = ((activated.data as { role?: string } | null) ?? {}).role ?? "user";
     return { ok: true, role, firstLogin: true };
   }
-
-  // Connexions suivantes : déjà activé.
-  if (profileRow?.status === "active") return { ok: true, role: profileRow.role ?? "user", firstLogin: false };
-
-  // AUCUN accès : invitation révoquée, expirée ou inexistante.
-  if (applicable && state !== "used") {
-    // Réitérer le bannissement (le lien ne doit plus marcher).
-    soft(admin.auth.updateUserById(user.id, { ban_duration: "876000h" }));
+  if (outcome === "suspended-admin") {
+    const admin = await adminServiceClient();
+    const current = toResult(await admin.from("profiles").select("id, role, status").eq("id", user.id).maybeSingle());
+    const role = ((current.data as { role?: string } | null) ?? {}).role ?? "user";
+    return { ok: false, status: 423, reason: role === "admin"
+      ? "COMPTE_SUSPENDU : contactez un autre administrateur."
+      : "COMPTE_REFUSE : suspension administrative — contactez un administrateur." };
   }
-  return { ok: false, status: 423, reason: refusalReason(state) };
-}
-
-function consumptionError(invitation: InvitationRow): string {
-  return `Consommation impossible : ${invitation.id}`; // état reconciliable côté admin
+  return { ok: false, status: 423, reason: refusalReason("refused") };
 }
 
 function refusalReason(state: string): string {
-  if (state === "revoked") return "COMPTE_REFUSE : invitation révoquée — contactez un administrateur.";
-  if (state === "expired") return "COMPTE_REFUSE : invitation expirée (14 jours) — demandez une nouvelle invitation.";
-  return "COMPTE_REFUSE : aucune invitation valide pour cet email.";
+  if (state === "refused") return "COMPTE_REFUSE : aucune invitation valide (révoquée, expirée ou inexistante) — contactez un administrateur.";
+  return "COMPTE_REFUSE : contactez un administrateur.";
 }

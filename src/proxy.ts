@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { tryActivateSuspendedUser, type ActivationOutcome } from "@/lib/admin/activation";
 
 /**
  * Accès privé au Studio, sans mode construction.
@@ -57,9 +58,24 @@ export async function proxy(request: NextRequest) {
     admin = profile?.role === "admin";
     suspended = profile?.status === "suspended";
     if (suspended && !isHome) {
-      // Un compte suspendu ne garde qu'une vue d'information : aucune
-      // opération possible (les API renvoient 423, RLS bloque les écritures).
-      return suspendedPage();
+      // Garde centrale côté serveur : valider l"invitation AVANT tout
+      // accès (couvre connexion directe, liens, renouvellements, appels
+      // API — pas seulement le formulaire /login). Seule une invitation
+      // en attente valide est consommée (atomique) et activée ici.
+      const activation: ActivationOutcome = await tryActivateSuspendedUser(user.id, user.email ?? null);
+      if (activation === "activated") {
+        // Réévaluer l"identité (rôle de l"invitation) pour la redirection.
+        suspended = false;
+        const recheck = await supabase.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+        const fresh = (recheck as { data: { role?: string; status?: string } | null }).data;
+        admin = fresh?.role === "admin";
+        suspended = fresh?.status === "suspended";
+      }
+      if (suspended) {
+        // Suspension administrative réelle (ou invitation révoquée/épuisée) :
+        // aucune navigation privée ; les API renvoient 423 et la RLS bloque.
+        return suspendedPage();
+      }
     }
   }
 

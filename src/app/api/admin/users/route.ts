@@ -13,10 +13,24 @@ export async function GET() {
     return NextResponse.json({ ok: false, errors: [principal.reason] }, { status: principal.status });
   }
   try {
-    const users = await listUsersWithProfiles(principal.adminClient);
-    const invitations = await listInvitations(principal.adminClient);
+    // listUsersWithProfiles / listInvitations renvoient { tableau, error } :
+    // on désencapsule et on propage les erreurs Supabase au frontend.
+    const usersRead = await listUsersWithProfiles(principal.adminClient);
+    if (usersRead.error) {
+      return NextResponse.json(
+        { ok: false, errors: [`Supabase : ${usersRead.error}`] },
+        { status: 503 }
+      );
+    }
+    const invitationsRead = await listInvitations(principal.adminClient);
+    if (invitationsRead.error) {
+      return NextResponse.json(
+        { ok: false, errors: [`Supabase : ${invitationsRead.error}`] },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
-      { ok: true, users, invitations },
+      { ok: true, users: usersRead.users, invitations: invitationsRead.invitations },
       { headers: { "cache-control": "no-store" } }
     );
   } catch (error) {
