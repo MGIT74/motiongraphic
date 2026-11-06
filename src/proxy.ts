@@ -87,9 +87,12 @@ export async function proxy(request: NextRequest) {
       response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
       return redirect;
     }
-    // Administrateur : seul à passer /admin* (Template Lab, utilisateurs).
+    // Administrateur : seul à passer /admin* (Template Lab, utilisateurs) ;
+    // un utilisateur simple est redirigé vers le Studio.
     if (path.startsWith("/admin") && role !== "admin") {
-      return response;
+      const redirect = NextResponse.redirect(new URL("/studio", request.url), 307);
+      response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+      return redirect;
     }
     // Les API de templates (Lab) sont réservées à l'administrateur ; les API
     // Studio (projets/médias/rendus propres à l'utilisateur) restent ouvertes
