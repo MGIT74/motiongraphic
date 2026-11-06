@@ -37,10 +37,14 @@ export default function LoginPage() {
       // Identité : admin -> /admin, utilisateur -> la destination prévue ou /studio.
       const authResult = (await client.auth.getUser()) as unknown as { data?: { user?: { id: string } | null } | null };
       const loggedInUser = authResult.data?.user ?? null;
-      let destination = nextPath && nextPath.startsWith("/") ? nextPath : "/studio";
+      let destination = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") && !nextPath.includes("\\") && !nextPath.includes("\r") && !nextPath.includes("\n") ? nextPath : "/studio";
       if (loggedInUser && destination.startsWith("/admin")) {
         const { data: profile } = await client.from("profiles").select("role").eq("id", loggedInUser.id).maybeSingle();
         if (profile?.role !== "admin") destination = "/studio";
+      }
+      if (loggedInUser && destination === "/studio") {
+        const { data: profile } = await client.from("profiles").select("role").eq("id", loggedInUser.id).maybeSingle();
+        if (profile?.role === "admin" && !nextPath) destination = "/admin";
       }
       router.push(destination);
       router.refresh();

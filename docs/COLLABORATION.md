@@ -57,9 +57,7 @@ dans la PR (« touche aussi : … »).
 
 ## 3. En cours
 
-- [OpenCode] `feat/studio-private-domain` — application privée : suppression du mode construction, proxy session (visiteur→/login, admin→/admin, user→/studio), galerie réservée aux connectés, masquage des templates non pilotables dans la bibliothèque (diag intacte au Lab), SQL d'application/diagnostic Supabase.
-
-- [ChatGPT] `feat/template-lab-studio-pipeline` (PR #31) — **réalisé** : capacités timeline/MP4 calculées (contrat `__MGS_TIMELINE__ = { duration, outAt, renderAt(time, params) }`), runtime sandbox déterministe (SEEK/FRAME_READY, sessions, CSP, quotas, neutralisation réseau/eval/img), catalogue Studio unifié (`/studio` + `/render` relisent le store à chaque requête), starter codes (libre + renderAt), tests `test:security` (12 contrôles), `test:export` (MP4 réel 16:9/9:16/1:1), contrôle CI des templates sandbox via /dev/template-check.
+- [OpenCode] `feat/template-lab-studio-pipeline` (PR #31) — **réalisé** : capacités timeline/MP4 calculées (contrat `__MGS_TIMELINE__ = { duration, outAt, renderAt(time, params) }`), runtime sandbox déterministe (SEEK/FRAME_READY, sessions, CSP, quotas, neutralisation réseau/eval/img), catalogue Studio unifié (`/studio` + `/render` relisent le store à chaque requête), starter codes (libre + renderAt), tests `test:security` (12 contrôles), `test:export` (MP4 réel 16:9/9:16/1:1), contrôle CI des templates sandbox via /dev/template-check.
 
 - [ChatGPT] `fix/template-lab-supabase-row-mapping` — correction du mapping des lignes Supabase côté admin et serveur ; code terminé, CI/revue en attente. Zone administration modifiée de façon ciblée.
 
