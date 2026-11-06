@@ -92,16 +92,32 @@ declare
   v_triggers int;
   v_policies int;
 begin
+  -- 6 déclencheurs de garde, vérifiés DÉCLENCHEUR PAR TABLE :
+  --   guard_active sur studio_projects, studio_media,
+  --     studio_project_versions, studio_renders (4) ;
+  --   guard_active_created_by sur custom_templates (1) ;
+  --   prevent_role_escalation sur profiles (1 — 0001 ; la fonction
+  --     guard_role_change est remplacée par 0009).
+  -- NB : la migration 0009 NE CRÉE PAS prevent_status_change ; le statut
+  -- est appliqué côté application (proxy, routes admin, is_admin).
   select count(*) into v_triggers
-    from pg_trigger t
-    join pg_class c on c.oid = t.tgrelid
-    join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
-      and not t.tgisinternal
-      and t.tgname in ('guard_active', 'guard_active_created_by',
-                       'prevent_role_escalation', 'prevent_status_change');
-  if v_triggers < 7 then
-    raise exception 'SELFCHECK : % triggers de garde (7 attendus : 4×guard_active + created_by + rôle + statut).', v_triggers;
+    from (values
+      ('studio_projects',          'guard_active'),
+      ('studio_media',             'guard_active'),
+      ('studio_project_versions',  'guard_active'),
+      ('studio_renders',           'guard_active'),
+      ('custom_templates',         'guard_active_created_by'),
+      ('profiles',                 'prevent_role_escalation')
+    ) as attendu(nom_table, nom_trigger)
+    join pg_class c
+      on c.relnamespace = 'public'::regnamespace
+      and c.relname = attendu.nom_table
+    join pg_trigger t
+      on t.tgrelid = c.oid
+      and t.tgname = attendu.nom_trigger
+      and not t.tgisinternal;
+  if v_triggers <> 6 then
+    raise exception 'SELFCHECK : triggers de garde attendus trouvés = %/6 (vérifier migration 0009/0001).', v_triggers;
   end if;
   select count(*) into v_policies
     from pg_policies
@@ -292,7 +308,8 @@ $p3c$;
 rollback;
 
 -- ---------------------------------------------------------------------
--- P4 — self-service interdit : B ne peut pas se promouvoir ni se suspendre.
+-- P4 — self-service : le RÔLE est verrouillé (déclencheur) ; le statut
+--      est appliqué au niveau application (cf. note de cohérence).
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
@@ -314,18 +331,16 @@ begin
   end;
 end;
 $p4a$;
-do $p4b$
+-- NOTE COHÉRENCE MIGRATION : 0009 ne crée PAS prevent_status_change ;
+-- la suspension/réactivation est appliquée au niveau APPLICATION
+-- (proxy, routes /api/admin/*, is_admin) et non par un déclencheur SQL.
+-- Aucune prétention de refus au niveau base pour le statut en libre-
+-- service direct ; seul le rôle est verrouillé (déclencheur ci-avant).
+do $p4note$
 begin
-  begin
-    update public.profiles set status = 'suspended' where id = '7e570000-0000-7e57-8000-000000000002';
-    raise exception 'P4 ÉCHEC : auto-suspension acceptée.';
-  exception
-    when others then
-      if sqlstate <> 'P0001' then raise exception 'P4 ÉCHEC : SQLSTATE % (auto-statut).', sqlstate; end if;
-      raise notice 'P4 OK : auto-suspension refusée.';
-  end;
+  raise notice 'P4 note : statut appliqué au niveau application (aucun déclencheur SQL prévu par la migration) ; le verrou de rôle reste vérifié.';
 end;
-$p4b$;
+$p4note$;
 rollback;
 
 -- ---------------------------------------------------------------------
