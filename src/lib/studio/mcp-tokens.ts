@@ -135,9 +135,12 @@ export async function requireActiveSession(): Promise<
   if (!client) return { ok: false, status: 503, reason: "Supabase non configuré." };
   const { data: { user } } = await client.auth.getUser();
   if (!user) return { ok: false, status: 401, reason: "Connexion requise." };
-  const { data: profile } = await client.from("profiles").select("status").eq("id", user.id).maybeSingle();
-  if ((profile as { status?: string } | null)?.status === "suspended") {
-    return { ok: false, status: 423, reason: "COMPTE_SUSPENDU : contactez un administrateur." };
+  const { data: profile, error } = await client.from("profiles").select("status").eq("id", user.id).maybeSingle();
+  const profileRow = (profile as { status?: string } | null) ?? null;
+  // FAIL-CLOSED (audit #5) : profil absent, lecture en erreur ou statut
+  // non « active » → refus systématique.
+  if (error || !profileRow || profileRow.status !== "active") {
+    return { ok: false, status: 423, reason: "Compte indisponible ou suspendu : accès refusé." };
   }
   return { ok: true, userId: user.id, email: user.email ?? null };
 }

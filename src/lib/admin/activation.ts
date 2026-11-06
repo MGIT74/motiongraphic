@@ -21,6 +21,8 @@ export type ActivationOutcome =
 
 interface UpdateChain {
   eq: (col: string, value: unknown) => UpdateChain;
+  is: (col: string, value: null | boolean) => UpdateChain;
+  gt: (col: string, value: unknown) => UpdateChain;
   select: (sel: string) => PromiseLike<unknown>;
 }
 interface ServiceClientLike {
@@ -99,11 +101,18 @@ export async function tryActivateSuspendedUser(
       return "suspended-admin";
     }
 
-    // Consommation atomique : un seul appel gagne, les autres voient 0 ligne
-    // (update ... where used_at is null ... via select : rows affectées).
+    // Consommation atomique : toutes les conditions de validité portent
+    // sur la LIGNE elle-même (course-safe) — un seul appel gagne, les
+    // autres (et les connexions simultanées) voient 0 ligne :
+    //   UPDATE user_invitations SET used_at = now()
+    //   WHERE id = X AND used_at IS NULL AND revoked_at IS NULL
+    //     AND expires_at > now()
     const consume = admin.from("user_invitations")
       .update({ used_at: new Date().toISOString() })
       .eq("id", invitation.id)
+      .is("used_at", null)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
       .select("id");
     const consumeResult = (await consume) as { data?: Array<{ id: string }> | null; error?: { message: string } | null };
     if (consumeResult.error || !consumeResult.data || consumeResult.data.length === 0) {
@@ -141,16 +150,24 @@ async function banAuth(admin: ServiceClientLike, userId: string): Promise<void> 
   }
 }
 
-/** Contrôle pour un utilisateur ACTIF (proxy : chemin rapide). */
+/**
+ * Contrôle du statut d"un utilisateur connecté — FAIL-CLOSED (audit #5) :
+ * lecture via le client session (RLS, pas de service_role requis).
+ * Erreur de lecture, profil ABSENT ou statut ≠ « active » → false.
+ * Le SEUL chemin de sortie pour un compte non actif reste
+ * tryActivateSuspendedUser() (invitation valide) — jamais un oui par défaut.
+ */
 export async function isAccountActiveCheck(userId: string): Promise<boolean> {
-  const admin = await serviceClient();
-  if (!admin) return true; // pas de service : décision côté session/RLS
+  const { createSupabaseServerClient } = await import("@/lib/supabase/server");
+  const client = await createSupabaseServerClient();
+  if (!client) return false; // lecture impossible → refus
   try {
-    const profileQuery = (admin.from("profiles").select("id, status") as { eq: (c: string, v: unknown) => Queryable }).eq("id", userId);
-    const profile = (await profileQuery) as { data?: Array<{ status?: string }> | null };
-    const row = (profile.data ?? [])[0];
-    return Boolean(row) && (row?.status ?? "active") === "active";
-  } catch {
+    const row = (await client.from("profiles").select("id, status").eq("id", userId).maybeSingle()) as
+      { data?: { id: string; status?: string } | null; error?: { message: string } | null };
+    const profile = row?.data ?? null;
+    if (row?.error || !profile || profile.status !== "active") return false;
     return true;
+  } catch {
+    return false;
   }
 }

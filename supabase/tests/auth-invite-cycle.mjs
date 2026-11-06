@@ -43,12 +43,17 @@ const ok = (c, msg) => { console.log((c ? "✅ " : "❌ ") + msg); if (!c) failu
 const email = `invite-${Date.now()}@test-clone.local`;
 const password = `Cyc!e-${Date.now().toString(36)}-${Date.now().toString(36)}`;
 
-/** Consommation atomique — RÉPLIQUE exacte du serveur (activation.ts). */
+/** Consommation atomique — RÉPLIQUE exacte du serveur (activation.ts) :
+ * conditions portées sur la ligne : used_at is null, revoked_at is null,
+ * expires_at > maintenant (un seul appel simultané gagne). */
 async function consumeAtomically(invitationId) {
   const update = admin.from("user_invitations")
     .update({ used_at: new Date().toISOString() })
     .eq("id", invitationId)
     .eq("email", email)
+    .is("used_at", null)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
     .select("id");
   return await update;
 }
@@ -88,6 +93,20 @@ async function main() {
   const second = await consumeAtomically(invitation.id);
   const secondRows = (second?.data ?? []) as Array<{ id: string }>;
   ok(!second.error && secondRows.length === 0, `4b. double activation impossible → ${secondRows.length} ligne (attendu 0)`);
+
+  /* Course réelle : 6 connexions simultanées sur une NOUVELLE invitation —
+   * une seule doit consommer (les autres voient 0 ligne). */
+  for (let round = 0; round < 2; round += 1) {
+    const raceEmail = `race-${round}-${Date.now()}@test-clone.local`;
+    const raceInvite = await admin.from("user_invitations").insert({ email: raceEmail, role: "user" }).select("id").single();
+    if (raceInvite.error || !raceInvite.data) { ok(false, `   course ${round} : invitation non créée`); continue; }
+    const raceId = (raceInvite.data as { id: string }).id;
+    const outcomes = await Promise.all(Array.from({ length: 6 }, () => consumeAtomically(raceId)));
+    const winners = (outcomes ?? []).filter((o) => ((o?.data ?? []) as Array<{ id: string }>).length === 1);
+    const losers = (outcomes ?? []).filter((o) => ((o?.data ?? []) as Array<{ id: string }>).length === 0);
+    ok(winners.length === 1 && losers.length === 5, `   course ${round} : 6 connexions simultanées → ${winners.length} gagnant(s) (attendu 1)`);
+    await admin.from("user_invitations").delete().eq("id", raceId);
+  }
 
   /* 5. Rôle attribué selon l'invitation. */
   const { data: profile5 } = await admin.from("profiles").select("id, role, status").eq("id", account.id).maybeSingle();

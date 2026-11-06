@@ -26,9 +26,19 @@ export async function authorizeRender(request: NextRequest): Promise<{ ok: true;
   if (!client) return { ok: false, status: 503, message: "Supabase non configuré." };
   const { data: { user } } = await client.auth.getUser();
   if (!user) return { ok: false, status: 401, message: "Connexion requise." };
-  const { data: profile } = await client.from("profiles").select("status").eq("id", user.id).maybeSingle();
-  if ((profile as { status?: string } | null)?.status === "suspended") {
+  // FAIL-CLOSED (audit) : le profil doit EXISTER avec status='active' ;
+  // toute erreur de lecture ou profil absent → refus (pas d"accès par
+  // acquiescement).
+  const { data: profile, error: profileError } = await client.from("profiles").select("status").eq("id", user.id).maybeSingle();
+  const row = (profile as { status?: string } | null);
+  if (profileError || !row) {
+    return { ok: false, status: 423, message: " Profil utilisateur indisponible : accès refusé." };
+  }
+  if (row.status === "suspended") {
     return { ok: false, status: 423, message: "COMPTE_SUSPENDU : contactez un administrateur." };
+  }
+  if (row.status !== "active") {
+    return { ok: false, status: 423, message: "Compte non actif : accès refusé." };
   }
   return { ok: true, userId: user.id };
 }

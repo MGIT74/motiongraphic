@@ -55,10 +55,15 @@ manuellement sans garde. Exporter les données ci-dessus AVANT rollback.
 
 ## 4. Limites connues et tests non exécutés (transparence)
 
-- **Aucun clone Supabase disponible** dans cet environnement (pas de
-  Docker, pas de CLI) : `rls-users.sql` (S1..S7) et
-  `auth-invite-cycle.mjs` ont été écrits mais **NON exécutés** —
-  la sécurité RLS/Auth réelle N'EST DONC PAS VALIDÉE par exécution.
+- **Aucun environnement SQL local viable** dans cet environnement :
+  pas de Docker, pas de CLI Supabase, pas de psql ; la tentative
+  d"installation d"un Postgres local (brew) échoue (compilation depuis
+  les sources, erreurs de build, macOS 13 hors support). Les scripts
+  `rls-users.sql` (S1..S7, série 3 corrigée) et `auth-invite-cycle.mjs`
+  (9 étapes + courses de connexions simultanées) sont prêts mais
+  **NON exécutés** — la sécurité RLS/Auth réelle N'EST DONC PAS VALIDÉE
+  par exécution (les scénarios SQL sont syntaxés et relus ; psql
+  ON_ERROR_STOP révélera tout écart résiduel sur le clone).
 - `listUsersWithProfiles` paginé (>200 comptes) : non testé réel
   (idem, clone requis).
 - Le dossier « profil utilisateur » (modifier prénom/email/mot de passe,

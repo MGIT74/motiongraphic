@@ -53,10 +53,26 @@ export async function proxy(request: NextRequest) {
   let admin = false;
   let suspended = false;
   if (user && (isAdmin || isHome || isLogin || isPrivate)) {
-    const { data } = await supabase.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
-    const profile = data as { role?: string; status?: string } | null;
-    admin = profile?.role === "admin";
+    const { data, error } = await supabase.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+    const profile = (data as { role?: string; status?: string } | null);
+    // FAIL-CLOSED (audit) : profil ABSENT ou lecture en erreur →
+    // l"utilisateur ne franchit pas : tentative d"activation (invitation
+    // valide) sinon page de suspension (aucune opé).
     suspended = profile?.status === "suspended";
+    if ((!profile || error) && isPrivate) {
+      const activation: ActivationOutcome = await tryActivateSuspendedUser(user.id, user.email ?? null);
+      if (activation === "activated") {
+        suspended = false;
+        const recheck2 = await supabase.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+        const fresh = (recheck2 as { data: { role?: string; status?: string } | null }).data;
+        admin = fresh?.role === "admin";
+        suspended = fresh?.status === "suspended";
+      } else if (!isLogin) {
+        return suspendedPage();
+      }
+    }
+    if (profile?.role === "admin") admin = true;
+    if (profile?.status === "suspended") suspended = true;
     if (suspended && !isHome) {
       // Garde centrale côté serveur : valider l"invitation AVANT tout
       // accès (couvre connexion directe, liens, renouvellements, appels

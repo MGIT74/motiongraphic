@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { validateTemplateCode } from "@/lib/templates/custom-model";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { requireActiveSession } from "@/lib/studio/mcp-tokens";
 
 /**
  * Validateur autoritaire du code source de template (pipeline).
@@ -7,6 +9,14 @@ import { validateTemplateCode } from "@/lib/templates/custom-model";
  * L'appelant browser ne prend AUCUNE décision de sécurité lui-même.
  */
 export async function POST(request: NextRequest) {
+  // API privée (audit #4) : en mode connecté, session requise et statut
+  // vérifié côté serveur ; en démo locale, aucun changement de confort.
+  if (isSupabaseConfigured()) {
+    const session = await requireActiveSession();
+    if (!session.ok) {
+      return NextResponse.json({ ok: false, errors: [session.reason] }, { status: session.status });
+    }
+  }
   let code: unknown;
   try {
     const body = (await request.json()) as { code?: unknown };

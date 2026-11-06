@@ -39,6 +39,7 @@ interface AdminSupabase {
  * pour accepter tables et builders variés sans `any` explicite). */
 type PostgrestChain = {
   select: (sel?: string) => PostgrestChain;
+  delete: () => PostgrestChain;
   eq: (col: string, value: unknown) => PostgrestChain;
   in: (col: string, values: unknown[]) => PostgrestChain;
   is: (col: string, value: null | boolean) => PostgrestChain;
@@ -310,34 +311,47 @@ export async function inviteUser(
     return { ok: true, status: 200, resent: true, invitation, ...(actionLink ? { action_link: actionLink, ...(!resentEmail ? {} : {}) } : {}) };
   }
 
-  // Aucune invitation applicative en attente :
-  // - compte invité non activé (sans ligne applicative, ex. restauration)
-  //   → ré-invitation avec nouveau lien ;
-  // - email inconnu → invitation fraîche.
+  // ORDRE IMPOSÉ (audit) : l\'enregistrement applicatif DOIT exister
+  // AVANT inviteUserByEmail — il déclenche auth.users INSERT et
+  // handle_new_user() lit user_invitations pour attribuer le rôle
+  // (admin ↔ user) au compte. En cas d'échec de l\'invitation, la ligne
+  // est SUPPRIMÉE (compensation) pour ne pas laisser un état incohérent.
+  const insertedFirst = await admin.from("user_invitations").insert({ email: clean, role, invited_by: invitedBy })
+    .select("id, email, role, invited_at, expires_at, used_at, revoked_at")
+    .single();
+  const insertedFirstResult = toResult(await insertedFirst);
+  const newInvitation = insertedFirstResult.data as InvitationRow | null;
+  if (!newInvitation) {
+    const errMessage = insertedFirstResult.error?.message ?? "insertion impossible";
+    if (/duplicate key|unique/i.test(errMessage)) {
+      return { ok: false, status: 409, reason: "Une invitation en attente existe déjà (revisez l'historique)." };
+    }
+    return { ok: false, status: 503, reason: `Historique d'invitation indisponible (migration 0009 requise) : ${errMessage}` };
+  }
+
   const invited = await admin.auth.inviteUserByEmail(clean, {
     redirectTo,
     data: { invited_role: role },
   });
   const inviteResult = invited as { error?: { message: string; status?: number } | null };
   if (inviteResult.error && /already registered/i.test(inviteResult.error.message)) {
+    // Compte Auth existant (invité non activé sans ligne applicative,
+    // ex. restauration) : régénérer un lien (compensation inutile).
     const link = await admin.auth.generateLink({ type: "invite", email: clean, options: { redirectTo } });
     const linkResult = link as { data?: { properties?: { action_link?: string } } | null; error?: { message: string } | null };
     if (linkResult.error || !linkResult.data?.properties?.action_link) {
-      return { ok: false, status: 503, reason: `Ré-invitation impossible : ${linkResult.error?.message ?? "lien indisponible"}` };
+      const compensation = toResult(await admin.from("user_invitations").delete().eq("id", newInvitation.id));
+      void compensation;
+      return { ok: false, status: 503, reason: `Ré-invitation impossible : ${linkResult.error?.message ?? "lien indisponible"} (enregistrement annulé)` };
     }
   } else if (inviteResult.error) {
-    return { ok: false, status: inviteResult.error.status ?? 500, reason: `Supabase Auth : ${inviteResult.error.message}` };
+    // COMPENSATION : annuler l\'enregistrement applicatif créé avant.
+    const compensation = toResult(await admin.from("user_invitations").delete().eq("id", newInvitation.id));
+    const note = compensation.error ? `COMPENSATION ÉCHOUÉE : ${compensation.error.message} — supprimer manuellement l\'invitation ${newInvitation.id}` : "enregistrement annulé";
+    return { ok: false, status: inviteResult.error.status ?? 500, reason: `Supabase Auth : ${inviteResult.error.message} (${note})` };
   }
 
-  const inserted = await admin.from("user_invitations").insert({ email: clean, role, invited_by: invitedBy })
-    .select("id, email, role, invited_at, expires_at, used_at, revoked_at")
-    .single();
-  const insertedResult = toResult(await inserted);
-  const invitation = insertedResult.data as InvitationRow | null;
-  if (!invitation) {
-    return { ok: false, status: 500, reason: "Historique d'invitation indisponible (migration 0009 requise)." };
-  }
-  return { ok: true, status: 201, invitation };
+  return { ok: true, status: 201, invitation: newInvitation };
 }
 
 export async function revokeInvitation(
@@ -540,7 +554,7 @@ export async function consumeInvitationOnFirstLogin(): Promise<ConsumeOutcome> {
   // connexion — formulaire, API directe, lien, renouvellement — passe
   // par la même vérification d"invitation.
   const { tryActivateSuspendedUser, isAccountActiveCheck } = await import("./activation");
-  const active = await isAccountActiveCheck(user.id);
+  const active = await isAccountActiveCheck(user.id); // fail-closed (profil/erreur)
   if (active) {
     // Compte actif : rôle courant (profils = vérité serveur).
     const admin = await adminServiceClient();
