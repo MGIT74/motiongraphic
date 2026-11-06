@@ -1,12 +1,30 @@
 -- =====================================================================
--- MotionGraphic Studio — Utilisateurs privés V1
--- Invitations + statut du compte (actif / suspendu) + garde d'écriture
--- + table MCP personnele (préparatoire, inactive).
--- ⚠️ NE PAS EXÉCUTER en production sans autorisation. Idempotent,
--- ré-exécutable sans perte de données.
--- Dépend de : 0001 (profiles, is_admin, guard_role_change) et 0003/0005
--- (tables studio + custom_templates).
+-- MotionGraphic Studio — Utilisateurs privés V1 (révision d'audit)
+-- Invitations + statut du compte (actif / suspendu) + gardes d'écriture
+-- + jetons MCP personnels (préparatoires, dormants).
+--
+-- ⚠️ NE PAS EXÉCUTER en production sans autorisation.
+-- Idempotent et re-exécutable (create or replace / drop if exists),
+-- SANS casser les tables existantes (0001/0003/0005 restent intacts ;
+-- seuls des remplacements de fonctions/trigger et des ajouts ici).
+-- Dépend de : 0001 (profiles, is_admin, guard_role_change,
+-- handle_new_user) et 0003/0005 (tables studio + custom_templates).
 -- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 0. Détection du chemin privilégié (API d'administration serveur).
+-- PostgREST expose les claims dans request.jwt.claims ; auth.role()
+-- lit le même champ. Les deux chemins sont couverts (cf audit).
+-- ---------------------------------------------------------------------
+
+create or replace function public.request_is_service_role()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce(auth.role(), '') = 'service_role'
+      or coalesce((current_setting('request.jwt.claims', true))::json ->> 'role', '') = 'service_role';
+$$;
 
 -- ---------------------------------------------------------------------
 -- 1. Statut du compte
@@ -17,7 +35,6 @@ alter table public.profiles
   text not null default 'active'
   check (status in ('active', 'suspended'));
 
--- Helper : le compte est-il opérationnel (existe et actif) ?
 create or replace function public.account_is_active(uid uuid)
 returns boolean
 language sql
@@ -34,9 +51,7 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------
--- 2. Invitations par email — créées/manipulées UNIQUEMENT côté serveur
---    par l'API d'administration (/api/admin/users/*, clé service_role
---    jamais exposée au navigateur).
+-- 2. Invitations par email (créées/manipulées UNIQUEMENT côté serveur)
 -- ---------------------------------------------------------------------
 
 create table if not exists public.user_invitations (
@@ -65,7 +80,7 @@ create policy invitations_admin_all on public.user_invitations
   using (public.is_admin())
   with check (public.is_admin());
 
--- Un utilisateur invité peut consulter la ligne qui le concerne.
+-- Un utilisateur invité (accepté) peut consulter l'invitation qui le concerne.
 drop policy if exists invitations_read_invited on public.user_invitations;
 create policy invitations_read_invited on public.user_invitations
   for select to authenticated
@@ -75,22 +90,17 @@ create policy invitations_read_invited on public.user_invitations
     ))
   );
 
--- ---------------------------------------------------------------------
--- 3. Suspension : un compte suspendu ne peut plus écrire ses projets,
---    médias, versions, rendus ni proposer des templates. Les lectures
---    restent possibles (consultation de ses données, pas d'opération
---    nouvelle). Garde appliquée par trigger, quel que soit le chemin.
--- ---------------------------------------------------------------------
+-- Le flux applicatif (consommation serveur) ne tient pas dans les
+-- politiques : l'écriture se fait via service_role (serveur uniquement).
+grant select, insert, update, delete on public.user_invitations to service_role;
 
--- Helper : la requête est-elle issue du rôle service_role (API
--- d'administration serveur) ? Aucun effet côté navigateur (JWT anon).
-create or replace function public.request_is_service_role()
-returns boolean
-language sql
-stable
-as $$
-  select coalesce(current_setting('request.jwt.claims', true)::json ->> 'role', '') = 'service_role';
-$$;
+-- ---------------------------------------------------------------------
+-- 3. Garde d'écriture des comptes suspendus (sessions réelles) :
+--    un profil suspendu NE PEUT PLUS écrire (insert/update/delete) sur
+--    ses projets, médias, versions, rendus ni proposer un template.
+--    Les LECTURES restent possibles. Les chemins privilégiés
+--    (service_role : MCP admin, migrations, restauration) sont exempts.
+-- ---------------------------------------------------------------------
 
 create or replace function public.assert_account_active_for_write()
 returns trigger
@@ -100,15 +110,23 @@ set search_path = public
 as $$
 declare
   v_owner uuid;
+  v_is_service boolean;
 begin
+  v_is_service := public.request_is_service_role();
+  if v_is_service then
+    return coalesce(NEW, OLD); -- chemin d'administration/migration
+  end if;
   if TG_OP = 'DELETE' then
     v_owner := OLD.user_id;
   else
     v_owner := NEW.user_id;
   end if;
+  if v_owner is null then
+    return coalesce(NEW, OLD); -- données historiques sans propriétaire
+  end if;
   if not public.account_is_active(v_owner) then
     raise exception 'COMPTE_SUSPENDU : opération réservée aux comptes actifs.'
-      using hint = 'Contactez un administrateur.';
+      using hint = 'Contactez un administrateur.', errcode = 'P0001';
   end if;
   return coalesce(NEW, OLD);
 end;
@@ -118,10 +136,11 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array[
-    'studio_projects', 'studio_media', 'studio_project_versions',
-    'studio_renders', 'custom_templates'
-  ] loop
+  -- studio_* : colonne user_id ; custom_templates : created_by (0005).
+  foreach t in array array['studio_projects',
+                           'studio_media',
+                           'studio_project_versions',
+                           'studio_renders'] loop
     execute format('drop trigger if exists guard_active on public.%I', t);
     execute format(
       'create trigger guard_active before insert or update or delete
@@ -130,16 +149,58 @@ begin
       t
     );
   end loop;
+
+  -- custom_templates : colonne owner = created_by (0005, nullable) —
+  -- un déclencheur dédié couvre insert/update/delete.
+  execute format('drop trigger if exists guard_active_created_by on public.%I', 'custom_templates');
+  execute format(
+    'create trigger guard_active_created_by before insert or update or delete
+       on public.custom_templates
+       for each row
+       execute function public.assert_account_active_for_write_created_by();'
+  );
+end;
+$$;
+
+-- Variante created_by (custom_templates — colonne nullable, jamais
+-- bloquée quand null : données admin/migration).
+create or replace function public.assert_account_active_for_write_created_by()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner uuid;
+begin
+  if public.request_is_service_role() then
+    return coalesce(NEW, OLD);
+  end if;
+  if TG_OP = 'DELETE' then
+    v_owner := OLD.created_by;
+  else
+    v_owner := NEW.created_by;
+  end if;
+  if v_owner is null then
+    return coalesce(NEW, OLD);
+  end if;
+  if not public.account_is_active(v_owner) then
+    raise exception 'COMPTE_SUSPENDU : opération réservée aux comptes actifs.'
+      using hint = 'Contactez un administrateur.', errcode = 'P0001';
+  end if;
+  return coalesce(NEW, OLD);
 end;
 $$;
 
 -- ---------------------------------------------------------------------
--- 4. Garde du statut : la suspension est réservée aux administrateurs
---    (le rôle était déjà verrouillé par 0001 / guard_role_change).
+-- 4. Garde du statut ET du rôle (profils) : un utilisateur connecté ne
+--    peut jamais changer son rôle ni son statut en self-service ; seuls
+--    un admin (session) ou l'API d'administration (service_role) le
+--    peuvent. guard_role_change de 0001 est remplacé par cette version
+--    (create or replace, sans suppression de données).
 -- ---------------------------------------------------------------------
 
-drop function if exists public.guard_status_change() cascade;
-create or replace function public.guard_status_change()
+create or replace function public.guard_role_change()
 returns trigger
 language plpgsql
 security definer
@@ -147,27 +208,79 @@ set search_path = public
 as $$
 begin
   if public.is_admin() or public.request_is_service_role() then
-    return new;
+    return new; -- administrateur connecté, ou API d'administration
+  end if;
+  if coalesce(new.role, 'user') <> old.role then
+    raise exception 'ROLE_PROTEGE : le rôle ne peut pas être changé en libre-service.'
+      using errcode = 'P0001';
   end if;
   if coalesce(new.status, 'active') <> coalesce(old.status, 'active') then
     raise exception 'STATUT_PROTEGE : la suspension est réservée aux administrateurs.'
-      using hint = 'Contactez un administrateur.';
+      using errcode = 'P0001';
   end if;
   return new;
 end;
 $$;
 
-drop trigger if exists prevent_status_change on public.profiles;
-create trigger prevent_status_change
-  before update on public.profiles
-  for each row
-  when (coalesce(new.status, 'active') <> coalesce(old.status, 'active'))
-  execute function public.guard_status_change();
+-- Ancien déclencheur 0001 (prevent_role_escalation) pointe déjà vers
+-- guard_role_change() : create or replace le met à jour.
 
 -- ---------------------------------------------------------------------
--- 5. MCP personnel (PRÉPARATOIRE — INACTIF : aucune connexion ni code
---    applicatif actif tant que le drapeau serveur MCP_USER_TOKENS n'est
---    pas activé explicitement ; jamais par défaut).
+-- 5. handle_new_user : attribution du rôle selon l'invitation valide
+--    (admin ↔ user) et création fail-closed.
+--    - invitation EN ATTENTE (non révoquée, non expirée, non utilisée)
+--      au moment de la création du compte (envoi d'invitation) :
+--      profil créé avec le rôle de l'invitation, statut « suspended »
+--      jusqu'à la première connexion (activation côté serveur :
+--      /api/auth/consume → used_at + activation) ;
+--    - sans invitation valide (inscription directe, invitation révoquée
+--      ou expirée) : profil « suspended » → tout accès refusé
+--      jusqu'à décision d'un administrateur.
+-- ---------------------------------------------------------------------
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invitation public.user_invitations;
+  v_role text := 'user';
+begin
+  select * into v_invitation
+    from public.user_invitations
+    where lower(email) = lower(coalesce(new.email, ''))
+      and used_at is null
+      and revoked_at is null
+      and expires_at > now()
+    order by invited_at desc
+    limit 1;
+  if found and v_invitation.role = 'admin' then
+    v_role := 'admin';
+  elsif found then
+    v_role := 'user';
+  end if;
+  insert into public.profiles (id, display_name, role, status)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'display_name',
+             split_part(coalesce(new.email, 'utilisateur'), '@', 1)),
+    v_role,
+    'suspended' -- activé à la première connexion validée côté serveur
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 6. Jetons MCP personnels — PRÉPARATOIRE ET DORMANT.
+--    Émission/révocation STRICTEMENT serveur : aucun droit PostgREST
+--    pour anon/authenticated (ni lecture ni écriture) — le navigateur
+--    ne peut donc pas insérer d'empreinte ni lire des secrets.
+--    L'API serveur (service_role) gère tout. Activation jamais par
+--    défaut : drapeau MCP_USER_TOKENS côté serveur.
 -- ---------------------------------------------------------------------
 
 create table if not exists public.mcp_user_tokens (
@@ -186,16 +299,18 @@ create index if not exists mcp_user_tokens_user_idx on public.mcp_user_tokens (u
 
 alter table public.mcp_user_tokens enable row level security;
 
-drop policy if exists mcp_tokens_owner on public.mcp_user_tokens;
-create policy mcp_tokens_owner on public.mcp_user_tokens
-  for all to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+-- Aucun accès direct navigateur/anon (cf audit : pas d'insertion de
+-- token_hash depuis le client, aucune lecture d'empreinte).
+revoke all on public.mcp_user_tokens from anon;
+revoke all on public.mcp_user_tokens from authenticated;
+grant select, insert, update, delete on public.mcp_user_tokens to service_role;
 
+drop policy if exists mcp_tokens_owner on public.mcp_user_tokens;
 drop policy if exists mcp_tokens_admin_read on public.mcp_user_tokens;
-create policy mcp_tokens_admin_read on public.mcp_user_tokens
-  for select to authenticated
-  using (public.is_admin());
+create policy mcp_tokens_service_all on public.mcp_user_tokens
+  for all to service_role
+  using (true)
+  with check (true);
 
 -- =====================================================================
 -- FIN — NE PAS EXÉCUTER en production sans autorisation.

@@ -32,7 +32,18 @@ export default function LoginPage() {
         setBusy(false);
         return;
       }
-      router.push("/admin");
+      // Garde d'acceptation (côté serveur) : l'invitation doit être valide
+      // (non révoquée, non expirée) et le compte actif — sinon déconnexion.
+      const consume = await fetch("/api/auth/consume", { method: "POST", cache: "no-store" });
+      const consumePayload = (await consume.json().catch(() => ({}))) as { ok?: boolean; errors?: string[]; role?: string };
+      if (!consume.ok || !consumePayload.ok) {
+        await client.auth.signOut();
+        router.refresh();
+        setError(((consumePayload.errors ?? []) as string[]).join(" ") || "Connexion refusée par le serveur.");
+        setBusy(false);
+        return;
+      }
+      router.push(consumePayload.role === "admin" ? "/admin" : "/studio");
       router.refresh();
     } catch {
       setError("Erreur inattendue pendant la connexion.");
@@ -47,7 +58,7 @@ export default function LoginPage() {
           <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface/70">
             <Lock className="h-5 w-5 text-accent" aria-hidden="true" />
           </span>
-          <h1 className="mt-5 text-2xl font-bold tracking-tight">Espace administration</h1>
+          <h1 className="mt-5 text-2xl font-bold tracking-tight">Connexion MotionGraphic</h1>
           <p className="mt-2 text-sm text-muted">Réservé aux administrateurs MotionGraphic.si.</p>
         </div>
 

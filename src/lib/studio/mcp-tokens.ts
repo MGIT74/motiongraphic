@@ -76,13 +76,16 @@ export async function verifyUserToken(candidate: string): Promise<TokenPrincipal
   if (!row) return null;
   if (row.revoked_at) return null;
   if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) return null;
-  // Le compte doit rester actif (une suspension coupe aussi le MCP perso).
+  // Fail-closed : aucune session sans profil EXPLICITEMENT actif
+  // (profil absent = refus — cf audit, un profil manquant ne doit pas
+  // être traité comme un compte sain).
   const { data: profile } = await client
     .from("profiles")
     .select("status")
     .eq("id", row.user_id)
     .maybeSingle();
-  if ((profile as { status?: string } | null)?.status === "suspended") return null;
+  const profileRow = (profile as { status?: string } | null) ?? null;
+  if (!profileRow || profileRow.status !== "active") return null;
   // Métadonnée d'usage (best effort, non bloquante).
   try {
     await client.from("mcp_user_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", row.id);
@@ -114,9 +117,11 @@ export async function emitUserToken(
   const { createClient } = await import("@supabase/supabase-js");
   const client = createClient(url, key, { auth: { persistSession: false } });
   const { token, tokenHash } = mintUserToken();
+  // Expiration réelle appliquée à la vérification : 90 jours par défaut.
+  const expiresAt = new Date(Date.now() + 90 * 86400_000).toISOString();
   const { error } = await client
     .from("mcp_user_tokens")
-    .insert({ user_id: userId, name: name.trim(), token_hash: tokenHash, created_by: createdBy });
+    .insert({ user_id: userId, name: name.trim(), token_hash: tokenHash, created_by: createdBy, expires_at: expiresAt });
   if (error) return { created: false, reason: `Émission impossible : ${error.message}` };
   return { created: true, token };
 }

@@ -31,13 +31,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
   if (typeof body.role === "string") {
-    const outcome = await setUserRole(principal.adminClient, id, body.role);
+    const outcome = await setUserRole(principal.adminClient, principal.userId, id, body.role);
     if (!outcome.ok) {
       return NextResponse.json({ ok: false, errors: [outcome.reason ?? "Changement de rôle impossible."] }, { status: outcome.status });
     }
   }
   if (typeof body.status === "string") {
-    const outcome = await setUserStatus(principal.adminClient, id, body.status);
+    const outcome = await setUserStatus(principal.adminClient, principal.userId, id, body.status);
     if (!outcome.ok) {
       return NextResponse.json({ ok: false, errors: [outcome.reason ?? "Changement de statut impossible."] }, { status: outcome.status });
     }

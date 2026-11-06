@@ -1,60 +1,76 @@
-# Utilisateurs privés V1 — déploiement et retour arrière
+# Utilisateurs privés V1 — déploiement, rollback et limites
 
-Branche `feat/users-private-v1` (PR brouillon #37). NE PAS fusionner ni
-déployer sans validation ChatGPT.
+Branche `feat/users-private-v1` — **PR #38** (brouillon)
+https://github.com/MGIT74/motiongraphic/pull/38
+Référence corrigée (la PR est bien la **#38**, pas la #37).
+NE PAS fusionner ni déployer sans validation ChatGPT finale.
 
-## Déroulé de déploiement (après validation)
+## 1. Ordre de déploiement (après validation, en environnement de test d'abord)
 
-1. **Branches/PR**
-   - PR #37 : `feat/users-private-v1` → `main` (code + migrations + tests).
-   - PR #35/#36 restent intouchées.
-2. **Supabase production** (exécution manuelle autorisée uniquement
-   après validation) :
-   - SQL Editor : `supabase/migrations/0009_users_private_v1.sql`
-     (idempotent ; crée `profiles.status`, `user_invitations`,
-     `mcp_user_tokens`, les gardes et les politiques RLS).
-   - Vérifier ensuite avec `supabase/diagnostics-verify.sql`
-     (lecture seule, aucune écriture).
-3. **xCloud — variables d'environnement** (aucun changement de code) :
-   - inchangées : `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-     `SUPABASE_SERVICE_ROLE_KEY` (déjà serveur), `MCP_ACCESS_TOKEN`,
-     `MCP_USER_ID`.
-   - NE PAS AJOUTER : `MCP_ENABLE_USER_TOKENS`, `MCP_USER_TOKENS`
-     (jetons MCP personnels volontairement désactivés pour cette V1).
-4. **Vérifications post-déploiement** (clic par clic) :
-   - /admin/users : la liste se charge ; tester un `PATCH` de rôle sur un
-     compte de test ; suspension → l'UI de l'utilisateur montre la page
-     « Compte suspendu » (403) et les API renvoient 423.
-   - Une invitation expirée : révoquer puis essayer le lien email →
-     Auth refuse (la session ne se crée pas).
-   - Deux comptes de test (A/B) : A ne voit pas les projets de B
-     (RLS `user_id = auth.uid()`), idem médias/versions/rendus.
-   - MCP admin Claude : preview_frame + render_project → inchangés.
+1. **Clone de test Supabase** (obligatoire avant production) :
+   - exécuter `supabase/migrations/0009_users_private_v1.sql` sur le clone
+     (idempotent, re-exécutable) ;
+   - exécuter `supabase/tests/rls-users.sql` (S1..S7) — les scénarios
+     doivent tous afficher « OK » ;
+   - exécuter `node supabase/tests/auth-invite-cycle.mjs` avec les
+     variables `SUPABASE_TEST_URL`, `SUPABASE_TEST_ANON`,
+     `SUPABASE_TEST_SERVICE_ROLE` — le cycle complet invitation →
+     acceptation → activation → connexion doit passer.
+2. **Application** : déployer la branche sur un environnement de staging
+   (jamais XCloud production d'abord), vérifier `/admin/users`,
+   une suspension réelle, une invitation complète.
+3. **Supabase production** : exécution manuelle autorunisée de
+   `0009_users_private_v1.sql` via SQL Editor (aucune donnée supprimée :
+   `create if not exists`/`create or replace` seulement).
+4. **XCloud production** : déployer l'application. Variables inchangées :
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `MCP_ACCESS_TOKEN`, `MCP_USER_ID`.
+   **À ne PAS ajouter** : `MCP_ENABLE_USER_TOKENS`,
+   `MCP_USER_TOKENS` (jetons MCP personnels dormants par défaut).
 
-## Retour arrière
+## 2. Vérification post-déploiement
 
-- **Code** : redeployer la version précédente sur xCloud (l'image).
-- **Base** : la V1 est additive ; pour revenir :
-  1. `drop table if exists public.mcp_user_tokens;`
-  2. `drop table if exists public.user_invitations;`
-  3. `alter table public.profiles drop column if exists status;`
-  4. `drop trigger if exists guard_active on <chaque table studio>;`
-  5. `drop function if exists public.account_is_active(uuid);
-     drop function if exists public.assert_account_active_for_write();
-     drop function if exists public.guard_status_change();
-     drop function if exists public.request_is_service_role();`
-  (les politiques ajoutées tombent avec leurs tables ; `profiles` garde
-  ses politiques d'origine 0001.)
-- Aucune donnée utilisateur n'est détruite par le retour arrière
-  (colonnes `status` supprimées avec `drop column`, invitations perdues
-  seulement si la table est supprimée — exporter avant si besoin).
+- `/admin/users` : liste, invitation, rôle, suspension (compte de test).
+- Invitation complète : email → acceptation → première connexion activée
+  (`used_at` renseigné) ; révoquer avant acceptation → connexion refusée.
+- Deux comptes A/B : isolation projets/médias/versions/rendus.
+- MCP admin Claude : `preview_frame`/`render_project` inchangés.
 
-## Limites connues (V1)
+## 3. Retour arrière — honnête (avec pertes, cf audit)
 
-- Les tests RLS croisés (scripts psql) exigent un CLONE Supabase :
-  `supabase/tests/rls-users.sql` ; non exécutables sans comptes réels.
-- La suspension via ban Auth prend effet immédiatement côté API ; côté
-  navigateur un jeton resté en cache est bloqué au prochain refresh de
-  session (proxy : pages privées ; API : 423).
-- Les invitations se basent sur l'email d'API admin Supabase ; le taux
-  d'envoi dépend des limites de l'instance (auth.email pour SMTP).
+| Étape | Action | Effet |
+|---|---|---|
+| Application | redeployer l'image xCloud précédente | sessions invitées non gérées : les comptes restent « suspended » → réactivation manuelle par SQL `update profiles set status='active'` |
+| SQL | `alter table public.profiles drop column if exists status;` | **Perte du statut de suspension** (il faut le rétablir manuellement si re-déploiement) |
+| SQL | `drop table if exists public.user_invitations;` | **Perte de l'historique d'invitations** (exporter avant : `select * from user_invitations`) |
+| SQL | `drop table if exists public.mcp_user_tokens;` | **Perte des jetons personnels** (aucun actif par défaut) |
+| Triggers | `drop trigger if exists guard_active on <chaque table>; drop trigger if exists guard_active_created_by on custom_templates; drop trigger if exists prevent_role_escalation on profiles;` puis `create trigger prevent_role_escalation … guard_role_change()` de 0001 (la fonction `guard_role_change` doit être rétablie depuis 0001 si remplacement fait) | les gardes V1 partent |
+| Fonctions | `drop function if exists …` (account_is_active, assert_account_active_for_write(-created_by), request_is_service_role, protect_status_change…) | — |
+
+**Attention** : le rollback rétablit un état où les invitations créées ne
+peuvent pas être consommées et où un compte invité peut être promu
+manuellement sans garde. Exporter les données ci-dessus AVANT rollback.
+
+## 4. Limites connues et tests non exécutés (transparence)
+
+- **Aucun clone Supabase disponible** dans cet environnement (pas de
+  Docker, pas de CLI) : `rls-users.sql` (S1..S7) et
+  `auth-invite-cycle.mjs` ont été écrits mais **NON exécutés** —
+  la sécurité RLS/Auth réelle N'EST DONC PAS VALIDÉE par exécution.
+- `listUsersWithProfiles` paginé (>200 comptes) : non testé réel
+  (idem, clone requis).
+- Le dossier « profil utilisateur » (modifier prénom/email/mot de passe,
+  déconnexion) n'est PAS dans cette PR (hors périmètre V1).
+
+## 5. Sécurité — récapitulatif des gardes
+
+- Invitation : 409 sur compte actif, ré-invitation sur compte invité non
+  activé (lien régénéré), expiration **appliquée côté serveur**
+  (`/api/auth/consume` refuse toute invitation passée/révoquée),
+  révocation → ban Auth du compte non activé (le lien email ne peut plus
+  créer de session) : *garde réelle prouvée par scripts (clone à exécuter).*
+- Suspension : proxy (pages 403), API (423), RLS+trigger (P0001), ban Auth.
+- Rôles : self-service impossible (trigger), API admin avec garde
+  « dernier admin actif » + compensation Auth↔profiles.
+- MCP perso : dormant par défaut (`MCP_USER_TOKENS` absent), aucune
+  permission navigateur (revoke), fail-closed sur profil, expiration 90 j.

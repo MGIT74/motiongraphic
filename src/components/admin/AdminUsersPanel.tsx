@@ -48,6 +48,7 @@ export default function AdminUsersPanel() {
   const [role, setRole] = useState("user");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionLink, setActionLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [nowMs, setNowMs] = useState<number | null>(null);
@@ -86,10 +87,17 @@ export default function AdminUsersPanel() {
         headers: { "content-type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
-      const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; resent?: boolean; errors?: string[] };
+      const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; resent?: boolean; action_link?: string; errors?: string[] };
       if (!response.ok || !payload.ok) {
         setError((payload.errors ?? [`Échec (${response.status}).`]).join(" "));
         return false;
+      }
+      if (payload.resent && payload.action_link) {
+        // Email non re-envoyé par Supabase (compte déjà invité) : le lien
+        // d'activation à usage unique est remis à l'administrateur.
+        setNotice("Invitation déjà créée : email non re-envoyé. Transmettez ce lien à usage unique à l'utilisateur.");
+        setActionLink(payload.action_link);
+        return true;
       }
       setNotice(payload.resent ? "Invitation déjà active : email ré-envoyé." : "Opération enregistrée.");
       await load();
@@ -194,6 +202,12 @@ export default function AdminUsersPanel() {
         {(notice || error) && (
           <p className={`mt-3 rounded-lg border p-3 text-sm ${error ? "border-red-800 bg-red-900/30 text-red-300" : "border-emerald-800 bg-emerald-900/30 text-emerald-300"}`}>
             {error ?? notice}
+          </p>
+        )}
+        {actionLink && (
+          <p className="mt-3 break-all rounded-lg border border-blue-800 bg-blue-900/30 p-3 font-mono text-xs text-blue-200">
+            <span className="font-sans font-medium text-blue-300">Lien d&apos;activation à usage unique : </span>
+            {actionLink}
           </p>
         )}
         <p className="mt-3 text-xs text-muted">
