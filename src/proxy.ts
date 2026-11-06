@@ -11,8 +11,6 @@ export async function proxy(request: NextRequest) {
   const isHome = path === "/";
   const isLogin = path === "/login";
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
-  const isStudio = path === "/studio" || path.startsWith("/studio/");
-  const isSettings = path === "/settings" || path.startsWith("/settings/");
   // Toutes les pages applicatives sont privées : ancienne galerie comprise.
   const isPrivate = !isHome && !isLogin && !path.startsWith("/api/") && path !== "/api" &&
     !path.startsWith("/render/") && !path.startsWith("/.well-known/") &&
