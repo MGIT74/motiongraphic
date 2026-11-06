@@ -216,7 +216,7 @@ export default function TemplateCheck() {
           reserved: true,
           compatible: t.compatible,
           duration: t.duration,
-        })),
+        })), // rendu STATIC côté check : pas d'iframe live (les tests sécurité/déterminisme sont dans test:security)
       ],
       load: (key, format, transparent) =>
         new Promise((resolve) => {
