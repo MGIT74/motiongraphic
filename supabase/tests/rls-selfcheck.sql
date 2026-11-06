@@ -53,16 +53,16 @@ begin
   if to_regclass('public.mcp_user_tokens') is null then
     v_missing := v_missing || 'mcp_user_tokens ';
   end if;
-  if to_regproc('public.account_is_active(uuid)') is null then
+  if to_regprocedure('public.account_is_active(uuid)') is null then
     v_missing := v_missing || 'account_is_active(uuid) ';
   end if;
-  if to_regproc('public.assert_account_active_for_write()') is null then
+  if to_regprocedure('public.assert_account_active_for_write()') is null then
     v_missing := v_missing || 'assert_account_active_for_write() ';
   end if;
-  if to_regproc('public.assert_account_active_for_write_created_by()') is null then
+  if to_regprocedure('public.assert_account_active_for_write_created_by()') is null then
     v_missing := v_missing || 'assert_account_active_for_write_created_by() ';
   end if;
-  if to_regproc('public.request_is_service_role()') is null then
+  if to_regprocedure('public.request_is_service_role()') is null then
     v_missing := v_missing || 'request_is_service_role() ';
   end if;
   if v_missing <> '' then
@@ -99,10 +99,9 @@ begin
     where n.nspname = 'public'
       and not t.tgisinternal
       and t.tgname in ('guard_active', 'guard_active_created_by',
-                       'prevent_role_escalation', 'prevent_status_change',
-                       'guard_active_s', 'guard_active_m');
-  if v_triggers < 6 then
-    raise exception 'SELFCHECK : % triggers de garde trouvés (6 attendus).', v_triggers;
+                       'prevent_role_escalation', 'prevent_status_change');
+  if v_triggers < 7 then
+    raise exception 'SELFCHECK : % triggers de garde (7 attendus : 4×guard_active + created_by + rôle + statut).', v_triggers;
   end if;
   select count(*) into v_policies
     from pg_policies
