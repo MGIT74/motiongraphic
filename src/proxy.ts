@@ -13,7 +13,10 @@ export async function proxy(request: NextRequest) {
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
   const isStudio = path === "/studio" || path.startsWith("/studio/");
   const isSettings = path === "/settings" || path.startsWith("/settings/");
-  const isPrivate = isAdmin || isStudio || isSettings;
+  // Toutes les pages applicatives sont privées : ancienne galerie comprise.
+  const isPrivate = !isHome && !isLogin && !path.startsWith("/api/") && path !== "/api" &&
+    !path.startsWith("/render/") && !path.startsWith("/.well-known/") &&
+    path !== "/robots.txt" && path !== "/sitemap.xml";
 
   // Ne jamais intercepter le rendu signé, les API MCP ni les assets.
   if (!isHome && !isLogin && !isPrivate) return NextResponse.next();
@@ -65,5 +68,5 @@ function redirect(request: NextRequest, path: string): NextResponse {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/admin/:path*", "/studio/:path*", "/settings/:path*"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };
