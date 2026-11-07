@@ -384,7 +384,7 @@ begin
   if n <> 1 then raise exception 'P2 ÉCHEC : A voit % projets (attendu 1 : le sien).', n; end if;
   select count(*) into n from public.studio_projects where user_id = '7e570000-0000-7e57-8000-000000000002';
   if n <> 0 then raise exception 'P2 ÉCHEC : A voit % projets de B.', n; end if;
-  raise notice 'P2 OK : symétrie — A et B isolés chacun de l'autre.';
+  raise notice 'P2 OK : symétrie — A et B isolés chacun de l''autre.';
 end;
 $p2b$;
 rollback;
