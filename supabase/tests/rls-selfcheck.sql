@@ -131,75 +131,6 @@ begin
   raise notice 'P0 OK : structure vérifiée (% triggers de garde, % politiques).', v_triggers, v_policies;
 end;
 $structure$;
--- Helper de session (temporaire, jamais persisté : pg_temp, duréée de connexion)
--- Insertion auth.users COMPATIBLE avec toutes les versions de Supabase Auth —
--- seules les colonnes réellement présentes (information_schema) sont
--- renseignées ; les autres utilisent les défauts PostgreSQL. Deux
--- versions connues n'ont ni recovery_tokens ni confirmation_token :
--- la liste est construite dynamiquement (plus aucune colonne supposée).
-create or replace function pg_temp.selfcheck_insert_auth_user(
-  p_id   uuid,
-  p_email text
-) returns void
-language plpgsql
-as $fn$
-declare
-  r      record;
-  v_cols text := 'id, aud, role, email, encrypted_password';
-  v_vals text := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', p_id::text, p_email);
-begin
-  for r in
-    select c.column_name,
-           case c.column_name
-             when 'instance_id'                 then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-             when 'email_confirmed_at'          then $$now()$$
-             when 'last_sign_in_at'             then $$now()$$
-             when 'created_at'                  then $$now()$$
-             when 'updated_at'                  then $$now()$$
-             when 'raw_app_meta_data'           then $$'{"provider":"email","providers":["email"]}'::jsonb$$
-             when 'raw_user_meta_data'          then $$'{}'::jsonb$$
-             when 'confirmation_token'          then $q$''$q$
-             when 'recovery_tokens'             then $q$''$q$
-             when 'recovery_token'              then $q$''$q$
-             when 'reauthentication_token'      then $q$''$q$
-             when 'email_change'                then $q$''$q$
-             when 'email_change_token_new'      then $q$''$q$
-             when 'email_change_confirm_status' then $$0$$
-             when 'phone'                       then $$null$$
-             when 'phone_change'                then $$null$$
-             when 'phone_confirmed_at'          then $$null$$
-             when 'phone_change_token'          then $q$''$q$
-             when 'phone_change_sent_at'        then $$null$$
-             when 'new_email'                   then $$null$$
-             when 'new_phone'                   then $$null$$
-             when 'is_super_admin'              then $$false$$
-             when 'is_sso_user'                 then $$false$$
-             when 'deleted_at'                  then $$null$$
-             when 'banned_until'                then $$null$$
-             when 'invite_sent_at'              then $$null$$
-           end as val
-    from information_schema.columns c
-    where c.table_schema = 'auth'
-      and c.table_name  = 'users'
-      and c.column_name in (
-        'instance_id','email_confirmed_at','last_sign_in_at','created_at',
-        'updated_at','raw_app_meta_data','raw_user_meta_data',
-        'confirmation_token','recovery_tokens','recovery_token',
-        'reauthentication_token','email_change','email_change_token_new',
-        'email_change_confirm_status','phone','phone_change',
-        'phone_confirmed_at','phone_change_token','phone_change_sent_at',
-        'new_email','new_phone','is_super_admin','is_sso_user',
-        'deleted_at','banned_until','invite_sent_at'
-      )
-  loop
-    if r.val is not null then
-      v_cols := v_cols || ', ' || r.column_name;
-      v_vals := v_vals || ', ' || r.val;
-    end if;
-  end loop;
-  execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
-end;
-$fn$;
 
 
 -- ---------------------------------------------------------------------
@@ -209,7 +140,72 @@ begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
 -- INSERT Auth → handle_new_user crée le profil (suspended) : vérifié, puis
 -- activé par UPDATE ciblé (jamais à l'aveugle).
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000001'::uuid, 'rls-selfcheck-a@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000001'],
+      ARRAY['rls-selfcheck-a@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 do $p1trigger$
 declare v_status text; v_role text;
 begin
@@ -257,8 +253,72 @@ rollback;
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000001'::uuid, 'rls-selfcheck-a@selftest.invalid');
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000002'::uuid, 'rls-selfcheck-b@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000001', '7e570000-0000-7e57-8000-000000000002'],
+      ARRAY['rls-selfcheck-a@selftest.invalid', 'rls-selfcheck-b@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 update public.profiles set status = 'active', display_name = 'SELFTEST-A' where id = '7e570000-0000-7e57-8000-000000000001';
 update public.profiles set status = 'active', display_name = 'SELFTEST-B' where id = '7e570000-0000-7e57-8000-000000000002';
 do $p2setup$
@@ -325,7 +385,72 @@ rollback;
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000003'::uuid, 'rls-selfcheck-s@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000003'],
+      ARRAY['rls-selfcheck-s@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 update public.profiles set status = 'active', display_name = 'SELFTEST-SUSPENDU' where id = '7e570000-0000-7e57-8000-000000000003';
 insert into public.studio_projects (id, user_id, name, schema_version, fps, width, height, data)
 values ('7e570000-0000-7e57-8000-000000010003','7e570000-0000-7e57-8000-000000000003','SELFTEST-S-PROJET',1,30,1920,1080,'{}'::jsonb);
@@ -379,7 +504,72 @@ rollback;
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000002'::uuid, 'rls-selfcheck-b@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000002'],
+      ARRAY['rls-selfcheck-b@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 update public.profiles set status = 'active', display_name = 'SELFTEST-B' where id = '7e570000-0000-7e57-8000-000000000002';
 
 set local role authenticated;
@@ -413,7 +603,72 @@ rollback;
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000004'::uuid, 'rls-selfcheck-admin@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000004'],
+      ARRAY['rls-selfcheck-admin@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 update public.profiles set role = 'admin', status = 'suspended', display_name = 'SELFTEST-ADMIN-SUSPENDU' where id = '7e570000-0000-7e57-8000-000000000004';
 
 set local role authenticated;
@@ -436,7 +691,72 @@ rollback;
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000002'::uuid, 'rls-selfcheck-b@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000002'],
+      ARRAY['rls-selfcheck-b@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7e570000-0000-7e57-8000-000000000002","role":"authenticated","email":"rls-selfcheck-b@selftest.invalid"}';
@@ -468,7 +788,72 @@ set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57
 -- FK mcp_user_tokens → auth.users : le compte est créé DANS CETTE
 -- transaction (la précédente s'est terminée par ROLLBACK, rien n'a
 -- persisté) ; handle_new_user crée le profil suspendu associé.
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000002'::uuid, 'rls-selfcheck-b@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000002'],
+      ARRAY['rls-selfcheck-b@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 insert into public.mcp_user_tokens (user_id, name, token_hash) values
   ('7e570000-0000-7e57-8000-000000000002','api-server','selfcheck-a1b2c3d4e5f6a1b2');
 do $p6c$
@@ -497,7 +882,72 @@ insert into public.user_invitations (id, email, role, expires_at) values
   ('7f570000-0000-7f57-8000-000000000003','rls-selfcheck-expired@selftest.invalid','user', now() - interval '1 day');
 
 -- (1) invitation valide acceptée → rôle admin, compte en attente
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000011'::uuid, 'rls-selfcheck-valid@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000011'],
+      ARRAY['rls-selfcheck-valid@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 do $p7a$
 declare v_role text; v_status text;
 begin
@@ -510,7 +960,72 @@ end;
 $p7a$;
 
 -- (2) invitation révoquée acceptée → profil fail-closed suspendu
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000012'::uuid, 'rls-selfcheck-revoked@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000012'],
+      ARRAY['rls-selfcheck-revoked@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 do $p7b$
 declare v_status text;
 begin
@@ -521,7 +1036,72 @@ end;
 $p7b$;
 
 -- (3) invitation expirée acceptée → profil fail-closed suspendu
-select pg_temp.selfcheck_insert_auth_user('7e570000-0000-7e57-8000-000000000013'::uuid, 'rls-selfcheck-expired@selftest.invalid');
+-- (inline, transactionnel) insertion auth.users compatible toutes
+-- versions : colonnes présentes uniquement (information_schema) ;
+-- rien de persistant, aucun objet pg_temp — fonctionne dans le
+-- SQL Editor ; annulé par le ROLLBACK du scénario.
+do $insu$
+declare
+  v_pair record;
+  r      record;
+  v_cols text;
+  v_vals text;
+begin
+  for v_pair in
+    select u.uid, u.mail
+    from unnest(
+      ARRAY['7e570000-0000-7e57-8000-000000000013'],
+      ARRAY['rls-selfcheck-expired@selftest.invalid']
+    ) as u(uid, mail)
+  loop
+    v_cols := 'id, aud, role, email, encrypted_password';
+    v_vals := format('%L, ''authenticated'', ''authenticated'', %L, ''selfcheck''', v_pair.uid, v_pair.mail);
+    for r in
+      select c.column_name,
+             case c.column_name
+               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when "email_confirmed_at"                then $$now()$$
+               when "last_sign_in_at"                then $$now()$$
+               when "created_at"                then $$now()$$
+               when "updated_at"                then $$now()$$
+               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
+               when "raw_user_meta_data"                then $$'{}'::jsonb$$
+               when "confirmation_token"                then $q$''$q$
+               when "recovery_tokens"                then $q$''$q$
+               when "recovery_token"                then $q$''$q$
+               when "reauthentication_token"                then $q$''$q$
+               when "email_change"                then $q$''$q$
+               when "email_change_token_new"                then $q$''$q$
+               when "email_change_confirm_status"                then $$0$$
+               when "phone"                then $$null$$
+               when "phone_change"                then $$null$$
+               when "phone_confirmed_at"                then $$null$$
+               when "phone_change_token"                then $q$''$q$
+               when "phone_change_sent_at"                then $$null$$
+               when "new_email"                then $$null$$
+               when "new_phone"                then $$null$$
+               when "is_super_admin"                then $$false$$
+               when "is_sso_user"                then $$false$$
+               when "deleted_at"                then $$null$$
+               when "banned_until"                then $$null$$
+               when "invite_sent_at"                then $$null$$
+             end as val
+      from information_schema.columns c
+      where c.table_schema = 'auth'
+        and c.table_name  = 'users'
+        and c.column_name in (
+          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+        )
+    loop
+      if r.val is not null then
+        v_cols := v_cols || ', ' || r.column_name;
+        v_vals := v_vals || ', ' || r.val;
+      end if;
+    end loop;
+    execute 'insert into auth.users (' || v_cols || ') values (' || v_vals || ')';
+  end loop;
+end;
+$insu$;
 do $p7c$
 declare v_status text;
 begin
