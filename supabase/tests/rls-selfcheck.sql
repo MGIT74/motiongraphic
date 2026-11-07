@@ -3,39 +3,43 @@
 -- Fichier : supabase/tests/rls-selfcheck.sql
 --
 -- USAGE :
+--   SQL Editor Supabase (toute l\"exécution dans le même onglet) ou :
 --   psql "<URL_SUPABASE>" -f supabase/tests/rls-selfcheck.sql
---   (compatible aussi avec le SQL Editor : aucune méta-commande psql.)
+--   (aucune méta-commande psql dans le fichier.)
 --
 -- GARANTIES :
---   1. CHAQUE scénario vit dans une transaction se terminant par
---      ROLLBACK : aucune ligne de test ne subsiste, même en cas d'erreur
---      (transaction abortée = rollback d'office).
---   2. Identifiants de test dédiés : préfixe UUID « 7e57/7f57 » +
---      emails « rls-selfcheck-*@selftest.invalid ». Le prévol ABORTE si
---      ces identifiants existent déjà (aucun écrasement possible).
---   3. Aucune lecture/écriture sur les données réelles : seuls des
---      contrôles de structure et des agrégats anonymes (counts).
---   4. Fin de script : preuve (lecture seule) que ZÉRO ligne de test
---      subsiste + compte d'administrateurs affiché anonymement.
---   5. P7 vérifie la consommation CONDITIONNELLE (idempotente) inline ;
---      l"épreuve de course SIMULTANÉE (6 connexions Promise.all) reste
---      dans `auth-invite-cycle.mjs` (séparé, aucune prétention ici).
+--   1. Chaque scénario vit dans une transaction terminée par ROLLBACK :
+--      aucune ligne de test ne subsiste (transaction abortée = rollback).
+--   2. Identifiants de test dédiés (préfixe 7e57/7f57 + emails
+--      rls-selfcheck-*@selftest.invalid) ; prévol ABORTE si collision.
+--   3. Aucune lecture/écriture des données réelles (contrôles de
+--      structure et agrégats anonymes uniquement).
+--   4. Preuve finale (lecture seule) : ZÉRO ligne de test subsistante +
+--      résumé anonyme des comptes administrateurs.
+--   5. P0 vérifie PRÉCISÉMENT les 6 déclencheurs de la migration, chacun
+--      sur SA table ; 0009 ne crée pas prevent_status_change (le statut
+--      est appliqué côté application : proxy, routes admin, is_admin).
+--   6. L\"insertion des comptes auth.users de test est TRANSACTIONNELLE
+--      et INLINE (blocs DO, aucune fonction pg_temp — compatibilité
+--      SQL Editor) : la liste des colonnes est construite DYNAMIQUEMENT
+--      depuis information_schema (aucune structure supposée ; les
+--      colonnes absentes de votre version reçoivent les défauts).
+--   7. P7 : garde conditionnelle et idempotence (séquentielles) ; la
+--      course simultanée réelle est dans auth-invite-cycle.mjs.
 --
--- Si une connexion est coupée en plein scénario : transaction annulée
--- par le serveur (aucun résidu) ; la purge d'urgence facultative ci-
--- dessous ne cible QUE le périmètre de test :
---   delete from public.studio_renders        where user_id::text like '7e570000-0000-7e57%';
+-- PURGE D\"URGENCE FACULTATIVE (identifiants de test uniquement) :
+--   delete from public.studio_renders  where user_id::text like '7e570000-0000-7e57%';
 --   delete from public.studio_project_versions where user_id::text like '7e570000-0000-7e57%';
---   delete from public.studio_media           where user_id::text like '7e570000-0000-7e57%';
---   delete from public.studio_projects        where user_id::text like '7e570000-0000-7e57%';
---   delete from public.user_invitations       where email like 'rls-selfcheck-%';
---   delete from public.mcp_user_tokens        where token_hash like 'selfcheck-%';
---   delete from public.profiles               where id::text like '7e570000-0000-7e57%';
---   delete from auth.users                    where id::text like '7e570000-0000-7e57%';
+--   delete from public.studio_media    where user_id::text like '7e570000-0000-7e57%';
+--   delete from public.studio_projects where user_id::text like '7e570000-0000-7e57%';
+--   delete from public.user_invitations where email like 'rls-selfcheck-%';
+--   delete from public.mcp_user_tokens where token_hash like 'selfcheck-%';
+--   delete from public.profiles        where id::text like '7e570000-0000-7e57%';
+--   delete from auth.users             where id::text like '7e570000-0000-7e57%';
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- P0 — prévol (lecture seule) : migration 0009 présentes + périmètre libre.
+-- P0 — prévol (lecture seule) : migration 0009 + périmètre libre.
 -- ---------------------------------------------------------------------
 do $preflight$
 declare
@@ -71,7 +75,7 @@ begin
   select count(*) into v_collisions from public.profiles
     where id::text like '7e570000-0000-7e57%' or id::text like '7f570000-0000-7f57%';
   if v_collisions > 0 then
-    raise exception 'SELFCHECK : % identifiants de test déjà présents — purgez-les (entête du script).', v_collisions;
+    raise exception 'SELFCHECK : % identifiants de test déjà présents — purgez-les (entête).', v_collisions;
   end if;
   select count(*) into v_collisions from auth.users
     where id::text like '7e570000-0000-7e57%' or email like 'rls-selfcheck-%';
@@ -98,8 +102,6 @@ begin
   --   guard_active_created_by sur custom_templates (1) ;
   --   prevent_role_escalation sur profiles (1 — 0001 ; la fonction
   --     guard_role_change est remplacée par 0009).
-  -- NB : la migration 0009 NE CRÉE PAS prevent_status_change ; le statut
-  -- est appliqué côté application (proxy, routes admin, is_admin).
   select count(*) into v_triggers
     from (values
       ('studio_projects',          'guard_active'),
@@ -117,7 +119,7 @@ begin
       and t.tgname = attendu.nom_trigger
       and not t.tgisinternal;
   if v_triggers <> 6 then
-    raise exception 'SELFCHECK : triggers de garde attendus trouvés = %/6 (vérifier migration 0009/0001).', v_triggers;
+    raise exception 'SELFCHECK : triggers de garde attendus = %/6 (vérifier migrations 0009/0001).', v_triggers;
   end if;
   select count(*) into v_policies
     from pg_policies
@@ -132,18 +134,14 @@ begin
 end;
 $structure$;
 
-
 -- ---------------------------------------------------------------------
 -- P1 — A crée et consulte SES ressources (projets, médias, versions, rendus).
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
--- INSERT Auth → handle_new_user crée le profil (suspended) : vérifié, puis
--- activé par UPDATE ciblé (jamais à l'aveugle).
 -- (inline, transactionnel) insertion auth.users compatible toutes
 -- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
+-- rien de persistant — le scénario est annulé par ROLLBACK.
 do $insu$
 declare
   v_pair record;
@@ -163,38 +161,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -212,7 +217,7 @@ begin
   select status, role into v_status, v_role from public.profiles where id = '7e570000-0000-7e57-8000-000000000001';
   if not found then raise exception 'P1 ÉCHEC : handle_new_user n''a pas créé le profil de test.'; end if;
   if v_status <> 'suspended' or v_role <> 'user' then
-    raise exception 'P1 ÉCHEC : profil inattendu (attends suspended/user, lu %/%).', v_role, v_status;
+    raise exception 'P1 ÉCHEC : profil inattendu (attendu suspended/user, lu %/%).', v_role, v_status;
   end if;
 end;
 $p1trigger$;
@@ -249,14 +254,10 @@ $p1$;
 rollback;
 
 -- ---------------------------------------------------------------------
--- P2 — B : ne voit ni ne modifie rien de A ; insertion croisée refusée.
+-- P2 — B : données propres, A invisible ; insertion croisée refusée.
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
--- (inline, transactionnel) insertion auth.users compatible toutes
--- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
 do $insu$
 declare
   v_pair record;
@@ -267,8 +268,8 @@ begin
   for v_pair in
     select u.uid, u.mail
     from unnest(
-      ARRAY['7e570000-0000-7e57-8000-000000000001', '7e570000-0000-7e57-8000-000000000002'],
-      ARRAY['rls-selfcheck-a@selftest.invalid', 'rls-selfcheck-b@selftest.invalid']
+      ARRAY['7e570000-0000-7e57-8000-000000000001','7e570000-0000-7e57-8000-000000000002'],
+      ARRAY['rls-selfcheck-a@selftest.invalid','rls-selfcheck-b@selftest.invalid']
     ) as u(uid, mail)
   loop
     v_cols := 'id, aud, role, email, encrypted_password';
@@ -276,38 +277,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -326,7 +334,7 @@ declare a2 int; b2 int;
 begin
   select count(*) into a2 from public.profiles where id = '7e570000-0000-7e57-8000-000000000001' and status = 'active';
   select count(*) into b2 from public.profiles where id = '7e570000-0000-7e57-8000-000000000002' and status = 'active';
-  if a2 <> 1 or b2 <> 1 then raise exception 'P2 ÉCHEC : profils de test absent/suspendus (trigger + update).' end if;
+  if a2 <> 1 or b2 <> 1 then raise exception 'P2 ÉCHEC : profils de test absents/suspendus (trigger + update).'; end if;
   raise notice 'P2 setup : profils créés par handle_new_user puis activés par UPDATE.';
 end;
 $p2setup$;
@@ -335,6 +343,8 @@ values ('7e570000-0000-7e57-8000-000000010001','7e570000-0000-7e57-8000-00000000
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7e570000-0000-7e57-8000-000000000002","role":"authenticated","email":"rls-selfcheck-b@selftest.invalid"}';
+insert into public.studio_projects (id, user_id, name, schema_version, fps, width, height, data)
+values ('7e570000-0000-7e57-8000-000000010006','7e570000-0000-7e57-8000-000000000002','SELFTEST-PROJET-B',1,30,1920,1080,'{}'::jsonb);
 do $p2a$
 begin
   begin
@@ -374,7 +384,7 @@ begin
   if n <> 1 then raise exception 'P2 ÉCHEC : A voit % projets (attendu 1 : le sien).', n; end if;
   select count(*) into n from public.studio_projects where user_id = '7e570000-0000-7e57-8000-000000000002';
   if n <> 0 then raise exception 'P2 ÉCHEC : A voit % projets de B.', n; end if;
-  raise notice 'P2 OK : symétrie — A et B isolés chacun de l\'autre.';
+  raise notice 'P2 OK : symétrie — A et B isolés chacun de l'autre.';
 end;
 $p2b$;
 rollback;
@@ -385,10 +395,6 @@ rollback;
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
--- (inline, transactionnel) insertion auth.users compatible toutes
--- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
 do $insu$
 declare
   v_pair record;
@@ -408,38 +414,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -504,10 +517,6 @@ rollback;
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
--- (inline, transactionnel) insertion auth.users compatible toutes
--- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
 do $insu$
 declare
   v_pair record;
@@ -527,38 +536,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -603,10 +619,6 @@ rollback;
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
--- (inline, transactionnel) insertion auth.users compatible toutes
--- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
 do $insu$
 declare
   v_pair record;
@@ -626,38 +638,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -688,13 +707,10 @@ rollback;
 
 -- ---------------------------------------------------------------------
 -- P6 — jetons MCP : navigateur sans accès (grants révoqués) ; serveur oui.
+-- (deux transactions : le compte Auth est recréé DANS CHACUNE)
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
--- (inline, transactionnel) insertion auth.users compatible toutes
--- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
 do $insu$
 declare
   v_pair record;
@@ -714,38 +730,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -783,15 +806,9 @@ exception
 end;
 $p6b$;
 rollback;
+
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
--- FK mcp_user_tokens → auth.users : le compte est créé DANS CETTE
--- transaction (la précédente s'est terminée par ROLLBACK, rien n'a
--- persisté) ; handle_new_user crée le profil suspendu associé.
--- (inline, transactionnel) insertion auth.users compatible toutes
--- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
 do $insu$
 declare
   v_pair record;
@@ -811,38 +828,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -869,7 +893,7 @@ rollback;
 
 -- ---------------------------------------------------------------------
 -- P7 — invitations : rôle correct à l'acceptation, révoquée/expirée
---      fail-closed, consommation atomique (1 gagne, 0 double).
+--      fail-closed, consommation conditionnelle + idempotence.
 -- ---------------------------------------------------------------------
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7e570000-0000-7e57-8000-000000000000"}';
@@ -882,10 +906,6 @@ insert into public.user_invitations (id, email, role, expires_at) values
   ('7f570000-0000-7f57-8000-000000000003','rls-selfcheck-expired@selftest.invalid','user', now() - interval '1 day');
 
 -- (1) invitation valide acceptée → rôle admin, compte en attente
--- (inline, transactionnel) insertion auth.users compatible toutes
--- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
 do $insu$
 declare
   v_pair record;
@@ -905,38 +925,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -960,10 +987,6 @@ end;
 $p7a$;
 
 -- (2) invitation révoquée acceptée → profil fail-closed suspendu
--- (inline, transactionnel) insertion auth.users compatible toutes
--- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
 do $insu$
 declare
   v_pair record;
@@ -983,38 +1006,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -1036,10 +1066,6 @@ end;
 $p7b$;
 
 -- (3) invitation expirée acceptée → profil fail-closed suspendu
--- (inline, transactionnel) insertion auth.users compatible toutes
--- versions : colonnes présentes uniquement (information_schema) ;
--- rien de persistant, aucun objet pg_temp — fonctionne dans le
--- SQL Editor ; annulé par le ROLLBACK du scénario.
 do $insu$
 declare
   v_pair record;
@@ -1059,38 +1085,45 @@ begin
     for r in
       select c.column_name,
              case c.column_name
-               when "instance_id"                then text $$'00000000-0000-0000-0000-000000000000'::uuid$$
-               when "email_confirmed_at"                then $$now()$$
-               when "last_sign_in_at"                then $$now()$$
-               when "created_at"                then $$now()$$
-               when "updated_at"                then $$now()$$
-               when "raw_app_meta_data"                then $$'{'provider':'email','providers':['email']}'::jsonb$$
-               when "raw_user_meta_data"                then $$'{}'::jsonb$$
-               when "confirmation_token"                then $q$''$q$
-               when "recovery_tokens"                then $q$''$q$
-               when "recovery_token"                then $q$''$q$
-               when "reauthentication_token"                then $q$''$q$
-               when "email_change"                then $q$''$q$
-               when "email_change_token_new"                then $q$''$q$
-               when "email_change_confirm_status"                then $$0$$
-               when "phone"                then $$null$$
-               when "phone_change"                then $$null$$
-               when "phone_confirmed_at"                then $$null$$
-               when "phone_change_token"                then $q$''$q$
-               when "phone_change_sent_at"                then $$null$$
-               when "new_email"                then $$null$$
-               when "new_phone"                then $$null$$
-               when "is_super_admin"                then $$false$$
-               when "is_sso_user"                then $$false$$
-               when "deleted_at"                then $$null$$
-               when "banned_until"                then $$null$$
-               when "invite_sent_at"                then $$null$$
+               when 'instance_id'                  then $$'00000000-0000-0000-0000-000000000000'::uuid$$
+               when 'email_confirmed_at'           then $$now()$$
+               when 'last_sign_in_at'              then $$now()$$
+               when 'created_at'                   then $$now()$$
+               when 'updated_at'                   then $$now()$$
+               when 'raw_app_meta_data'            then $$'{"provider":"email","providers":["email"]}'::jsonb$$
+               when 'raw_user_meta_data'           then $$'{}'::jsonb$$
+               when 'confirmation_token'           then $q$''$q$
+               when 'recovery_tokens'              then $q$''$q$
+               when 'recovery_token'               then $q$''$q$
+               when 'reauthentication_token'       then $q$''$q$
+               when 'email_change'                 then $q$''$q$
+               when 'email_change_token_new'       then $q$''$q$
+               when 'email_change_confirm_status'  then $$0$$
+               when 'phone'                        then $$null$$
+               when 'phone_change'                 then $$null$$
+               when 'phone_confirmed_at'           then $$null$$
+               when 'phone_change_token'           then $q$''$q$
+               when 'phone_change_sent_at'         then $$null$$
+               when 'new_email'                    then $$null$$
+               when 'new_phone'                    then $$null$$
+               when 'is_super_admin'               then $$false$$
+               when 'is_sso_user'                  then $$false$$
+               when 'deleted_at'                   then $$null$$
+               when 'banned_until'                 then $$null$$
+               when 'invite_sent_at'               then $$null$$
              end as val
       from information_schema.columns c
       where c.table_schema = 'auth'
         and c.table_name  = 'users'
         and c.column_name in (
-          'instance_id', 'email_confirmed_at', 'last_sign_in_at', 'created_at', 'updated_at', 'raw_app_meta_data', 'raw_user_meta_data', 'confirmation_token', 'recovery_tokens', 'recovery_token', 'reauthentication_token', 'email_change', 'email_change_token_new', 'email_change_confirm_status', 'phone', 'phone_change', 'phone_confirmed_at', 'phone_change_token', 'phone_change_sent_at', 'new_email', 'new_phone', 'is_super_admin', 'is_sso_user', 'deleted_at', 'banned_until', 'invite_sent_at'
+          'instance_id','email_confirmed_at','last_sign_in_at','created_at',
+          'updated_at','raw_app_meta_data','raw_user_meta_data',
+          'confirmation_token','recovery_tokens','recovery_token',
+          'reauthentication_token','email_change','email_change_token_new',
+          'email_change_confirm_status','phone','phone_change',
+          'phone_confirmed_at','phone_change_token','phone_change_sent_at',
+          'new_email','new_phone','is_super_admin','is_sso_user',
+          'deleted_at','banned_until','invite_sent_at'
         )
     loop
       if r.val is not null then
@@ -1111,9 +1144,8 @@ begin
 end;
 $p7c$;
 
--- (4) garde CONDITIONNELLE : refus d"une invitation expirée — test
---     SÉQUENTIEL (pas une course simulée ; la course simultanée réelle
---     est dans auth-invite-cycle.mjs, cf. entête).
+-- (4) garde conditionnelle : refus d\"une invitation expirée — test
+--     SÉQUENTIEL (la course simultanée reste dans auth-invite-cycle.mjs)
 do $p7d$
 declare gagne int;
 begin
@@ -1122,11 +1154,11 @@ begin
       and used_at is null and revoked_at is null and expires_at > now();
   get diagnostics gagne = row_count;
   if gagne <> 0 then raise exception 'P7 ÉCHEC : une invitation EXPIRÉE a été consommée (%).', gagne; end if;
-  raise notice 'P7 OK : invitation expirée non consommable (guard expires_at > now).';
+  raise notice 'P7 OK : invitation expirée non consommable (garde expires_at > now).';
 end;
 $p7d$;
 
--- (5) idempotence de la consommation : 1er appel gagne, 2e appel 0 ligne
+-- (5) idempotence : 1er appel gagne, 2e appel 0 ligne
 update public.user_invitations set used_at = now()
   where id = '7f570000-0000-7f57-8000-000000000001'
     and used_at is null and revoked_at is null and expires_at > now();
@@ -1163,9 +1195,9 @@ begin
   + (select count(*) from public.mcp_user_tokens      where token_hash like 'selfcheck-%')
   into restantes;
   if restantes <> 0 then
-    raise exception 'PROUVE ÉCHEC : % lignes de test persistantes — purge manuelle requise (entête du script).', restantes;
+    raise exception 'PROUVE ÉCHEC : % lignes de test persistantes — purge manuelle requise (entête).', restantes;
   end if;
-  raise notice 'PROUVE OK : aucune ligne de test persistante ; données existantes jamais touchées.';
+  raise notice 'PROUVE OK : aucune ligne de test persistante ; les données existantes n\"ont jamais été touchées.';
 end;
 $proof$;
 
@@ -1178,4 +1210,5 @@ begin
     from public.profiles where role = 'admin';
   raise notice 'RÉSUMÉ : comptes admin = % (actifs = %).', v_admins, v_admins_actifs;
   raise notice '=== rls-selfcheck : TOUS les contrôles passent — aucune trace persistée ===';
-end $summary$;
+end;
+$summary$;
