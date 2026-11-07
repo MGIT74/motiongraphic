@@ -97,3 +97,79 @@ PostgreSQL réel (libpg_query).
   n" bénéficie d"aucun privilège (toutes les politiques RLS).
 - MCP perso : dormant par défaut (`MCP_USER_TOKENS` absent), aucune
   permission navigateur (revoke), fail-closed sur profil, expiration 90 j.
+
+---
+
+# Plan de déploiement final — audit ciblé (PR #38, branche `feat/users-private-v1`)
+
+## 1. Migration complémentaire (faille fermée)
+
+`supabase/migrations/0010_status_self_change_guard.sql` — **À EXÉCUTER
+SUR LE SUPABASE AUTO-HÉBERGÉ AVANT LA FUSION** :
+ferme la faille réelle identifiée par l'audit final — un utilisateur
+suspendu pouvait SE RÉACTIVER lui-même via Supabase (PostgREST
+navigateur : `profiles_update_self` 0001 + JWT + clé anon), car la
+migration installée ne contient pas de déclencheur gardien du statut.
+0010 ajoute `prevent_status_self_change` (nom distinct : le script
+`rls-selfcheck.sql` P0 - 6 déclencheurs nommés - reste valide).
+Vérification après exécution (SQL Editor, lecture seule) :
+```
+select tgname from pg_trigger join pg_class c on c.oid = tgrelid
+ where nspname-ish c.relnamespace = 'public'::regnamespace
+   and tgname in ('prevent_status_self_change');
+-- attendu : 1 ligne
+```
+
+## 2. Variables d'environnement XCloud (NOMS SEULEMENT — aucun secret)
+
+| Variable | Rôle | Où |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | API Auth/PostgREST (publique) | build+runtime |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | clé publique anon | build+runtime |
+| `SUPABASE_SERVICE_ROLE_KEY` | opérations admin serveur (invitations, suspension, MCP) | runtime SEULEMENT |
+| `MCP_ACCESS_TOKEN` | MCP administrateur Claude (existant) | runtime SEULEMENT |
+| `MCP_USER_ID` | utilisateur cible MCP legacy | runtime SEULEMENT |
+| — NE PAS DÉFINIR — `MCP_ENABLE_USER_TOKENS` / `MCP_USER_TOKENS` | jetons MCP personnels (dormants) | — |
+| — NE PAS DÉFINIR — `STUDIO_CI_TEST_BYPASS`, `CI`, `TEMPLATE_CHECK`, `CONSTRUCTION_MODE` | flags de test/dev (contournement / pages /dev) | — |
+
+## 3. Ordre de déploiement (le site XCloud s'auto-déploie depuis `main`)
+
+1. Exécuter `0010_status_self_change_guard.sql` (SQL Editor).
+2. Vérifier les 6+1 triggers + politiques (`rls-selfcheck.sql` P0 est
+   lecture seule : peut être relancé — il attend 6 gardes nommées ✓).
+3. **Valider la PR #38 → fusion → auto-déploiement XCloud.**
+4. Après déploiement (smoke checks sans secrets) :
+   - `curl -o /dev/null -w "%{http_code}" https://studio.motiongraphic.si/studio`
+     → 307 (redirection);
+   - /admin/users : invite + suspension d'un compte de TEST puis
+     réactivation ;
+   - MCP Claude (legacy) : `list_tools` toujours fonctionnel.
+5. Ne fusionner qu'APRÈS la validation des points 1–3.
+
+## 4. Retour arrière
+
+- **Application** : `git revert` du commit de fusion sur `main` →
+  auto-déploiement de la version précédente (le site repasse sur le
+  Studio privé sans gestion d'utilisateurs).
+- **Base** : Rien à faire obligatoirement (tables/profiles.status/
+  mcp_user_tokens/additifs sans impact sur le code d'avant-fusion) ;
+  facultatif : `drop trigger if exists prevent_status_self_change on
+  public.profiles; drop function if exists
+  public.guard_status_self_change();` pour retirer la 0010.
+  Les invitations en cours et les statuts restent dans la base
+  (retour complet en supprimant 0009 : cf. section rollback plus haut,
+  avec export préalable).
+- Un compte test créé pendant la vérification : suppression via
+  /admin/users puis `delete from auth.users where email like
+  'test-%'` (côté admin console).
+
+## 5. Récapitulatif de l'audit final ciblé
+
+| Point | Résultat |
+|---|---|
+| /admin/users + /api/admin/* (session, rôle admin, statut) | ✅ code + gates fail-closed ; sans session : 307 / 401 / 503 (vérifié réellement) |
+| self-service rôle (API + SQL direct) | ✅ bloqué (0001/0009/0010) |
+| self-service statut (SQL direct) | ⚠️ FAILLE IDENTIFIÉE → fermée par **0010** (à appliquer avant fusion) |
+| invitations / activation / suspension | ✅ code complet (cycle réel Auth à exécuter sur un clone — séparé) |
+| projets des autres | ✅ RLS `user_id = auth.uid()` + contrôle de propriété sur les rendus/médias (P2/P3 validés sur votre instance) |
+| batteries locales (nouveau commit) | ✅ users 39/39, e2e 23/23, security 21/21, templates 11/11, parcours 15/15, export 28/28, lint/typecheck 0 |
