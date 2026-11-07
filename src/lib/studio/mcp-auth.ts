@@ -30,6 +30,15 @@ export async function authenticateMcpRequest(request: Request): Promise<McpPrinc
   if (legacy && safeEqual(candidate, legacy) && process.env.MCP_USER_ID) {
     return { userId: process.env.MCP_USER_ID, kind: "legacy" };
   }
+  // Jetons MCP personnels (PRÉPARATOIRE V1) : inactifs tant que le drapeau
+  // serveur MCP_USER_TOKENS n'est pas activé explicitement (jamais par
+  // défaut). Vérification : hash, révocation, expiration, compte actif.
+  if (candidate.startsWith("mgsi_") && process.env.MCP_USER_TOKENS === "true") {
+    const { verifyUserToken } = await import("./mcp-tokens");
+    const principal = await verifyUserToken(candidate).catch(() => null);
+    if (principal) return { userId: principal.userId, kind: "user" };
+    return null;
+  }
   // Activation explicite après revue sécurité et tests d’isolation des ressources.
   if (process.env.MCP_ENABLE_USER_TOKENS !== "true") return null;
   // En mode multi-utilisateur, seuls les Bearer JWT vérifiés sont acceptés.

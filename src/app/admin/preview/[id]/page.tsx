@@ -15,8 +15,9 @@ export default async function AdminPreviewPage({ params }: { params: Promise<{ i
   if (!client) redirect("/login");
   const { data: { user } } = await client.auth.getUser();
   if (!user) redirect("/login");
-  const { data: profile } = await client.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  if (profile?.role !== "admin") notFound();
+  const { data: profile, error: profileError } = await client.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+  const profileRow = (profile as { role?: string; status?: string } | null) ?? null;
+  if (profileError || profileRow?.role !== "admin" || profileRow?.status !== "active") notFound(); // fail-closed
 
   // Authenticated admin session and Supabase RLS allow viewing drafts.
   const { data, error } = await client.from("animations").select(ANIMATION_SELECT).eq("id", id).maybeSingle();

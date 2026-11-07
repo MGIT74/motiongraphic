@@ -34,18 +34,23 @@ export default function LoginPage() {
         setBusy(false);
         return;
       }
+      // Garde d"acceptation serveur (toutes les connexions passent ici) :
+      // l"invitation doit être valide (non révoquée/non expirée) et le
+      // compte activé — sinon déconnexion immédiate.
+      const consume = await fetch("/api/auth/consume", { method: "POST", cache: "no-store" });
+      const consumePayload = (await consume.json().catch(() => ({}))) as { ok?: boolean; errors?: string[]; role?: string };
+      if (!consume.ok || !consumePayload.ok) {
+        await client.auth.signOut();
+        router.refresh();
+        setError(((consumePayload.errors ?? []) as string[]).join(" ") || "Connexion refusée par le serveur.");
+        setBusy(false);
+        return;
+      }
+      const role = consumePayload.role ?? "user";
       // Identité : admin -> /admin, utilisateur -> la destination prévue ou /studio.
-      const authResult = (await client.auth.getUser()) as unknown as { data?: { user?: { id: string } | null } | null };
-      const loggedInUser = authResult.data?.user ?? null;
       let destination = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") && !nextPath.includes("\\") && !nextPath.includes("\r") && !nextPath.includes("\n") ? nextPath : "/studio";
-      if (loggedInUser && destination.startsWith("/admin")) {
-        const { data: profile } = await client.from("profiles").select("role").eq("id", loggedInUser.id).maybeSingle();
-        if (profile?.role !== "admin") destination = "/studio";
-      }
-      if (loggedInUser && destination === "/studio") {
-        const { data: profile } = await client.from("profiles").select("role").eq("id", loggedInUser.id).maybeSingle();
-        if (profile?.role === "admin" && !nextPath) destination = "/admin";
-      }
+      if (destination.startsWith("/admin") && role !== "admin") destination = "/studio";
+      if (role === "admin" && !nextPath) destination = "/admin";
       router.push(destination);
       router.refresh();
     } catch {
@@ -63,7 +68,6 @@ export default function LoginPage() {
           </span>
           <h1 className="mt-5 text-2xl font-bold tracking-tight">Connexion</h1>
           <p className="mt-1 text-xs text-muted">MotionGraphic Studio — accès privé</p>
-
         </div>
 
         {!configured ? (

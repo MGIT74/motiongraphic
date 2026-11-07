@@ -61,12 +61,16 @@ export async function GET(request: NextRequest, { params: routeParams }: { param
       const { data: { user } } = client ? ((await client.auth.getUser()) as { data: { user: { id: string } | null } }) : { data: { user: null } };
       let isAdmin = false;
       if (user && client) {
-        const { data: profile } = await client
+        // is_admin applicatif (audit 2/5) : admin ET compte actif ;
+        // profil absent/erreur → refus (fail-closed).
+        const { data: profile, error: profileError } = await client
           .from("profiles")
-          .select("role")
+          .select("role, status")
           .eq("id", user.id)
           .maybeSingle();
-        isAdmin = profile?.role === "admin";
+        const row = (profile as { role?: string; status?: string } | null) ?? null;
+        isAdmin = Boolean(row) && row?.role === "admin" && row?.status === "active";
+        if (profileError) isAdmin = false;
       }
       if (!isAdmin) {
         return sandboxRedirectError("Ce template n'est pas publié (accès admin requis).");

@@ -12,7 +12,8 @@
     "test:templates": "node tests/templates/check.cjs",
     "test:security": "node tests/security/sandbox.security.cjs",
     "test:export": "node tests/export/export.mp4.mjs",
-    "test:parcours": "node tests/parcours/parcours.cjs"
+    "test:parcours": "node tests/parcours/parcours.cjs",
+    "test:users": "NODE_OPTIONS=\"--experimental-strip-types --conditions react-server\" node tests/users/users.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",

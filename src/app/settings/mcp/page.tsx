@@ -19,7 +19,11 @@ export default async function McpConnectionsPage() {
         {["Claude", "ChatGPT"].map((name) => (
           <section key={name} className="rounded-2xl border border-line bg-surface p-6">
             <h2 className="text-lg font-semibold">{name}</h2>
-            <p className="mt-2 text-sm text-muted">Connexion personnelle bientôt disponible. Aucun accès n’est accordé automatiquement.</p>
+            <p className="mt-2 text-sm text-muted">
+              Architecture des jetons personnels prête (émise sur demande, stockée hachée,
+              révocable, expirable). Les connexions restent inactives jusqu&apos;à validation
+              sécurité ; aucun accès n&apos;est accordé automatiquement.
+            </p>
             <span className="mt-4 inline-block rounded-full border border-line px-3 py-1 text-xs text-muted">En préparation</span>
           </section>
         ))}
