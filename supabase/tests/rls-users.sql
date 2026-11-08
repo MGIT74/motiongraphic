@@ -34,12 +34,13 @@ delete from public.studio_projects where user_id::text like '7a000000-0000-7000-
 delete from public.user_invitations where email like '%@clone.test';
 delete from public.profiles where id::text like '7a000000-0000-7000-8000-00000000000%' or id::text like '7b000000-0000-7000-8000-00000000000%';
 delete from auth.users where id::text like '7a000000-0000-7000-8000-00000000000%' or id::text like '7b000000-0000-7000-8000-00000000000%';
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7a000000-0000-7000-8000-000000000001','authenticated','authenticated','a@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', ''),
        ('00000000-0000-0000-0000-000000000000','7a000000-0000-7000-8000-000000000002','authenticated','authenticated','b@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 insert into public.profiles (id, display_name, role, status) values
   ('7a000000-0000-7000-8000-000000000001','Utilisateur A','user','active'),
-  ('7a000000-0000-7000-8000-000000000002','Utilisateur B','user','active');
+  ('7a000000-0000-7000-8000-000000000002','Utilisateur B','user','active')
+on conflict (id) do update set display_name = excluded.display_name, role = excluded.role, status = excluded.status;
 commit;
 \echo 'Préparation : A/B créés (auth.users + profils actifs).'
 
@@ -160,10 +161,20 @@ end $$;
 do $$
 declare maj int;
 begin
-  update public.studio_projects set name = 'ESSAI-CONTOUR' where id = '1a000000-0000-7000-8000-00000000000a';
-  get diagnostics maj = row_count;
-  if maj <> 0 then raise exception 'S4 ÉCHEC : le suspendu a modifié % lignes (garde inactive ?).', maj; end if;
-  raise notice 'S4 OK : le suspendu ne peut pas écrire sur sa propre ligne.';
+  begin
+    update public.studio_projects set name = 'ESSAI-CONTOUR' where id = '1a000000-0000-7000-8000-00000000000a';
+    get diagnostics maj = row_count;
+  exception
+    when sqlstate 'P0001' then
+      if position('COMPTE_SUSPENDU' in sqlerrm) = 0 then
+        raise exception 'S4 ÉCHEC : refus P0001 inattendu : %.', sqlerrm;
+      end if;
+      raise notice 'S4 OK : le suspendu ne peut pas écrire sur sa propre ligne.';
+      maj := -1;
+  end;
+  if maj <> -1 then
+    raise exception 'S4 ÉCHEC : UPDATE non refusé par COMPTE_SUSPENDU (% lignes).', maj;
+  end if;
   select count(*) into maj from public.studio_projects; -- lecture conservée
   if maj <> 1 then raise exception 'S4 ÉCHEC : suspension a coupé la lecture (% projets).', maj; end if;
   raise notice 'S4 OK : lecture de ses propres données conservée.';
@@ -172,17 +183,34 @@ commit;
 begin;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000002","role":"authenticated","email":"b@clone.test"}';
-do $$
+do $s4_transfer$
+declare maj int;
 begin
   begin
     update public.studio_projects set user_id = '7a000000-0000-7000-8000-000000000002' where id = '1a000000-0000-7000-8000-00000000000a';
-    raise exception 'S4 ÉCHEC : B a réaffecté le projet de A.';
+    get diagnostics maj = row_count;
+    if maj <> 0 then
+      raise exception 'S4 ÉCHEC : B a réaffecté % projet(s) de A.', maj;
+    end if;
+    raise notice 'S4 OK : réaffectation refusée par RLS (UPDATE = 0 ligne).';
   exception
     when insufficient_privilege then
-      raise notice 'S4 OK : réaffectation de propriétaire refusée par RLS.';
+      raise notice 'S4 OK : réaffectation refusée explicitement (42501).';
   end;
-end $$;
+end $s4_transfer$;
 commit;
+-- Contrôle indépendant avec les privilèges postgres après sortie du rôle B.
+do $s4_owner$
+declare owner_id uuid;
+begin
+  select user_id into owner_id
+    from public.studio_projects
+    where id = '1a000000-0000-7000-8000-00000000000a';
+  if not found or owner_id is distinct from '7a000000-0000-7000-8000-000000000001'::uuid then
+    raise exception 'S4 ÉCHEC : propriétaire du projet A modifié ou projet absent.';
+  end if;
+  raise notice 'S4 OK : vérification indépendante, propriétaire du projet A inchangé.';
+end $s4_owner$;
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
 insert into public.studio_projects (id, user_id, name, schema_version, fps, width, height, data)
@@ -227,7 +255,7 @@ end $$;
 commit;
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7a000000-0000-7000-8000-000000000003','authenticated','authenticated','admin-suspendu@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '')
 on conflict (id) do update set email = excluded.email;
 insert into public.profiles (id, display_name, role, status) values
@@ -247,6 +275,75 @@ begin
   if n > 0 then raise exception 'S5 ÉCHEC : admin suspendu lit % invitations.', n; end if;
   raise notice 'S5 OK : admin suspendu → is_admin() false, 0 accès admin.';
 end $$;
+commit;
+
+-- S5 : visibilité des invitations via email du JWT (sans auth.users).
+begin;
+set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
+insert into public.user_invitations (id, email, role) values
+  ('1e000000-0000-7000-8000-0000000000a1','a@clone.test','user'),
+  ('1e000000-0000-7000-8000-0000000000a2','autre@clone.test','user');
+commit;
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000001","role":"authenticated","email":"a@clone.test"}';
+do $s5_invited$
+declare n int;
+begin
+  select count(*) into n from public.user_invitations;
+  if n <> 1 then raise exception 'S5 ÉCHEC : A voit % invitations (attendu 1).', n; end if;
+  select count(*) into n from public.user_invitations where email = 'a@clone.test';
+  if n <> 1 then raise exception 'S5 ÉCHEC : invitation personnelle de A invisible.'; end if;
+  raise notice 'S5 OK : utilisateur actif voit uniquement son invitation via JWT.';
+end $s5_invited$;
+commit;
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000002","role":"authenticated","email":"b@clone.test"}';
+do $s5_other$
+declare n int;
+begin
+  select count(*) into n from public.user_invitations;
+  if n <> 0 then raise exception 'S5 ÉCHEC : B voit % invitations d''autrui.', n; end if;
+  raise notice 'S5 OK : autre utilisateur actif ne voit aucune invitation d''autrui.';
+end $s5_other$;
+commit;
+
+-- Promouvoir B temporairement pour tester un admin ACTIF. Le garde de rôle n'exempte que
+-- is_admin() et service_role : même le propriétaire SQL doit présenter le claim service_role.
+begin;
+set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
+update public.profiles set role = 'admin' where id = '7a000000-0000-7000-8000-000000000002';
+commit;
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000002","role":"authenticated","email":"b@clone.test"}';
+do $s5_admin$
+declare n int;
+begin
+  if not public.is_admin() then raise exception 'S5 ÉCHEC : B admin actif non reconnu.'; end if;
+  select count(*) into n from public.user_invitations;
+  if n <> 2 then raise exception 'S5 ÉCHEC : admin actif voit % invitations (attendu 2).', n; end if;
+  raise notice 'S5 OK : admin actif voit toutes les invitations.';
+end $s5_admin$;
+commit;
+begin;
+set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
+update public.profiles set role = 'user' where id = '7a000000-0000-7000-8000-000000000002';
+commit;
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000003","role":"authenticated","email":"admin-suspendu@clone.test"}';
+do $s5_suspended$
+declare n int;
+begin
+  select count(*) into n from public.user_invitations;
+  if n <> 0 then raise exception 'S5 ÉCHEC : admin suspendu voit % invitations.', n; end if;
+  raise notice 'S5 OK : admin suspendu voit 0 invitation.';
+end $s5_suspended$;
 commit;
 
 -- ---------------------------------------------------------------------
@@ -269,9 +366,15 @@ end $$;
 do $$
 declare n int;
 begin
-  select count(*) into n from public.mcp_user_tokens;
-  if n > 0 then raise exception 'S6 ÉCHEC : navigateur lit % jetons.', n; end if;
-  raise notice 'S6 OK : lecture navigateur sans accès.';
+  begin
+    select count(*) into n from public.mcp_user_tokens;
+    -- Accepté seulement si 0 ligne visible ; toute ligne lisible = faille.
+    if n > 0 then raise exception 'S6 ÉCHEC : navigateur lit % jetons.', n; end if;
+    raise notice 'S6 OK : lecture navigateur sans accès (0 ligne).';
+  exception
+    when insufficient_privilege then
+      raise notice 'S6 OK : lecture navigateur refusée explicitement (42501, grants révoqués).';
+  end;
 end $$;
 commit;
 begin;
@@ -304,7 +407,7 @@ insert into public.user_invitations (id, email, role, expires_at) values
   ('1e000000-0000-7000-8000-00000000000c','invite-expiree@clone.test','user', now() - interval '1 day');
 commit;
 begin;
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7b000000-0000-7000-8000-000000000001','authenticated','authenticated','invite-valide@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 commit;
 do $$
@@ -317,7 +420,7 @@ begin
   raise notice 'S7 OK : invitation valide → profil admin + suspended (activation serveur).';
 end $$;
 begin;
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7b000000-0000-7000-8000-000000000002','authenticated','authenticated','invite-revoquee@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 commit;
 do $$
@@ -328,7 +431,7 @@ begin
   raise notice 'S7 OK : invitation révoquée → profil fail-closed suspendu.';
 end $$;
 begin;
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7b000000-0000-7000-8000-000000000003','authenticated','authenticated','invite-expiree@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 commit;
 do $$

@@ -1,0 +1,83 @@
+name: Supabase test (jetable)
+
+# Environnement Supabase LOCAL et jetable (GoTrue + PostgREST + Postgres + boîte mail de capture),
+# démarré dans le runner GitHub puis détruit. Aucun lien avec la production :
+# aucune donnée réelle, aucun secret, clés de démonstration locales uniquement.
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-test.yml"
+  workflow_dispatch:
+
+jobs:
+  supabase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 : WebSocket natif requis par supabase-js (Node 20 l'a pas).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Projet temporaire séparé : les migrations du dépôt sont appliquées à la main (ordre numérique),
+      # pour avoir un message d'erreur précis à la migration fautive.
+      - name: Démarrer Supabase local
+        run: |
+          mkdir -p .supabase-ci
+          cd .supabase-ci
+          supabase init --force
+          supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+
+      - name: Appliquer les migrations (0001 -> dernière)
+        run: |
+          for f in $(ls supabase/migrations/[0-9][0-9][0-9][0-9]_*.sql | sort); do
+            echo "::group::$f"
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+            echo "::endgroup::"
+          done
+
+      - name: RLS multi-utilisateurs (rls-users.sql)
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/rls-users.sql
+
+      - name: Auto-vérification RLS (rls-selfcheck.sql)
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/rls-selfcheck.sql
+
+      - name: Cycle d'invitation (Auth réel local)
+        run: |
+          eval "$(cd .supabase-ci && supabase status -o env)"
+          SUPABASE_TEST_URL="$API_URL" \
+          SUPABASE_TEST_SERVICE_ROLE="$SERVICE_ROLE_KEY" \
+          SUPABASE_TEST_ANON="$ANON_KEY" \
+          node supabase/tests/auth-invite-cycle.mjs
+
+      # Tests PostgREST/JWT (ex. refus de réactivation d'un compte suspendu), ajoutés par ChatGPT.
+      - name: Tests PostgREST / JWT (si présents)
+        run: |
+          eval "$(cd .supabase-ci && supabase status -o env)"
+          for t in supabase/tests/*.postgrest.mjs; do
+            [ -e "$t" ] || { echo "Aucun test PostgREST pour l'instant."; break; }
+            SUPABASE_TEST_URL="$API_URL" SUPABASE_TEST_SERVICE_ROLE="$SERVICE_ROLE_KEY" \
+            SUPABASE_TEST_ANON="$ANON_KEY" node "$t"
+          done
+
+      - name: Journaux Supabase (en cas d'échec)
+        if: failure()
+        run: docker ps -a --format '{{.Names}}' | grep supabase | head -20 | xargs -r -I{} sh -c 'echo "== {}"; docker logs --tail 40 {} 2>&1'
+
+      - name: Arrêter et détruire l'environnement
+        if: always()
+        run: cd .supabase-ci && supabase stop --no-backup || true
