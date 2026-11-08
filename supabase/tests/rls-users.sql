@@ -183,7 +183,7 @@ commit;
 begin;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000002","role":"authenticated","email":"b@clone.test"}';
-do $
+do $s4_transfer$
 declare maj int;
 begin
   begin
@@ -197,10 +197,10 @@ begin
     when insufficient_privilege then
       raise notice 'S4 OK : réaffectation refusée explicitement (42501).';
   end;
-end $;
+end $s4_transfer$;
 commit;
 -- Contrôle indépendant avec les privilèges postgres après sortie du rôle B.
-do $
+do $s4_owner$
 declare owner_id uuid;
 begin
   select user_id into owner_id
@@ -210,7 +210,7 @@ begin
     raise exception 'S4 ÉCHEC : propriétaire du projet A modifié ou projet absent.';
   end if;
   raise notice 'S4 OK : vérification indépendante, propriétaire du projet A inchangé.';
-end $;
+end $s4_owner$;
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
 insert into public.studio_projects (id, user_id, name, schema_version, fps, width, height, data)
