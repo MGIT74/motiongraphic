@@ -76,7 +76,7 @@ async function main() {
   const account = (users1 ?? []).find((u) => u.email === email);
   ok(Boolean(account), "   compte Auth en état « invité » (non activé)");
   if (!account) return finish();
-  await admin.auth.admin.updateUserById(account.id, { password });
+  await admin.auth.admin.updateUserById(account.id, { password, email_confirm: true }); // simule le clic sur le lien d invitation (confirme l email)
   if (ANON) {
     const anon = createClient(URL_TEST, ANON, { auth: { persistSession: false } });
     const session = await anon.auth.signInWithPassword({ email, password });
