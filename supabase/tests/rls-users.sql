@@ -161,10 +161,20 @@ end $$;
 do $$
 declare maj int;
 begin
-  update public.studio_projects set name = 'ESSAI-CONTOUR' where id = '1a000000-0000-7000-8000-00000000000a';
-  get diagnostics maj = row_count;
-  if maj <> 0 then raise exception 'S4 ÉCHEC : le suspendu a modifié % lignes (garde inactive ?).', maj; end if;
-  raise notice 'S4 OK : le suspendu ne peut pas écrire sur sa propre ligne.';
+  begin
+    update public.studio_projects set name = 'ESSAI-CONTOUR' where id = '1a000000-0000-7000-8000-00000000000a';
+    get diagnostics maj = row_count;
+  exception
+    when sqlstate 'P0001' then
+      if position('COMPTE_SUSPENDU' in sqlerrm) = 0 then
+        raise exception 'S4 ÉCHEC : refus P0001 inattendu : %.', sqlerrm;
+      end if;
+      raise notice 'S4 OK : le suspendu ne peut pas écrire sur sa propre ligne.';
+      maj := -1;
+  end;
+  if maj <> -1 then
+    raise exception 'S4 ÉCHEC : UPDATE non refusé par COMPTE_SUSPENDU (% lignes).', maj;
+  end if;
   select count(*) into maj from public.studio_projects; -- lecture conservée
   if maj <> 1 then raise exception 'S4 ÉCHEC : suspension a coupé la lecture (% projets).', maj; end if;
   raise notice 'S4 OK : lecture de ses propres données conservée.';
