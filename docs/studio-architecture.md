@@ -135,3 +135,12 @@ Mesuré : 15 s de vidéo 1080p rendues en ~57 s (4 cœurs).
 - Les onglets ouvrent un panneau glissant (`MobileSheet`) qui réutilise les panneaux de bureau (`variant="sheet"`, onglet imposé). Ajouter un template ou un média referme le panneau pour montrer le résultat ; un point bleu sur « Modifier » signale un élément sélectionné.
 - Notifications au-dessus de la barre d'onglets ; menu Projets en pleine largeur.
 - Au-delà de 1024 px (ordinateur, tablette en paysage) : disposition à trois colonnes inchangée.
+
+## Jetons MCP personnels — backend (dormant)
+
+- Drapeau serveur `MCP_USER_TOKENS=true` requis ; absent = toutes les routes répondent 503. **Ne pas l'activer avant** : migrations 0009/0010/0011 installées, tests de sécurité du Supabase jetable verts, rotation des secrets traitée.
+- Migration `0011_mcp_tokens_scopes.sql` (idempotente, exécutée par le propriétaire) : colonnes `scopes` et `rotated_from`, table `mcp_token_audit` (service_role seul). Sans 0011, la vérification retombe sur les permissions `read`+`write` (jamais `export`).
+- Permissions : `read` (lecture), `write` (modification, inclut la lecture), `export` (`render_project`). Table `scopeForTool` dans `src/lib/studio/mcp-scopes.ts` ; un outil inconnu est traité comme `write`. Le jeton admin « legacy » n'est pas soumis aux permissions.
+- `render_project` reste refusé pour tout jeton utilisateur tant que le pipeline de rendu multi-utilisateur n'est pas validé, même avec la permission `export`.
+- Routes : `/api/settings/mcp-tokens` (GET, POST, DELETE), `/api/settings/mcp-tokens/{id}/rotate`, `/api/admin/mcp-tokens` (GET, DELETE, admin actif).
+- Garde-fous : 10 jetons actifs maximum par compte, 10 créations/renouvellements par heure (limiteur en mémoire), `last_used_at` réécrit au plus toutes les 5 minutes, audit de chaque création, renouvellement, révocation et refus de permission, aucune valeur de jeton journalisée.

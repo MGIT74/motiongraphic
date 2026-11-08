@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
-export type McpPrincipal = { userId: string; kind: "user" | "legacy" };
+export type McpPrincipal = { userId: string; kind: "user" | "legacy"; scopes?: string[]; tokenId?: string };
 const principalStore = new AsyncLocalStorage<McpPrincipal>();
 
 export function withMcpPrincipal<T>(principal: McpPrincipal, run: () => Promise<T>): Promise<T> {
@@ -36,7 +36,7 @@ export async function authenticateMcpRequest(request: Request): Promise<McpPrinc
   if (candidate.startsWith("mgsi_") && process.env.MCP_USER_TOKENS === "true") {
     const { verifyUserToken } = await import("./mcp-tokens");
     const principal = await verifyUserToken(candidate).catch(() => null);
-    if (principal) return { userId: principal.userId, kind: "user" };
+    if (principal) return { userId: principal.userId, kind: "user", scopes: principal.scopes, tokenId: principal.tokenId };
     return null;
   }
   // Activation explicite après revue sécurité et tests d’isolation des ressources.
