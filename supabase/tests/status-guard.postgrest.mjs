@@ -8,6 +8,15 @@ if (!url || !serviceKey || !anonKey) {
   console.error('FAIL CONFIG: SUPABASE_TEST_URL, SUPABASE_TEST_SERVICE_ROLE and SUPABASE_TEST_ANON are required');
   process.exit(1);
 }
+// Garde-fou : ce test CRÉE et SUPPRIME des comptes et des données. Uniquement sur un Supabase local jetable.
+{
+  let host = '';
+  try { host = new URL(url).hostname; } catch { /* URL invalide : refusée ci-dessous */ }
+  if (!['127.0.0.1', 'localhost', 'host.docker.internal'].includes(host) || /motiongraphic\.si/i.test(url)) {
+    console.error('FAIL CONFIG: refusé, SUPABASE_TEST_URL doit être un Supabase LOCAL jetable (jamais la production).');
+    process.exit(2);
+  }
+}
 const admin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 const publicClient = createClient(url, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
 const ids = [];
