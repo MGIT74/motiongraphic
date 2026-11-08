@@ -39,7 +39,8 @@ values ('00000000-0000-0000-0000-000000000000','7a000000-0000-7000-8000-00000000
        ('00000000-0000-0000-0000-000000000000','7a000000-0000-7000-8000-000000000002','authenticated','authenticated','b@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 insert into public.profiles (id, display_name, role, status) values
   ('7a000000-0000-7000-8000-000000000001','Utilisateur A','user','active'),
-  ('7a000000-0000-7000-8000-000000000002','Utilisateur B','user','active');
+  ('7a000000-0000-7000-8000-000000000002','Utilisateur B','user','active')
+on conflict (id) do update set display_name = excluded.display_name, role = excluded.role, status = excluded.status;
 commit;
 \echo 'Préparation : A/B créés (auth.users + profils actifs).'
 
