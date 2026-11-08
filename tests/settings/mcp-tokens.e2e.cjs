@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Tests e2e « Accès MCP » (panneau de jetons personnels).
  *   BASE_URL=http://localhost:3000 npm run test:settings-mcp
@@ -37,10 +38,6 @@ const C_TOKEN_REVOKED = {
   name: "Jeton révoqué",
   revokedAt: "2026-11-04T09:00:00Z",
 };
-
-function itemsUrl(path) {
-  return `${BASE}${path}`;
-}
 
 async function freshPage(context) {
   return context.newPage();
@@ -91,7 +88,7 @@ async function main() {
 
   /* 1-2-3 : état de chargement, puis liste, aide visible */
   {
-    const { context, page, panel } = await openTokens(browser, { list: [A_TOKEN_ITEM, B_TOKEN_EXPIRED, C_TOKEN_REVOKED] });
+    const { context, page } = await openTokens(browser, { list: [A_TOKEN_ITEM, B_TOKEN_EXPIRED, C_TOKEN_REVOKED] });
     await page.waitForTimeout(400);
     ok(await page.locator("[data-mcp-tokens-list] [data-mcp-token-row]").count() === 3, "liste : 3 jetons affichés");
     ok((await page.locator("[data-mcp-help]").textContent()).includes("Authorization: Bearer"), "bloc d'aide : en-tête Bearer documenté (sans valeur réelle)");
@@ -246,7 +243,7 @@ async function main() {
     ];
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
-    await page.route(`**${TOKENS_URL}**`, (route, req) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ tokens: [A_TOKEN_ITEM] }) }));
+    await page.route(`**${TOKENS_URL}**`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ tokens: [A_TOKEN_ITEM] }) }));
     await page.route(`**${ADMIN_URL}**`, (route, req) => {
       if (req.method() === "GET") {
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ tokens: ADMIN_T }) });
