@@ -179,7 +179,7 @@ async function run() {
     });
   } finally {
     // Remove child rows before GoTrue users, regardless of test failures.
-    for (const table of ['studio_renders', 'studio_project_versions', 'studio_media', 'studio_projects']) {
+    for (const table of ['studio_renders', 'studio_project_versions', 'studio_media']) {
       if (projectIds.length) {
         const { error } = await admin.from(table).delete().in('project_id', projectIds);
         if (error && table !== 'studio_projects') console.error('FAIL CLEANUP ' + table + ': ' + cleanError(error));
