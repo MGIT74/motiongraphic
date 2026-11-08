@@ -12,6 +12,7 @@ import type { ElementTiming } from "@/lib/studio/project-model";
 import { fontCss } from "@/lib/brand/fonts";
 import SandboxTimelineFrame from "./sandbox-frame";
 import { KineticTypography01Frame } from "@/components/animations/KineticTypography01";
+import { LetterReveal01Frame } from "@/components/animations/LetterReveal01";
 import { TextReveal01Frame } from "@/components/animations/TextReveal01";
 import { ElasticText01Frame } from "@/components/animations/ElasticText01";
 import { ShapeMorph01Frame } from "@/components/animations/ShapeMorph01";
@@ -22,6 +23,7 @@ import MinimalSaaSUIShowcase01 from "@/components/animations/MinimalSaaSUIShowca
 const STUDIO_FRAMES: Record<ComponentKey, ComponentType<AnimationComponentProps>> = {
   "kinetic-type-01": KineticTypography01Frame,
   "text-reveal-01": TextReveal01Frame,
+  "letter-reveal-01": LetterReveal01Frame,
   "elastic-text-01": ElasticText01Frame,
   "shape-morph-01": ShapeMorph01Frame,
   "staggered-cards-01": StaggeredCards01Frame,

@@ -14,6 +14,7 @@ const ANIMATION_COMPONENTS: Record<
   React.ComponentType<AnimationComponentProps>
 > = {
   "kinetic-type-01": dynamic(() => import("@/components/animations/KineticTypography01")),
+  "letter-reveal-01": dynamic(() => import("@/components/animations/LetterReveal01")),
   "text-reveal-01": dynamic(() => import("@/components/animations/TextReveal01")),
   "elastic-text-01": dynamic(() => import("@/components/animations/ElasticText01")),
   "shape-morph-01": dynamic(() => import("@/components/animations/ShapeMorph01")),
