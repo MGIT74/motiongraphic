@@ -153,8 +153,16 @@ async function main() {
   /* 9. Réinvitation : régénérée sans doublon (pending unique). */
   const reinvite = await admin.auth.admin.inviteUserByEmail(email, {});
   ok(Boolean(reinvite.error), `9a. inviteUserByEmail sur compte existant → refusée par Auth (${reinvite.error?.status ?? "-"})`);
+  // Compte déjà activé (puis banni) : un lien d'INVITATION ne doit plus être régénérable.
   const newLink = await admin.auth.admin.generateLink({ type: "invite", email });
-  ok(!newLink.error && Boolean(newLink.data?.properties?.action_link), "9b. réinvitation : lien régénéré (action_link) disponible");
+  ok(Boolean(newLink.error), "9b. compte déjà activé : lien d'invitation refusé (déjà enregistré)");
+  // Ré-envoi légitime : invité NON activé (comme src/lib/admin/users-store.ts) → lien régénéré.
+  const pendingEmail = `reinvite-${Date.now()}@test-clone.local`;
+  const pendingInvite = await admin.auth.admin.inviteUserByEmail(pendingEmail, {});
+  ok(!pendingInvite.error, `9d. invité non activé créé (${pendingInvite.error?.message ?? "ok"})`);
+  const resend = await admin.auth.admin.generateLink({ type: "invite", email: pendingEmail });
+  ok(!resend.error && Boolean(resend.data?.properties?.action_link), "9e. ré-envoi : lien régénéré pour un invité non activé");
+  const pendingUser = pendingInvite.data?.user ?? null;
   const pendings = await admin.from("user_invitations").select("id").eq("email", email).is("used_at", null).is("revoked_at", null);
   const pendingRows = (pendings?.data ?? []);
   ok(pendingRows.length <= 1, `9c. une seule invitation applicative en attente (${pendingRows.length})`);
@@ -164,6 +172,11 @@ async function main() {
   await admin.from("user_invitations").delete().eq("email", futureEmail);
   await admin.from("profiles").delete().eq("id", account.id);
   await admin.auth.admin.deleteUser(account.id);
+  if (pendingUser?.id) {
+    await admin.from("profiles").delete().eq("id", pendingUser.id);
+    await admin.auth.admin.deleteUser(pendingUser.id);
+  }
+  await admin.from("user_invitations").delete().eq("email", pendingEmail);
   console.log("ℹ️  Nettoyage effectué.");
   finish();
 }
