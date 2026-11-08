@@ -32,6 +32,13 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     technologies: ["React", "GSAP", "SVG"],
     defaultConfig: CONFIG({ text: "MOTION", duration: 3.2 }),
   },
+  "typewriter-01": {
+    key: "typewriter-01",
+    name: "Typewriter — Minimal",
+    description: "Texte tapé caractère par caractère avec curseur animé et sortie douce.",
+    technologies: ["React", "GSAP", "CSS"],
+    defaultConfig: CONFIG({ text: "YOUR NEXT IDEA", primaryColor: "#F5F5F7", accentColor: "#72F1B8", backgroundColor: "#0E1016", duration: 4 }),
+  },
   "text-reveal-01": {
     key: "text-reveal-01",
     name: "Text Reveal (Masque)",
