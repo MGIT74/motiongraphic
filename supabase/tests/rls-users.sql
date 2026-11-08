@@ -34,7 +34,7 @@ delete from public.studio_projects where user_id::text like '7a000000-0000-7000-
 delete from public.user_invitations where email like '%@clone.test';
 delete from public.profiles where id::text like '7a000000-0000-7000-8000-00000000000%' or id::text like '7b000000-0000-7000-8000-00000000000%';
 delete from auth.users where id::text like '7a000000-0000-7000-8000-00000000000%' or id::text like '7b000000-0000-7000-8000-00000000000%';
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7a000000-0000-7000-8000-000000000001','authenticated','authenticated','a@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', ''),
        ('00000000-0000-0000-0000-000000000000','7a000000-0000-7000-8000-000000000002','authenticated','authenticated','b@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 insert into public.profiles (id, display_name, role, status) values
@@ -227,7 +227,7 @@ end $$;
 commit;
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7a000000-0000-7000-8000-000000000003','authenticated','authenticated','admin-suspendu@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '')
 on conflict (id) do update set email = excluded.email;
 insert into public.profiles (id, display_name, role, status) values
@@ -304,7 +304,7 @@ insert into public.user_invitations (id, email, role, expires_at) values
   ('1e000000-0000-7000-8000-00000000000c','invite-expiree@clone.test','user', now() - interval '1 day');
 commit;
 begin;
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7b000000-0000-7000-8000-000000000001','authenticated','authenticated','invite-valide@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 commit;
 do $$
@@ -317,7 +317,7 @@ begin
   raise notice 'S7 OK : invitation valide → profil admin + suspended (activation serveur).';
 end $$;
 begin;
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7b000000-0000-7000-8000-000000000002','authenticated','authenticated','invite-revoquee@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 commit;
 do $$
@@ -328,7 +328,7 @@ begin
   raise notice 'S7 OK : invitation révoquée → profil fail-closed suspendu.';
 end $$;
 begin;
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
 values ('00000000-0000-0000-0000-000000000000','7b000000-0000-7000-8000-000000000003','authenticated','authenticated','invite-expiree@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '');
 commit;
 do $$
