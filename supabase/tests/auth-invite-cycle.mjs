@@ -66,17 +66,17 @@ async function main() {
   if (!invitation) return finish();
 
   /* 2. Envoi Supabase Auth + lien de réception. */
-  const invite = await admin.auth.inviteUserByEmail(email, {});
+  const invite = await admin.auth.admin.inviteUserByEmail(email, {});
   ok(!invite.error, `2. invitation Auth émise (${invite.error?.message ?? "ok"})`);
-  const link = await admin.auth.generateLink({ type: "invite", email });
+  const link = await admin.auth.admin.generateLink({ type: "invite", email });
   ok(!link.error && Boolean(link.data?.properties?.action_link), "   lien (action_link) reçu");
 
   /* 3. Première connexion réelle. */
-  const { data: { users: users1 } } = await admin.auth.listUsers({ perPage: 200 });
+  const { data: { users: users1 } } = await admin.auth.admin.listUsers({ perPage: 200 });
   const account = (users1 ?? []).find((u) => u.email === email);
   ok(Boolean(account), "   compte Auth en état « invité » (non activé)");
   if (!account) return finish();
-  await admin.auth.updateUserById(account.id, { password });
+  await admin.auth.admin.updateUserById(account.id, { password });
   if (ANON) {
     const anon = createClient(URL_TEST, ANON, { auth: { persistSession: false } });
     const session = await anon.auth.signInWithPassword({ email, password });
@@ -120,9 +120,9 @@ async function main() {
   ok(profile6?.status === "active", "   état final : actif");
 
   /* 7. Révocation : ban Auth, le lien ne peut plus donner de session. */
-  const banned = await admin.auth.updateUserById(account.id, { ban_duration: "876000h" });
+  const banned = await admin.auth.admin.updateUserById(account.id, { ban_duration: "876000h" });
   ok(!banned.error, `7a. ban Auth appliqué (${banned.error?.message ?? "ok"})`);
-  const { data: { users: users2 } } = await admin.auth.listUsers({ perPage: 200 });
+  const { data: { users: users2 } } = await admin.auth.admin.listUsers({ perPage: 200 });
   const account2 = (users2 ?? []).find((u) => u.email === email);
   ok(Boolean(account2?.banned_until && new Date(account2.banned_until).getTime() > Date.now()), "7b. compte banni (banned_until futur)");
   if (ANON) {
@@ -151,9 +151,9 @@ async function main() {
   }
 
   /* 9. Réinvitation : régénérée sans doublon (pending unique). */
-  const reinvite = await admin.auth.inviteUserByEmail(email, {});
+  const reinvite = await admin.auth.admin.inviteUserByEmail(email, {});
   ok(Boolean(reinvite.error), `9a. inviteUserByEmail sur compte existant → refusée par Auth (${reinvite.error?.status ?? "-"})`);
-  const newLink = await admin.auth.generateLink({ type: "invite", email });
+  const newLink = await admin.auth.admin.generateLink({ type: "invite", email });
   ok(!newLink.error && Boolean(newLink.data?.properties?.action_link), "9b. réinvitation : lien régénéré (action_link) disponible");
   const pendings = await admin.from("user_invitations").select("id").eq("email", email).is("used_at", null).is("revoked_at", null);
   const pendingRows = (pendings?.data ?? []);
@@ -163,7 +163,7 @@ async function main() {
   await admin.from("user_invitations").delete().eq("email", email);
   await admin.from("user_invitations").delete().eq("email", futureEmail);
   await admin.from("profiles").delete().eq("id", account.id);
-  await admin.auth.deleteUser(account.id);
+  await admin.auth.admin.deleteUser(account.id);
   console.log("ℹ️  Nettoyage effectué.");
   finish();
 }
