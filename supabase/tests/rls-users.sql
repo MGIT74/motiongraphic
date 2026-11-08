@@ -183,17 +183,34 @@ commit;
 begin;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000002","role":"authenticated","email":"b@clone.test"}';
-do $$
+do $
+declare maj int;
 begin
   begin
     update public.studio_projects set user_id = '7a000000-0000-7000-8000-000000000002' where id = '1a000000-0000-7000-8000-00000000000a';
-    raise exception 'S4 ÉCHEC : B a réaffecté le projet de A.';
+    get diagnostics maj = row_count;
+    if maj <> 0 then
+      raise exception 'S4 ÉCHEC : B a réaffecté % projet(s) de A.', maj;
+    end if;
+    raise notice 'S4 OK : réaffectation refusée par RLS (UPDATE = 0 ligne).';
   exception
     when insufficient_privilege then
-      raise notice 'S4 OK : réaffectation de propriétaire refusée par RLS.';
+      raise notice 'S4 OK : réaffectation refusée explicitement (42501).';
   end;
-end $$;
+end $;
 commit;
+-- Contrôle indépendant avec les privilèges postgres après sortie du rôle B.
+do $
+declare owner_id uuid;
+begin
+  select user_id into owner_id
+    from public.studio_projects
+    where id = '1a000000-0000-7000-8000-00000000000a';
+  if not found or owner_id is distinct from '7a000000-0000-7000-8000-000000000001'::uuid then
+    raise exception 'S4 ÉCHEC : propriétaire du projet A modifié ou projet absent.';
+  end if;
+  raise notice 'S4 OK : vérification indépendante, propriétaire du projet A inchangé.';
+end $;
 begin;
 set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
 insert into public.studio_projects (id, user_id, name, schema_version, fps, width, height, data)
