@@ -20,9 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 22 : WebSocket natif requis par supabase-js (Node 20 l'a pas).
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Installer les dépendances
