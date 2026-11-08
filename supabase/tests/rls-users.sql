@@ -234,6 +234,21 @@ insert into public.profiles (id, display_name, role, status) values
   ('7a000000-0000-7000-8000-000000000003','Admin Suspendu','admin','suspended')
 on conflict (id) do update set role = 'admin', status = 'suspended';
 commit;
+-- Invitations témoins : S5 doit être non-vacu, même pour un suspendu
+-- dont l'adresse email correspond exactement au JWT.
+begin;
+set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_tokens, email_change, email_change_token_new)
+values ('00000000-0000-0000-0000-000000000000','7a000000-0000-7000-8000-000000000004','authenticated','authenticated','admin-actif@clone.test','crypt-bucket', now(), '{"provider":"email","providers":["email"]}'::jsonb,'{}'::jsonb, now(), now(), '', '', '', '')
+on conflict (id) do update set email = excluded.email;
+insert into public.profiles (id, display_name, role, status)
+values ('7a000000-0000-7000-8000-000000000004','Admin Actif','admin','active')
+on conflict (id) do update set role = 'admin', status = 'active';
+insert into public.user_invitations (id, email, role, expires_at) values
+ ('1e000000-0000-7000-8000-0000000000d1','b@clone.test','user',now() + interval '14 days'),
+ ('1e000000-0000-7000-8000-0000000000d2','a@clone.test','user',now() + interval '14 days'),
+ ('1e000000-0000-7000-8000-0000000000d3','admin-suspendu@clone.test','user',now() + interval '14 days');
+commit;
 begin;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000003","role":"authenticated","email":"admin-suspendu@clone.test"}';
@@ -247,6 +262,48 @@ begin
   if n > 0 then raise exception 'S5 ÉCHEC : admin suspendu lit % invitations.', n; end if;
   raise notice 'S5 OK : admin suspendu → is_admin() false, 0 accès admin.';
 end $$;
+commit;
+
+-- ---------------------------------------------------------------------
+-- S5 invitations : JWT propre email, isolation, admin actif, suspendus.
+-- ---------------------------------------------------------------------
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000002","role":"authenticated","email":"b@clone.test"}';
+do $
+declare n int;
+begin
+  select count(*) into n from public.user_invitations;
+  if n <> 1 then raise exception 'S5 INVITATIONS ÉCHEC : B voit % invitations (attendu 1).', n; end if;
+  select count(*) into n from public.user_invitations where email = 'b@clone.test';
+  if n <> 1 then raise exception 'S5 INVITATIONS ÉCHEC : B ne voit pas sa propre invitation (%).', n; end if;
+  select count(*) into n from public.user_invitations where email <> 'b@clone.test';
+  if n <> 0 then raise exception 'S5 INVITATIONS ÉCHEC : B voit % invitations d''autrui.', n; end if;
+  raise notice 'S5 INVITATIONS OK : compte actif lit uniquement sa propre invitation (JWT).';
+end $;
+commit;
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000004","role":"authenticated","email":"admin-actif@clone.test"}';
+do $
+declare n int;
+begin
+  if not public.is_admin() then raise exception 'S5 INVITATIONS ÉCHEC : admin actif non reconnu.'; end if;
+  select count(*) into n from public.user_invitations;
+  if n <> 3 then raise exception 'S5 INVITATIONS ÉCHEC : admin actif voit % invitations (attendu 3).', n; end if;
+  raise notice 'S5 INVITATIONS OK : admin actif voit toutes les invitations (3).';
+end $;
+commit;
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000001","role":"authenticated","email":"a@clone.test"}';
+do $
+declare n int;
+begin
+  select count(*) into n from public.user_invitations;
+  if n <> 0 then raise exception 'S5 INVITATIONS ÉCHEC : compte suspendu A voit % invitations (attendu 0).', n; end if;
+  raise notice 'S5 INVITATIONS OK : compte suspendu avec invitation propre voit 0.';
+end $;
 commit;
 
 -- ---------------------------------------------------------------------
