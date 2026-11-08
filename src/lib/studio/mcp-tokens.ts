@@ -18,8 +18,6 @@ import { createHash, randomBytes } from "node:crypto";
 /* ne mint, n'affiche ni n'accepte ces jetons.                          */
 /* ------------------------------------------------------------------ */
 
-import { parseExpiryDays, parseScopes, MAX_ACTIVE_TOKENS_PER_USER } from "./mcp-scopes";
-
 const PREFIX = "mgsi_";
 
 /** Génère un jeton clair `mgsi_<256 bits base64url>` + son empreinte SHA-256. */
@@ -180,6 +178,8 @@ export async function emitUserToken(
   if (typeof name !== "string" || name.trim().length < 1 || name.trim().length > 60) {
     return { created: false, reason: "Nom du jeton invalide (1 à 60 caractères).", status: 400 };
   }
+  // Import différé : le test unitaire charge ce fichier tel quel (Node, sans résolution d'extension).
+  const { parseExpiryDays, parseScopes, MAX_ACTIVE_TOKENS_PER_USER } = await import("./mcp-scopes");
   const days = parseExpiryDays(options.expiresInDays ?? 90);
   const scopes = parseScopes(options.scopes ?? ["read", "write"]);
   if (!days) return { created: false, reason: "Durée invalide (30, 90 ou 365 jours).", status: 400 };
