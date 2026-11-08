@@ -501,9 +501,20 @@ $p3b$;
 do $p3c$
 declare maj int; n int;
 begin
-  update public.studio_projects set name = 'ESSAI-CONTOUR' where id = '7e570000-0000-7e57-8000-000000010003';
-  get diagnostics maj = row_count;
-  if maj <> 0 then raise exception 'P3 ÉCHEC : le suspendu a modifié % lignes.', maj; end if;
+  begin
+    update public.studio_projects set name = 'ESSAI-CONTOUR' where id = '7e570000-0000-7e57-8000-000000010003';
+    get diagnostics maj = row_count;
+  exception
+    when sqlstate 'P0001' then
+      if position('COMPTE_SUSPENDU' in sqlerrm) = 0 then
+        raise exception 'P3 ÉCHEC : refus P0001 inattendu : %.', sqlerrm;
+      end if;
+      raise notice 'P3 OK : UPDATE suspendu refusé (P0001 COMPTE_SUSPENDU).';
+      maj := -1;
+  end;
+  if maj <> -1 then
+    raise exception 'P3 ÉCHEC : UPDATE non refusé par COMPTE_SUSPENDU (% lignes).', maj;
+  end if;
   select count(*) into n from public.studio_projects;
   if n <> 2 then raise exception 'P3 ÉCHEC : lecture de SES lignes cassée (% projets, attendu 2).', n; end if;
   raise notice 'P3 OK : écriture suspendue, lecture de ses propres données conservée.';
