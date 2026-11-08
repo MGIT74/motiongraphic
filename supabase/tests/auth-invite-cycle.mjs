@@ -88,10 +88,10 @@ async function main() {
 
   /* 4. Consommation ATOMIQUE + course (2 appels). */
   const first = await consumeAtomically(invitation.id, email);
-  const firstRows = (first?.data ?? []) as Array<{ id: string }>;
+  const firstRows = (first?.data ?? []);
   ok(!first.error && firstRows.length === 1, `4a. consommation atomique → ${firstRows.length} ligne (${first.error?.message ?? "ok"})`);
   const second = await consumeAtomically(invitation.id, email);
-  const secondRows = (second?.data ?? []) as Array<{ id: string }>;
+  const secondRows = (second?.data ?? []);
   ok(!second.error && secondRows.length === 0, `4b. double activation impossible → ${secondRows.length} ligne (attendu 0)`);
 
   /* Course réelle : 6 connexions simultanées sur une NOUVELLE invitation —
@@ -100,11 +100,11 @@ async function main() {
     const raceEmail = `race-${round}-${Date.now()}@test-clone.local`;
     const raceInvite = await admin.from("user_invitations").insert({ email: raceEmail, role: "user" }).select("id").single();
     if (raceInvite.error || !raceInvite.data) { ok(false, `   course ${round} : invitation non créée`); continue; }
-    const raceId = (raceInvite.data as { id: string }).id;
+    const raceId = (raceInvite.data).id;
     const racePromises = Array.from({ length: 6 }, () => consumeAtomically(raceId, raceEmail));
     const outcomes = await Promise.all(racePromises);
-    const winners = (outcomes ?? []).filter((o) => ((o?.data ?? []) as Array<{ id: string }>).length === 1);
-    const losers = (outcomes ?? []).filter((o) => ((o?.data ?? []) as Array<{ id: string }>).length === 0);
+    const winners = (outcomes ?? []).filter((o) => ((o?.data ?? [])).length === 1);
+    const losers = (outcomes ?? []).filter((o) => ((o?.data ?? [])).length === 0);
     ok(winners.length === 1 && losers.length === 5, `   course ${round} : 6 connexions simultanées → ${winners.length} gagnant(s) (attendu 1)`);
     await admin.from("user_invitations").delete().eq("id", raceId);
   }
@@ -140,11 +140,11 @@ async function main() {
   if (!expired.error && expired.data) {
     const consumeExpired = await admin.from("user_invitations")
       .update({ used_at: new Date().toISOString() })
-      .eq("id", (expired.data as { id: string }).id)
+      .eq("id", (expired.data).id)
       .gt("expires_at", new Date().toISOString())
       .select("id");
     if (consumeExpired?.error) { ok(false, `8. lecture erreur : ${consumeExpired.error.message}`); }
-    const rows = (consumeExpired?.data ?? []) as Array<{ id: string }>;
+    const rows = (consumeExpired?.data ?? []);
     ok(rows.length === 0, "8. invitation expirée → consommation impossible (0 ligne, garde réelle)");
   } else {
     ok(false, `8. insertion invitation expirée impossible (${expired.error?.message ?? "?"})`);
@@ -156,7 +156,7 @@ async function main() {
   const newLink = await admin.auth.generateLink({ type: "invite", email });
   ok(!newLink.error && Boolean(newLink.data?.properties?.action_link), "9b. réinvitation : lien régénéré (action_link) disponible");
   const pendings = await admin.from("user_invitations").select("id").eq("email", email).is("used_at", null).is("revoked_at", null);
-  const pendingRows = (pendings?.data ?? []) as Array<{ id: string }>;
+  const pendingRows = (pendings?.data ?? []);
   ok(pendingRows.length <= 1, `9c. une seule invitation applicative en attente (${pendingRows.length})`);
 
   /* Nettoyage du clone. */
