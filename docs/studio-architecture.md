@@ -135,3 +135,17 @@ Mesuré : 15 s de vidéo 1080p rendues en ~57 s (4 cœurs).
 - Les onglets ouvrent un panneau glissant (`MobileSheet`) qui réutilise les panneaux de bureau (`variant="sheet"`, onglet imposé). Ajouter un template ou un média referme le panneau pour montrer le résultat ; un point bleu sur « Modifier » signale un élément sélectionné.
 - Notifications au-dessus de la barre d'onglets ; menu Projets en pleine largeur.
 - Au-delà de 1024 px (ordinateur, tablette en paysage) : disposition à trois colonnes inchangée.
+
+
+## Connexions MCP personnelles (`/settings/mcp`)
+
+Dashboard « Accès MCP » (branche `feat/mcp-tokens-ui`) : chaque
+utilisateur gère SES jetons MCP (création, renouvellement, révocation,
+expiration) — le serveur ne stocke AUCUN jeton en clair : seul le
+empreinte SHA-256 figure en base (`mcp_user_tokens`, migration 0009) ;
+la valeur n'est rendue qu'UNE fois (création/renouvellement) et n'est
+jamais conservée côté client. Les jetons sont inactifs tant que le
+drapeau serveur n'est pas activé (503 clair à l'écran). Architecture
+d'isolation : chaque jeton = identité utilisateur (RLS `user_id =
+auth.uid()`) — voir `src/lib/studio/mcp-tokens.ts` (dormant) et le
+contrat d'API dans `src/components/settings/McpTokensPanel.tsx`.
