@@ -277,6 +277,72 @@ begin
 end $$;
 commit;
 
+-- S5 : visibilité des invitations via email du JWT (sans auth.users).
+begin;
+set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
+insert into public.user_invitations (id, email, role) values
+  ('1e000000-0000-7000-8000-0000000000a1','a@clone.test','user'),
+  ('1e000000-0000-7000-8000-0000000000a2','autre@clone.test','user');
+commit;
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000001","role":"authenticated","email":"a@clone.test"}';
+do $s5_invited$
+declare n int;
+begin
+  select count(*) into n from public.user_invitations;
+  if n <> 1 then raise exception 'S5 ÉCHEC : A voit % invitations (attendu 1).', n; end if;
+  select count(*) into n from public.user_invitations where email = 'a@clone.test';
+  if n <> 1 then raise exception 'S5 ÉCHEC : invitation personnelle de A invisible.'; end if;
+  raise notice 'S5 OK : utilisateur actif voit uniquement son invitation via JWT.';
+end $s5_invited$;
+commit;
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000002","role":"authenticated","email":"b@clone.test"}';
+do $s5_other$
+declare n int;
+begin
+  select count(*) into n from public.user_invitations;
+  if n <> 0 then raise exception 'S5 ÉCHEC : B voit % invitations d''autrui.', n; end if;
+  raise notice 'S5 OK : autre utilisateur actif ne voit aucune invitation d''autrui.';
+end $s5_other$;
+commit;
+
+-- Promouvoir B temporairement via postgres pour tester un admin ACTIF.
+begin;
+update public.profiles set role = 'admin' where id = '7a000000-0000-7000-8000-000000000002';
+commit;
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000002","role":"authenticated","email":"b@clone.test"}';
+do $s5_admin$
+declare n int;
+begin
+  if not public.is_admin() then raise exception 'S5 ÉCHEC : B admin actif non reconnu.'; end if;
+  select count(*) into n from public.user_invitations;
+  if n <> 2 then raise exception 'S5 ÉCHEC : admin actif voit % invitations (attendu 2).', n; end if;
+  raise notice 'S5 OK : admin actif voit toutes les invitations.';
+end $s5_admin$;
+commit;
+begin;
+update public.profiles set role = 'user' where id = '7a000000-0000-7000-8000-000000000002';
+commit;
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"7a000000-0000-7000-8000-000000000003","role":"authenticated","email":"admin-suspendu@clone.test"}';
+do $s5_suspended$
+declare n int;
+begin
+  select count(*) into n from public.user_invitations;
+  if n <> 0 then raise exception 'S5 ÉCHEC : admin suspendu voit % invitations.', n; end if;
+  raise notice 'S5 OK : admin suspendu voit 0 invitation.';
+end $s5_suspended$;
+commit;
+
 -- ---------------------------------------------------------------------
 -- S6 : jetons MCP — navigateur sans accès (grants révoqués), serveur oui.
 -- ---------------------------------------------------------------------
