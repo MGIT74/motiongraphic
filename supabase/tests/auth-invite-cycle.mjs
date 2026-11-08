@@ -66,17 +66,17 @@ async function main() {
   if (!invitation) return finish();
 
   /* 2. Envoi Supabase Auth + lien de réception. */
-  const invite = await admin.auth.inviteUserByEmail(email, {});
+  const invite = await admin.auth.admin.inviteUserByEmail(email, {});
   ok(!invite.error, `2. invitation Auth émise (${invite.error?.message ?? "ok"})`);
-  const link = await admin.auth.generateLink({ type: "invite", email });
+  const link = await admin.auth.admin.generateLink({ type: "invite", email });
   ok(!link.error && Boolean(link.data?.properties?.action_link), "   lien (action_link) reçu");
 
   /* 3. Première connexion réelle. */
-  const { data: { users: users1 } } = await admin.auth.listUsers({ perPage: 200 });
+  const { data: { users: users1 } } = await admin.auth.admin.listUsers({ perPage: 200 });
   const account = (users1 ?? []).find((u) => u.email === email);
   ok(Boolean(account), "   compte Auth en état « invité » (non activé)");
   if (!account) return finish();
-  await admin.auth.updateUserById(account.id, { password });
+  await admin.auth.admin.updateUserById(account.id, { password, email_confirm: true }); // simule le clic sur le lien d invitation (confirme l email)
   if (ANON) {
     const anon = createClient(URL_TEST, ANON, { auth: { persistSession: false } });
     const session = await anon.auth.signInWithPassword({ email, password });
@@ -88,10 +88,10 @@ async function main() {
 
   /* 4. Consommation ATOMIQUE + course (2 appels). */
   const first = await consumeAtomically(invitation.id, email);
-  const firstRows = (first?.data ?? []) as Array<{ id: string }>;
+  const firstRows = (first?.data ?? []);
   ok(!first.error && firstRows.length === 1, `4a. consommation atomique → ${firstRows.length} ligne (${first.error?.message ?? "ok"})`);
   const second = await consumeAtomically(invitation.id, email);
-  const secondRows = (second?.data ?? []) as Array<{ id: string }>;
+  const secondRows = (second?.data ?? []);
   ok(!second.error && secondRows.length === 0, `4b. double activation impossible → ${secondRows.length} ligne (attendu 0)`);
 
   /* Course réelle : 6 connexions simultanées sur une NOUVELLE invitation —
@@ -100,11 +100,11 @@ async function main() {
     const raceEmail = `race-${round}-${Date.now()}@test-clone.local`;
     const raceInvite = await admin.from("user_invitations").insert({ email: raceEmail, role: "user" }).select("id").single();
     if (raceInvite.error || !raceInvite.data) { ok(false, `   course ${round} : invitation non créée`); continue; }
-    const raceId = (raceInvite.data as { id: string }).id;
+    const raceId = (raceInvite.data).id;
     const racePromises = Array.from({ length: 6 }, () => consumeAtomically(raceId, raceEmail));
     const outcomes = await Promise.all(racePromises);
-    const winners = (outcomes ?? []).filter((o) => ((o?.data ?? []) as Array<{ id: string }>).length === 1);
-    const losers = (outcomes ?? []).filter((o) => ((o?.data ?? []) as Array<{ id: string }>).length === 0);
+    const winners = (outcomes ?? []).filter((o) => ((o?.data ?? [])).length === 1);
+    const losers = (outcomes ?? []).filter((o) => ((o?.data ?? [])).length === 0);
     ok(winners.length === 1 && losers.length === 5, `   course ${round} : 6 connexions simultanées → ${winners.length} gagnant(s) (attendu 1)`);
     await admin.from("user_invitations").delete().eq("id", raceId);
   }
@@ -120,9 +120,9 @@ async function main() {
   ok(profile6?.status === "active", "   état final : actif");
 
   /* 7. Révocation : ban Auth, le lien ne peut plus donner de session. */
-  const banned = await admin.auth.updateUserById(account.id, { ban_duration: "876000h" });
+  const banned = await admin.auth.admin.updateUserById(account.id, { ban_duration: "876000h" });
   ok(!banned.error, `7a. ban Auth appliqué (${banned.error?.message ?? "ok"})`);
-  const { data: { users: users2 } } = await admin.auth.listUsers({ perPage: 200 });
+  const { data: { users: users2 } } = await admin.auth.admin.listUsers({ perPage: 200 });
   const account2 = (users2 ?? []).find((u) => u.email === email);
   ok(Boolean(account2?.banned_until && new Date(account2.banned_until).getTime() > Date.now()), "7b. compte banni (banned_until futur)");
   if (ANON) {
@@ -140,30 +140,43 @@ async function main() {
   if (!expired.error && expired.data) {
     const consumeExpired = await admin.from("user_invitations")
       .update({ used_at: new Date().toISOString() })
-      .eq("id", (expired.data as { id: string }).id)
+      .eq("id", (expired.data).id)
       .gt("expires_at", new Date().toISOString())
       .select("id");
     if (consumeExpired?.error) { ok(false, `8. lecture erreur : ${consumeExpired.error.message}`); }
-    const rows = (consumeExpired?.data ?? []) as Array<{ id: string }>;
+    const rows = (consumeExpired?.data ?? []);
     ok(rows.length === 0, "8. invitation expirée → consommation impossible (0 ligne, garde réelle)");
   } else {
     ok(false, `8. insertion invitation expirée impossible (${expired.error?.message ?? "?"})`);
   }
 
   /* 9. Réinvitation : régénérée sans doublon (pending unique). */
-  const reinvite = await admin.auth.inviteUserByEmail(email, {});
+  const reinvite = await admin.auth.admin.inviteUserByEmail(email, {});
   ok(Boolean(reinvite.error), `9a. inviteUserByEmail sur compte existant → refusée par Auth (${reinvite.error?.status ?? "-"})`);
-  const newLink = await admin.auth.generateLink({ type: "invite", email });
-  ok(!newLink.error && Boolean(newLink.data?.properties?.action_link), "9b. réinvitation : lien régénéré (action_link) disponible");
+  // Compte déjà activé (puis banni) : un lien d'INVITATION ne doit plus être régénérable.
+  const newLink = await admin.auth.admin.generateLink({ type: "invite", email });
+  ok(Boolean(newLink.error), "9b. compte déjà activé : lien d'invitation refusé (déjà enregistré)");
+  // Ré-envoi légitime : invité NON activé (comme src/lib/admin/users-store.ts) → lien régénéré.
+  const pendingEmail = `reinvite-${Date.now()}@test-clone.local`;
+  const pendingInvite = await admin.auth.admin.inviteUserByEmail(pendingEmail, {});
+  ok(!pendingInvite.error, `9d. invité non activé créé (${pendingInvite.error?.message ?? "ok"})`);
+  const resend = await admin.auth.admin.generateLink({ type: "invite", email: pendingEmail });
+  ok(!resend.error && Boolean(resend.data?.properties?.action_link), "9e. ré-envoi : lien régénéré pour un invité non activé");
+  const pendingUser = pendingInvite.data?.user ?? null;
   const pendings = await admin.from("user_invitations").select("id").eq("email", email).is("used_at", null).is("revoked_at", null);
-  const pendingRows = (pendings?.data ?? []) as Array<{ id: string }>;
+  const pendingRows = (pendings?.data ?? []);
   ok(pendingRows.length <= 1, `9c. une seule invitation applicative en attente (${pendingRows.length})`);
 
   /* Nettoyage du clone. */
   await admin.from("user_invitations").delete().eq("email", email);
   await admin.from("user_invitations").delete().eq("email", futureEmail);
   await admin.from("profiles").delete().eq("id", account.id);
-  await admin.auth.deleteUser(account.id);
+  await admin.auth.admin.deleteUser(account.id);
+  if (pendingUser?.id) {
+    await admin.from("profiles").delete().eq("id", pendingUser.id);
+    await admin.auth.admin.deleteUser(pendingUser.id);
+  }
+  await admin.from("user_invitations").delete().eq("email", pendingEmail);
   console.log("ℹ️  Nettoyage effectué.");
   finish();
 }

@@ -311,8 +311,10 @@ begin
 end $s5_other$;
 commit;
 
--- Promouvoir B temporairement via postgres pour tester un admin ACTIF.
+-- Promouvoir B temporairement pour tester un admin ACTIF. Le garde de rôle n'exempte que
+-- is_admin() et service_role : même le propriétaire SQL doit présenter le claim service_role.
 begin;
+set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
 update public.profiles set role = 'admin' where id = '7a000000-0000-7000-8000-000000000002';
 commit;
 begin;
@@ -328,6 +330,7 @@ begin
 end $s5_admin$;
 commit;
 begin;
+set local request.jwt.claims = '{"role":"service_role","sub":"7a000000-0000-7000-8000-000000000000"}';
 update public.profiles set role = 'user' where id = '7a000000-0000-7000-8000-000000000002';
 commit;
 
@@ -363,9 +366,15 @@ end $$;
 do $$
 declare n int;
 begin
-  select count(*) into n from public.mcp_user_tokens;
-  if n > 0 then raise exception 'S6 ÉCHEC : navigateur lit % jetons.', n; end if;
-  raise notice 'S6 OK : lecture navigateur sans accès.';
+  begin
+    select count(*) into n from public.mcp_user_tokens;
+    -- Accepté seulement si 0 ligne visible ; toute ligne lisible = faille.
+    if n > 0 then raise exception 'S6 ÉCHEC : navigateur lit % jetons.', n; end if;
+    raise notice 'S6 OK : lecture navigateur sans accès (0 ligne).';
+  exception
+    when insufficient_privilege then
+      raise notice 'S6 OK : lecture navigateur refusée explicitement (42501, grants révoqués).';
+  end;
 end $$;
 commit;
 begin;
