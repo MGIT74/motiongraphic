@@ -346,7 +346,7 @@ async function prepareAudio(project: import("@/lib/studio/project-model").Studio
   const none = { inputs: [] as string[], filter: "", map: [] as string[], codec: [] as string[] };
   const audio = project.audio;
   const asset = audio ? project.media.find((m) => m.id === audio.assetId && m.kind === "audio") : undefined;
-  if (!audio || !asset) return none;
+  if (!audio || audio.muted || !asset) return none;
   const file = path.join(dir, `${jobId}-audio`);
   try {
     await downloadMedia(asset.storagePath, file);

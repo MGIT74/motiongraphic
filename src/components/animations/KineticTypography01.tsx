@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { AnimationComponentProps } from "@/types/animation";
-import { alignLayout } from "@/lib/animations/config";
+import { alignLayout, typoVars } from "@/lib/animations/config";
 import { useAnimationEngine } from "./engine";
 import { buildKineticType } from "@/lib/animations/builders";
 
@@ -41,7 +41,7 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%", containerType: "size", ...lay.outer }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size", ...lay.outer, ...(typoVars(config) as React.CSSProperties) }}
     >
       <div
         className="flex flex-col justify-center gap-1"
@@ -58,17 +58,18 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
               >
                 {char === " " ? (
                   // Espace à la taille du titre (sinon les mots se collent).
-                  <span style={{ fontSize: "12cqmin", lineHeight: 1.15 }}>&nbsp;</span>
+                  <span style={{ fontSize: "calc(12cqmin * var(--mg-fs))", lineHeight: "calc(1.15 * var(--mg-lh))", letterSpacing: "var(--mg-ls)", wordSpacing: "var(--mg-ws)" }}>&nbsp;</span>
                 ) : (
                   <span
                     data-letter-inner
                     className="inline-block will-change-transform"
                     style={{
                       color: accent ? accentColor : primaryColor,
-                      fontSize: "12cqmin",
+                      fontSize: "calc(12cqmin * var(--mg-fs))",
                       fontWeight: 800,
-                      letterSpacing: "0.02em",
-                      lineHeight: 1.15,
+                      letterSpacing: "calc(0.02em + var(--mg-ls))",
+                      wordSpacing: "var(--mg-ws)",
+                      lineHeight: "calc(1.15 * var(--mg-lh))",
                     }}
                   >
                     {char}

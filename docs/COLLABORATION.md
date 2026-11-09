@@ -61,7 +61,7 @@ dans la PR (« touche aussi : … »).
 
 - [ChatGPT] `fix/template-lab-supabase-row-mapping` — correction du mapping des lignes Supabase côté admin et serveur ; code terminé, CI/revue en attente. Zone administration modifiée de façon ciblée.
 
-- [Claude] `feat/studio-canvas-direct` — sélection directe sur le canvas (clic, glisser, poignées d'échelle/rotation) ; le fond d'un calque ne pivote plus avec son contenu. Zone Studio.
+- [Claude] `feat/studio-calques-typo` — œil par calque/piste (masqué = absent de l'aperçu et de l'export), échelle par mise en page (texte net), réglages taille/interligne/espacements (Kinetic, Elastic, Text Reveal). Touche aussi : `AnimationConfig`, `project-model.ts` (`hidden`, `muted`), MCP (`font_size`…), moteur d'export audio.
 
 - [ChatGPT] `feat/two-typography-custom-templates` — Letter Reveal + Typewriter en brouillons via migration 0008 ; code prêt, attente revue/tests SQL et application manuelle.
 

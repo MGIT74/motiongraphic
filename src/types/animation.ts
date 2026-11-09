@@ -26,6 +26,14 @@ export interface AnimationConfig {
   logoUrl?: string;
   /** Alignement du texte : gauche, centre, droite ou justifié (défaut : centre). */
   align?: "left" | "center" | "right" | "justify";
+  /** Taille du texte (multiplicateur, 0.3–3, défaut 1). */
+  fontSize?: number;
+  /** Interligne vertical (multiplicateur, 0.6–2.5, défaut 1). */
+  lineHeight?: number;
+  /** Espacement des lettres (em ajoutés, −0.1 à 0.6, défaut 0). */
+  letterSpacing?: number;
+  /** Espacement des mots (em ajoutés, −0.2 à 1.5, défaut 0). */
+  wordSpacing?: number;
 }
 
 export interface AnimationComponentProps {

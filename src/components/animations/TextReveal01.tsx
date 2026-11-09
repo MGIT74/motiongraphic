@@ -1,7 +1,7 @@
 "use client";
 
 import type { AnimationComponentProps } from "@/types/animation";
-import { alignLayout } from "@/lib/animations/config";
+import { alignLayout, typoVars } from "@/lib/animations/config";
 import { useAnimationEngine } from "./engine";
 import { buildTextReveal } from "@/lib/animations/builders";
 
@@ -19,7 +19,7 @@ export function TextReveal01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%", containerType: "size", ...lay.outer }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size", ...lay.outer, ...(typoVars(config) as React.CSSProperties) }}
     >
       <div className="relative flex flex-col justify-center" style={lay.block}>
         {lines.map((line, i) => (
@@ -30,10 +30,11 @@ export function TextReveal01Frame({ config }: AnimationComponentProps) {
               style={{
                 color: primaryColor,
                 ...(config.align === "justify" ? { textAlign: "justify" as const, textAlignLast: "justify" as const } : {}),
-                fontSize: "10.8cqmin",
+                fontSize: "calc(10.8cqmin * var(--mg-fs))",
                 fontWeight: 750,
-                letterSpacing: "0.03em",
-                lineHeight: 1.1,
+                letterSpacing: "calc(0.03em + var(--mg-ls))",
+                wordSpacing: "var(--mg-ws)",
+                lineHeight: "calc(1.1 * var(--mg-lh))",
               }}
             >
               {line}

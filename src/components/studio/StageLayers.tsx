@@ -90,8 +90,8 @@ function SceneLayers({
   const scene = project.scenes[Math.min(sceneIndex, project.scenes.length - 1)];
   const sceneStart = sceneOffsets(project)[sceneIndex] ?? 0;
   const active = endState
-    ? scene.elements.filter((el) => el.start + el.duration >= scene.duration - FRAME_SECONDS / 2)
-    : scene.elements.filter((el) => time >= sceneStart + el.start && time < sceneStart + el.start + el.duration);
+    ? scene.elements.filter((el) => !el.hidden && el.start + el.duration >= scene.duration - FRAME_SECONDS / 2)
+    : scene.elements.filter((el) => !el.hidden && time >= sceneStart + el.start && time < sceneStart + el.start + el.duration);
 
   return (
     <div className="absolute inset-0" style={{ backgroundColor: scene.background ?? "#000000" }} data-canvas-surface="">
@@ -107,10 +107,16 @@ function SceneLayers({
           >
             {/* Le fond reste fixe (plein cadre) ; seul le contenu se déplace, se redimensionne et pivote. */}
             <div
-              className="absolute inset-0"
+              className="absolute"
               data-element-layer={element.id}
+              // L'échelle agit sur la mise en page (taille réelle du calque) et non sur un
+              // transform : le texte est re-rendu à la bonne taille, donc net.
               style={{
-                transform: `translate(${element.x - 50}%, ${element.y - 50}%) scale(${element.scale})${element.rotation ? ` rotate(${element.rotation}deg)` : ""}`,
+                left: `${element.x - 50 * element.scale}%`,
+                top: `${element.y - 50 * element.scale}%`,
+                width: `${element.scale * 100}%`,
+                height: `${element.scale * 100}%`,
+                ...(element.rotation ? { transform: `rotate(${element.rotation}deg)` } : {}),
               }}
             >
               {element.kind === "media" ? (
@@ -137,5 +143,5 @@ export function activeElementCount(project: StudioProject, time: number): number
   const sceneIndex = sceneIndexAtTime(project, time);
   const scene = project.scenes[sceneIndex];
   const sceneStart = sceneOffsets(project)[sceneIndex] ?? 0;
-  return scene.elements.filter((el) => time >= sceneStart + el.start && time < sceneStart + el.start + el.duration).length;
+  return scene.elements.filter((el) => !el.hidden && time >= sceneStart + el.start && time < sceneStart + el.start + el.duration).length;
 }
