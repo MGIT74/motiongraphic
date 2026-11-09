@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Baseline, Check, ChevronDown, ChevronUp, Move, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Baseline, Check, Sparkles, X, ChevronDown, ChevronUp, Move, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
 import { supportsFontSize } from "@/lib/studio/typography";
 import type { ElementTiming, MediaOptions, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
@@ -27,6 +27,8 @@ export default function StudioRightPanel({
   onPatchElement,
   onDeleteElement,
   onMoveLayer,
+  fxOpen = false,
+  onToggleFx,
   variant = "sidebar",
 }: {
   project: StudioProject;
@@ -34,6 +36,9 @@ export default function StudioRightPanel({
   /** sidebar = colonne de droite (≥ 1024 px) ; sheet = panneau glissant mobile. */
   variant?: "sidebar" | "sheet";
   time?: number;
+  /** Bouton « fx » : ouvre / ferme la galerie de styles sur la scène. */
+  fxOpen?: boolean;
+  onToggleFx?: () => void;
   onChangeTemplate: (elementId: string, newTemplateKey: string) => void;
   onPatchElement: (elementId: string, patch: Partial<StudioElement>) => void;
   onDeleteElement: (elementId: string) => void;
@@ -59,14 +64,14 @@ export default function StudioRightPanel({
         </div>
       ) : (
         <>
-          <ElementProperties selection={selection} onPatchElement={onPatchElement} onDeleteElement={onDeleteElement} onMoveLayer={onMoveLayer} />
-          {selection.element.kind === "media" ? null : (
+          <ElementProperties selection={selection} onPatchElement={onPatchElement} onDeleteElement={onDeleteElement} onMoveLayer={onMoveLayer} fxOpen={fxOpen} onToggleFx={onToggleFx} />
+          {variant === "sheet" && fxOpen && selection.element.kind !== "media" ? (
             <CompatibleStyles
               element={selection.element}
               project={project}
               onChange={onChangeTemplate}
             />
-          )}
+          ) : null}
         </>
       )}
     </aside>
@@ -84,7 +89,11 @@ function ElementProperties({
   onPatchElement,
   onDeleteElement,
   onMoveLayer,
+  fxOpen,
+  onToggleFx,
 }: {
+  fxOpen: boolean;
+  onToggleFx?: () => void;
   selection: StudioSelection;
   onPatchElement: (elementId: string, patch: Partial<StudioElement>) => void;
   onDeleteElement: (elementId: string) => void;
@@ -118,14 +127,19 @@ function ElementProperties({
           <p className="truncate text-sm font-semibold text-ink">{element.label}</p>
           <p className="truncate text-[11px] text-muted">{template ? template.name : element.templateKey} · {scene.name}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => onDeleteElement(element.id)}
-          className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line text-muted transition-colors hover:border-red-500/50 hover:text-red-300"
-          aria-label={`Supprimer l'élément ${element.label}`}
-        >
-          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
+        {!isMedia && onToggleFx ? (
+          <button
+            type="button"
+            onClick={onToggleFx}
+            aria-pressed={fxOpen}
+            className={`inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2.5 text-xs font-semibold transition-colors ${fxOpen ? "border-accent bg-accent/15 text-accent" : "border-line text-ink hover:border-accent/50"}`}
+            title="Styles et animations"
+            aria-label="Styles et animations (fx)"
+          >
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            fx
+          </button>
+        ) : null}
       </div>
 
       {!isMedia ? (
@@ -372,6 +386,13 @@ function ElementProperties({
                 className={inputCls}
               />
             </div>
+            <button
+              type="button"
+              onClick={() => onDeleteElement(element.id)}
+              className="col-span-2 inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-line text-xs text-muted transition-colors hover:border-red-500/50 hover:text-red-300"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Supprimer le calque
+            </button>
           </div>
         ) : null}
       </div>
@@ -495,33 +516,37 @@ function toValidHex(color: string): string {
 /* Styles compatibles — remplacement instantané                         */
 /* ------------------------------------------------------------------ */
 
-function CompatibleStyles({
+export function CompatibleStyles({
   element,
   project,
   onChange,
+  layout = "list",
+  onClose,
 }: {
   element: StudioElement;
   project: StudioProject;
   onChange: (elementId: string, newTemplateKey: string) => void;
+  /** list = colonne (mobile) ; strip = bandeau horizontal sur la scène. */
+  layout?: "list" | "strip";
+  onClose?: () => void;
 }) {
+  const strip = layout === "strip";
   const compatible = templatesForKind(element.kind).filter((t) => t.elementKind === element.kind);
 
   return (
-    <section className="p-4">
-      <div className="mb-3 flex items-center justify-between">
+    <section className={strip ? "shrink-0 border-t border-line bg-surface/95 p-3" : "p-4"}>
+      <div className={`${strip ? "mb-2" : "mb-3"} flex items-center justify-between gap-2`}>
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
-          Styles compatibles · {element.kind}
+          Styles · {compatible.length} · le texte, les couleurs et la position sont conservés (Cmd+Z pour annuler)
         </p>
-        <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
-          {compatible.length}
-        </span>
+        {onClose ? (
+          <button type="button" onClick={onClose} aria-label="Fermer les styles" className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted hover:text-ink">
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
-      <p className="mb-3 text-[11px] leading-relaxed text-muted">
-        Cliquez pour remplacer instantanément : le texte, les couleurs, la
-        durée et la position sont conservés. Annulable (Cmd+Z).
-      </p>
 
-      <div className="flex flex-col gap-2.5">
+      <div className={strip ? "flex gap-2.5 overflow-x-auto pb-1" : "flex flex-col gap-2.5"}>
         {compatible.map((template) => {
           const isCurrent = template.key === element.templateKey;
           const previewConfig = {
@@ -535,7 +560,7 @@ function CompatibleStyles({
               type="button"
               disabled={isCurrent}
               onClick={() => onChange(element.id, template.key)}
-              className={`group cursor-pointer overflow-hidden rounded-xl border text-left transition-all disabled:cursor-default ${
+              className={`group cursor-pointer overflow-hidden rounded-xl border text-left transition-all disabled:cursor-default ${strip ? "w-48 shrink-0" : ""} ${
                 isCurrent
                   ? "border-accent/70 bg-accent/5"
                   : "border-line bg-background/60 hover:border-accent/50 hover:-translate-y-0.5"
@@ -568,7 +593,7 @@ function CompatibleStyles({
           );
         })}
       </div>
-      <p className="mt-3 text-[10px] text-muted/70">
+      <p className={strip ? "hidden" : "mt-3 text-[10px] text-muted/70"}>
         {compatible.length === 1
           ? "Un seul style pour ce type d'élément — d'autres arrivent en Phase 2."
           : `${compatible.length} styles pour les éléments de type « ${element.kind} ».`}
