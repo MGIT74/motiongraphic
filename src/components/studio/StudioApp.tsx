@@ -46,7 +46,7 @@ import { useStudioClock } from "@/lib/studio/clock";
 import StudioTopBar from "./StudioTopBar";
 import StudioLeftPanel, { type LeftPanelTab } from "./StudioLeftPanel";
 import StudioCanvas from "./StudioCanvas";
-import StudioRightPanel from "./StudioRightPanel";
+import StudioRightPanel, { CompatibleStyles } from "./StudioRightPanel";
 import StudioTimeline from "./StudioTimeline";
 import ExportButton from "./ExportButton";
 import ProjectsMenu from "./ProjectsMenu";
@@ -139,6 +139,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
   // Disposition mobile (< 1024 px) : panneaux en bas, ouverts depuis la barre d'onglets.
   const compact = useCompactStudio();
   const [sheet, setSheet] = useState<MobileSheetId | null>(null);
+  const [fxOpen, setFxOpen] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("saved");
   const [cloudState, setCloudState] = useState<CloudStateKind | null>(null);
 
@@ -593,6 +594,8 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       onPatchElement={patchElement}
       onDeleteElement={deleteElement}
       onMoveLayer={moveLayer}
+      fxOpen={fxOpen}
+      onToggleFx={() => setFxOpen((v) => !v)}
       variant={variant}
     />
   );
@@ -610,6 +613,17 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       compact={compact}
     />
   );
+
+  const stylesStrip =
+    fxOpen && selection && selection.element.kind !== "media" ? (
+      <CompatibleStyles
+        element={selection.element}
+        project={project}
+        onChange={changeElementTemplate}
+        layout="strip"
+        onClose={() => setFxOpen(false)}
+      />
+    ) : null;
 
   const timeline = (
     <StudioTimeline
@@ -707,6 +721,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
           {leftPanel("sidebar")}
           <div className="flex min-w-0 flex-1 flex-col">
             {canvas}
+            {stylesStrip}
             {timeline}
           </div>
           {rightPanel("sidebar")}
