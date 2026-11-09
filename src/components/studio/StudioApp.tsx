@@ -379,7 +379,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
     });
     // Logique calques : dans une scène qui a déjà du contenu, le nouvel élément est sans fond (superposable).
     const baseConfig = brandedConfig({ ...template.defaultConfig }, template.elementKind, project.brand);
-    if (scene.elements.length > 0) baseConfig.backgroundColor = "transparent";
+    if (scene.elements.length > 0 || template.sandboxCode) baseConfig.backgroundColor = "transparent";
     const element = makeElement(templateKey, template.elementKind, baseConfig, {
       start,
       duration: template.timelineDuration,
