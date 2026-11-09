@@ -65,7 +65,7 @@ window.__MGS_TIMELINE__ = {
         word.setAttribute("data-i", String(i));
         box.appendChild(word);
       });
-      // Ajustement automatique : plus grande police qui tient dans 84% x 72% du cadre.
+      // Taille de base : tient dans ~60% du cadre (marge pour agrandir la police depuis le Studio).
       var lo = 10, hi = Math.min(W, H) * 0.3, mid = lo;
       for (var it = 0; it < 14; it++) {
         mid = (lo + hi) / 2;
@@ -73,7 +73,7 @@ window.__MGS_TIMELINE__ = {
         var widest = 0;
         var ws = box.querySelectorAll(".hp-word");
         for (var k = 0; k < ws.length; k++) widest = Math.max(widest, ws[k].offsetWidth);
-        if (box.scrollHeight <= H * 0.72 && widest <= box.clientWidth) lo = mid; else hi = mid;
+        if (box.scrollHeight <= H * 0.5 && widest <= box.clientWidth * 0.72) lo = mid; else hi = mid;
       }
       box.style.fontSize = (lo * fs) + "px";
     }

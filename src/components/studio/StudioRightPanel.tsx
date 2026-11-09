@@ -2,6 +2,7 @@
 
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Check, ChevronDown, ChevronUp, Layers, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
+import { supportsFontSize } from "@/lib/studio/typography";
 import type { ElementTiming, MediaOptions, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
 import { getStudioTemplate, templatesForKind } from "@/lib/studio/template-registry";
 import LoopingDemoFrame from "@/components/studio/LoopingDemoFrame";
@@ -312,7 +313,7 @@ function ElementProperties({
           </select>
         </div>
 
-        <div className={element.kind !== "media" && (TYPO_TEMPLATES.includes(element.templateKey) || !BUILTIN_TEMPLATES.includes(element.templateKey)) ? "col-span-2 flex flex-col gap-3" : "hidden"}>
+        <div className={supportsFontSize(element.templateKey, element.kind) ? "col-span-2 flex flex-col gap-3" : "hidden"}>
           <p className={labelCls}>
             <Type className="mr-1 inline-block h-3 w-3" aria-hidden="true" /> Typographie
           </p>
@@ -455,10 +456,6 @@ function SliderField({ id, label, unit, min, max, step, reset, value, onChange }
   );
 }
 
-/** Templates texte qui lisent taille / interligne / espacements. */
-const TYPO_TEMPLATES = ["kinetic-type-01", "elastic-text-01", "text-reveal-01"];
-/** Templates intégrés : les autres sont des templates en code (Template Lab), qui lisent aussi ces réglages. */
-const BUILTIN_TEMPLATES = ["kinetic-type-01", "text-reveal-01", "elastic-text-01", "shape-morph-01", "staggered-cards-01", "logo-reveal-01", "minimal-saas-ui-01"];
 const QUICK_COLORS = ["#FFFFFF", "#F5F5F7", "#A1A1AA", "#52525B", "#18181B", "#000000", "#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899"];
 const ALIGN_OPTIONS = [
   { id: "left", label: "Aligner à gauche", Icon: AlignLeft },

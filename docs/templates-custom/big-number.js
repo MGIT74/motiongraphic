@@ -43,13 +43,13 @@ window.__MGS_TIMELINE__ = {
       lab.textContent = label;
       stage.appendChild(big); stage.appendChild(rule); stage.appendChild(lab);
       document.body.appendChild(stage);
-      // Taille du grand nombre : la plus grande qui tient dans 86% de la largeur avec sa valeur finale.
+      // Taille de base : 64% de la largeur (marge pour agrandir la police depuis le Studio).
       big.textContent = prefix + target.toFixed(decimals) + suffix;
       var lo = 20, hi = Math.min(W * 0.4, H * 0.5), mid;
       for (var it = 0; it < 14; it++) {
         mid = (lo + hi) / 2;
         big.style.fontSize = mid + "px";
-        if (big.scrollWidth <= W * 0.86) lo = mid; else hi = mid;
+        if (big.scrollWidth <= W * 0.64) lo = mid; else hi = mid;
       }
       big.style.fontSize = (lo * fs) + "px";
     }
