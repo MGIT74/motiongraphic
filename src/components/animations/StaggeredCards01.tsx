@@ -10,8 +10,62 @@ import { buildStaggeredCards } from "@/lib/animations/builders";
  *
  * `StaggeredCards01Frame` = DOM pur (réutilisé tel quel par le Studio).
  */
+/** Découpe « idée · idée · idée » en cartes de message (2 à 6). Sinon : mode décoratif d'origine. */
+export function parseCardItems(text: string | undefined): string[] {
+  if (!text) return [];
+  const items = text.split(/[·|]/).map((part) => part.trim()).filter(Boolean);
+  return items.length >= 2 ? items.slice(0, 6) : [];
+}
+
+function MessageCards({ items, primary, accent, background }: { items: string[]; primary: string; accent: string; background: string }) {
+  const cols = items.length <= 3 ? items.length : items.length === 4 ? 2 : 3;
+  const width = cols === 1 ? "60cqw" : cols === 2 ? "min(36cqw, 62cqh)" : "min(27cqw, 52cqh)";
+  return (
+    <div
+      className="flex h-full w-full items-center justify-center overflow-hidden"
+      style={{ backgroundColor: background, minHeight: "100%", containerType: "size" }}
+    >
+      <div
+        className="grid justify-center"
+        style={{ gridTemplateColumns: `repeat(${cols}, ${width})`, gap: "min(2.4cqw, 3cqh)" }}
+      >
+        {items.map((label, i) => (
+          <div
+            key={i}
+            data-card
+            className="flex flex-col justify-between rounded-3xl will-change-transform"
+            style={{
+              containerType: "inline-size",
+              aspectRatio: "1.05",
+              padding: "9cqw",
+              background: i % 2 === 0 ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.11)",
+              border: "1px solid rgba(255,255,255,0.14)",
+              boxShadow: `0 28px 60px -28px rgba(0,0,0,0.8), 0 0 0 1px ${accent}22 inset`,
+            }}
+          >
+            <span className="font-bold tabular-nums" style={{ color: accent, fontSize: "13cqw", letterSpacing: "0.08em" }}>
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            <div className="flex flex-col" style={{ gap: "6cqw" }}>
+              <span data-card-bar className="block rounded-full" style={{ height: "1.6cqw", width: "28cqw", backgroundColor: accent }} />
+              <span className="font-bold uppercase leading-[1.08]" style={{ color: primary, fontSize: "11.5cqw", letterSpacing: "0.01em", overflowWrap: "anywhere" }}>
+                {label}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function StaggeredCards01Frame({ config }: AnimationComponentProps) {
-  const { text, accentColor, backgroundColor, primaryColor: _primary } = config;
+  const { text, accentColor, backgroundColor, primaryColor } = config;
+  const items = parseCardItems(text);
+  if (items.length >= 2) {
+    return <MessageCards items={items} primary={primaryColor} accent={accentColor} background={backgroundColor} />;
+  }
+  const _primary = primaryColor;
   void _primary;
 
   const cardStyle = {
