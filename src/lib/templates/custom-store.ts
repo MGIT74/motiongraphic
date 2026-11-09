@@ -80,7 +80,7 @@ function demoSeedCTA(): CustomTemplate | null {
       text: "ESSAYEZ",
       primaryColor: "#F5F5F7",
       accentColor: "#A1A1AA",
-      backgroundColor: "#000000",
+      backgroundColor: "transparent",
       duration: 2.8,
       speed: 1,
     } as AnimationConfig,
