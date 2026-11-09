@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { scopeForTool, scopesAllow } from "@/lib/studio/mcp-scopes";
 import { MCP_PROJECT_TOOLS, McpToolError, type McpToolOutput } from "@/lib/studio/mcp-server";
 import { rememberBaseUrl } from "@/lib/render/engine";
 import { authenticateMcpRequest, withMcpPrincipal } from "@/lib/studio/mcp-auth";
@@ -133,6 +134,17 @@ export async function POST(request: NextRequest) {
           return errorResponse(id, METHOD_NOT_FOUND, `Outil inconnu : ${name}`);
         }
         const input = ((params as { arguments?: unknown }).arguments ?? {}) as Record<string, unknown>;
+        // Permissions du jeton personnel (lecture / écriture / export). Le jeton admin « legacy » n'est pas concerné.
+        if (principal.kind === "user" && principal.scopes) {
+          const needed = scopeForTool(name);
+          if (!scopesAllow(principal.scopes, needed)) {
+            void import("@/lib/studio/mcp-tokens").then((m) => m.auditDenied(principal.userId, principal.tokenId, name, needed)).catch(() => undefined);
+            return json(id, {
+              content: [{ type: "text", text: `Erreur : ce jeton n'a pas la permission « ${needed} » nécessaire pour ${name}. Créez un jeton avec cette permission dans Connexions MCP.` }],
+              isError: true,
+            });
+          }
+        }
         try {
           // Origine publique : utilisée par le rendu (navigateur interne) pour joindre l'app.
           const proto = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");

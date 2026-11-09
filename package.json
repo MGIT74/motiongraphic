@@ -13,6 +13,7 @@
     "test:security": "node tests/security/sandbox.security.cjs",
     "test:export": "node tests/export/export.mp4.mjs",
     "test:parcours": "node tests/parcours/parcours.cjs",
+    "test:mcp-tokens": "node --experimental-strip-types tests/mcp-tokens/scopes.test.mjs",
     "test:users": "NODE_OPTIONS=\"--experimental-strip-types --conditions react-server\" node tests/users/users.test.mjs"
   },
   "dependencies": {
