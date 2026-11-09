@@ -3,11 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowRight, Menu, Search, X } from "lucide-react";
+import { ArrowRight, Menu, X } from "lucide-react";
 
 const NAV = [
-  { href: "/explore", label: "Explore" },
-  { href: "/explore#categories", label: "Categories" },
   { href: "/studio", label: "Studio" },
 ] as const;
 
@@ -70,8 +68,7 @@ export default function Header() {
           />
           {NAV.map((item) => {
             const isActive =
-              pathname === item.href.split("#")[0] &&
-              (item.href !== "/explore#categories" || pathname === "/explore");
+              pathname === item.href;
             return (
               <Link
                 key={item.href}
@@ -83,11 +80,6 @@ export default function Header() {
                 }`}
               >
                 {item.label}
-                {item.href === "/studio" ? (
-                  <span className="ml-2 rounded-full border border-accent/40 bg-accent/10 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wider text-accent">
-                    Soon
-                  </span>
-                ) : null}
               </Link>
             );
           })}
@@ -95,17 +87,17 @@ export default function Header() {
 
         <div className="flex items-center gap-2.5">
           <Link
-            href="/explore"
+            href="/studio"
             className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface/50 text-muted transition-all hover:border-accent/50 hover:text-ink"
-            aria-label="Rechercher un template"
+            aria-label="Ouvrir le Studio"
           >
-            <Search className="h-4.5 w-4.5" aria-hidden="true" />
+            <ArrowRight className="h-4.5 w-4.5" aria-hidden="true" />
           </Link>
           <Link
             href="/explore"
             className="hidden h-11 items-center gap-2 rounded-full bg-ink px-5 text-sm font-semibold text-black transition-all hover:bg-white sm:inline-flex"
           >
-            Explorer
+            Ouvrir le Studio
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
           <button
@@ -131,7 +123,6 @@ export default function Header() {
                   className="flex h-12 items-center justify-between rounded-2xl px-3 text-sm font-medium text-muted transition-colors hover:bg-surface hover:text-ink"
                 >
                   {item.label}
-                  {item.href === "/studio" ? <span className="text-[10px] uppercase tracking-wider text-accent">Soon</span> : null}
                 </Link>
               </li>
             ))}
