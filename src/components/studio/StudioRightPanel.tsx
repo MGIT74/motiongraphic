@@ -167,71 +167,11 @@ function ElementProperties({
           />
         </div>
 
-        <div>
-          <label htmlFor="pr-x" className={labelCls}>Position X (%)</label>
-          <input
-            id="pr-x"
-            type="number"
-            min={0}
-            max={100}
-            value={element.x}
-            onChange={(e) => onPatchElement(element.id, { x: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
-            className={inputCls}
-          />
-        </div>
-
-        <div>
-          <label htmlFor="pr-y" className={labelCls}>Position Y (%)</label>
-          <input
-            id="pr-y"
-            type="number"
-            min={0}
-            max={100}
-            value={element.y}
-            onChange={(e) => onPatchElement(element.id, { y: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
-            className={inputCls}
-          />
-        </div>
-
-        <div>
-          <label htmlFor="pr-scale" className={labelCls}>Échelle</label>
-          <input
-            id="pr-scale"
-            type="number"
-            min={0.2}
-            max={3}
-            step={0.05}
-            value={element.scale}
-            onChange={(e) => onPatchElement(element.id, { scale: Math.max(0.2, Math.min(3, Number(e.target.value) || 1)) })}
-            className={inputCls}
-          />
-        </div>
-
-        <div>
-          <label htmlFor="pr-rotation" className={labelCls}>Rotation (°)</label>
-          <div className="flex items-center gap-2">
-            <input
-              id="pr-rotation"
-              type="range"
-              min={-180}
-              max={180}
-              step={1}
-              value={element.rotation ?? 0}
-              onChange={(e) => onPatchElement(element.id, { rotation: Math.round(Number(e.target.value)) || 0 })}
-              className="min-w-0 flex-1 cursor-pointer"
-              aria-label="Rotation en degrés"
-            />
-            <input
-              type="number"
-              min={-180}
-              max={180}
-              step={1}
-              value={element.rotation ?? 0}
-              onChange={(e) => onPatchElement(element.id, { rotation: Math.max(-180, Math.min(180, Math.round(Number(e.target.value) || 0))) })}
-              className={inputCls + " w-16"}
-              aria-label="Rotation (valeur)"
-            />
-          </div>
+        <div className="col-span-2 flex flex-col gap-3">
+          <SliderField id="pr-x" label="Position X" unit="%" min={0} max={100} step={1} reset={50} value={element.x} onChange={(v) => onPatchElement(element.id, { x: v })} />
+          <SliderField id="pr-y" label="Position Y" unit="%" min={0} max={100} step={1} reset={50} value={element.y} onChange={(v) => onPatchElement(element.id, { y: v })} />
+          <SliderField id="pr-scale" label="Échelle" unit="×" min={0.2} max={3} step={0.05} reset={1} value={element.scale} onChange={(v) => onPatchElement(element.id, { scale: Math.round(v * 100) / 100 })} />
+          <SliderField id="pr-rotation" label="Rotation" unit="°" min={-180} max={180} step={1} reset={0} value={element.rotation ?? 0} onChange={(v) => onPatchElement(element.id, { rotation: Math.round(v) })} />
         </div>
 
         <div>
@@ -455,6 +395,53 @@ function MediaOptionsFields({
         />
       </div>
     </>
+  );
+}
+
+function SliderField({ id, label, unit, min, max, step, reset, value, onChange }: {
+  id: string; label: string; unit: string; min: number; max: number; step: number; reset: number; value: number; onChange: (v: number) => void;
+}) {
+  const clamp = (v: number) => Math.max(min, Math.min(max, Number.isFinite(v) ? v : reset));
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <label htmlFor={id} className="text-[9px] font-medium uppercase tracking-wider text-muted">{label}</label>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={(e) => onChange(clamp(Number(e.target.value)))}
+            className="w-16 rounded-md border border-line bg-background px-1.5 py-0.5 text-right font-mono text-[11px] text-ink"
+            aria-label={`${label} (valeur)`}
+          />
+          <span className="w-3 text-[10px] text-muted">{unit}</span>
+          <button
+            type="button"
+            onClick={() => onChange(reset)}
+            disabled={value === reset}
+            className="rounded-md border border-line px-1.5 py-0.5 text-[10px] text-muted disabled:opacity-30"
+            aria-label={`Réinitialiser ${label}`}
+            title="Réinitialiser"
+          >
+            ↺
+          </button>
+        </div>
+      </div>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(clamp(Number(e.target.value)))}
+        className="h-2 w-full cursor-pointer accent-[#A1A1AA]"
+        aria-label={label}
+      />
+    </div>
   );
 }
 
