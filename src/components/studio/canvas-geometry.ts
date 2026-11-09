@@ -79,6 +79,22 @@ export function measureContentBox(layer: HTMLElement, stage: HTMLElement): Box {
   layer.style.transform = "none";
   try {
     const origin = stage.getBoundingClientRect();
+    // Template en code (iframe) : le runtime rapporte la boîte de son contenu (fractions du cadre).
+    const frame = layer.querySelector<HTMLIFrameElement>("iframe[data-content-box]");
+    if (frame) {
+      const parts = (frame.getAttribute("data-content-box") ?? "").split(",").map(Number);
+      if (parts.length === 4 && parts.every((v) => Number.isFinite(v))) {
+        const fr = frame.getBoundingClientRect();
+        const pad = 6;
+        return {
+          l: fr.left - origin.left + parts[0] * fr.width - pad,
+          t: fr.top - origin.top + parts[1] * fr.height - pad,
+          r: fr.left - origin.left + parts[2] * fr.width + pad,
+          b: fr.top - origin.top + parts[3] * fr.height + pad,
+          full: false,
+        };
+      }
+    }
     let l = Infinity;
     let t = Infinity;
     let r = -Infinity;
