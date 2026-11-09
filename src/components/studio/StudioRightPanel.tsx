@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Baseline, Check, Eye, EyeOff, GripVertical, Sparkles, X, Move, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, AlignCenter, AlignJustify, AlignLeft, AlignRight, Baseline, Check, Eye, EyeOff, GripVertical, Sparkles, X, Move, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
+import { requestAlign, type AlignEdge } from "@/components/studio/align-events";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
 import { supportsFontSize } from "@/lib/studio/typography";
 import type { ElementTiming, MediaOptions, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
@@ -303,6 +304,32 @@ function ElementProperties({
             <SliderField id="pr-y" label="Position Y" unit="%" min={0} max={100} step={1} reset={50} value={element.y} onChange={(v) => onPatchElement(element.id, { y: v })} />
             <SliderField id="pr-scale" label="Échelle" unit="×" min={0.2} max={3} step={0.05} reset={1} value={element.scale} onChange={(v) => onPatchElement(element.id, { scale: Math.round(v * 100) / 100 })} />
             <SliderField id="pr-rotation" label="Rotation" unit="°" min={-180} max={180} step={1} reset={0} value={element.rotation ?? 0} onChange={(v) => onPatchElement(element.id, { rotation: Math.round(v) })} />
+            <div>
+              <p className={labelCls}>Aligner sur la page</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(
+                  [
+                    ["left", "Gauche", AlignStartVertical],
+                    ["hcenter", "Centre horizontal", AlignCenterVertical],
+                    ["right", "Droite", AlignEndVertical],
+                    ["top", "Haut", AlignStartHorizontal],
+                    ["vcenter", "Centre vertical", AlignCenterHorizontal],
+                    ["bottom", "Bas", AlignEndHorizontal],
+                  ] as [AlignEdge, string, typeof AlignCenter][]
+                ).map(([edge, label, Icon]) => (
+                  <button
+                    key={edge}
+                    type="button"
+                    onClick={() => requestAlign(element.id, edge)}
+                    className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-line text-muted transition-colors hover:border-accent/50 hover:text-ink"
+                    aria-label={label}
+                    title={label}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            </div>
             {onMoveLayer ? (
               <LayersList
                 elements={scene.elements}
