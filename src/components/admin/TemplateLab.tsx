@@ -75,7 +75,7 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
     configText: "MOTION",
     primaryColor: "#F5F5F7",
     accentColor: "#A1A1AA",
-    backgroundColor: "#000000",
+    backgroundColor: "transparent",
     duration: "4",
     speed: "1",
     promptWeb: "",
@@ -104,7 +104,8 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
         text: f.configText.trim() || f.name.trim() || "MOTION",
         primaryColor: f.primaryColor.trim(),
         accentColor: f.accentColor.trim(),
-        backgroundColor: f.backgroundColor.trim(),
+        // Les templates n'ont pas de fond : il s'ajoute dans le Studio (option « Sans fond » / fond de scène).
+        backgroundColor: "transparent",
         duration,
         speed: Number(f.speed) || 1,
       },
@@ -362,7 +363,7 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
       text: editor.configText || editor.name || "MOTION",
       primaryColor: editor.primaryColor,
       accentColor: editor.accentColor,
-      backgroundColor: editor.backgroundColor,
+      backgroundColor: "transparent",
       duration: Number(editor.duration) || 4,
       speed: Number(editor.speed) || 1,
     };
@@ -747,10 +748,6 @@ function Editor({
           <div className="flex flex-col gap-1">
             <span className={labelCls}>Accent</span>
             <input type="color" value={toValidHex(editor.accentColor)} onChange={(e) => setEditor({ ...editor, accentColor: e.target.value })} className="h-10 w-full cursor-pointer rounded-xl border border-line" aria-label="Couleur accent" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className={labelCls}>Fond</span>
-            <input type="color" value={toValidHex(editor.backgroundColor)} onChange={(e) => setEditor({ ...editor, backgroundColor: e.target.value })} className="h-10 w-full cursor-pointer rounded-xl border border-line" aria-label="Couleur de fond" />
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="tl-speed" className={labelCls}>Vitesse</label>
