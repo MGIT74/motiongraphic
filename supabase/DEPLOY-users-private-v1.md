@@ -173,3 +173,43 @@ select tgname from pg_trigger join pg_class c on c.oid = tgrelid
 | invitations / activation / suspension | ✅ code complet (cycle réel Auth à exécuter sur un clone — séparé) |
 | projets des autres | ✅ RLS `user_id = auth.uid()` + contrôle de propriété sur les rendus/médias (P2/P3 validés sur votre instance) |
 | batteries locales (nouveau commit) | ✅ users 39/39, e2e 23/23, security 21/21, templates 11/11, parcours 15/15, export 28/28, lint/typecheck 0 |
+
+---
+
+# Plan de mise en production — état du 9 novembre 2026 (migrations 0011, 0014, 0015)
+
+**Rien de ce qui suit n'est exécuté. Chaque étape de production exige l'accord explicite du propriétaire.**
+0009 et 0010 sont DÉJÀ installées en production : ne jamais les rejouer.
+
+## A. Ce que la CI « Supabase jetable » a démontré (base locale éphémère, aucune donnée réelle)
+- Les migrations 0001 → 0015 s'appliquent depuis zéro ; 0011, 0014 et 0015 se rejouent deux fois sans erreur (idempotence).
+- `rls-users.sql` (S1–S7), `rls-selfcheck.sql`, le cycle d'invitation (Auth réel local) et les tests PostgREST avec de vrais JWT
+  (`status-guard.postgrest.mjs` a–h, `mcp-tokens-0011.postgrest.mjs` a–g) passent.
+- **Non couvert :** vrai email reçu, dérive du schéma de production par rapport au dépôt, appel MCP complet avec un jeton personnel,
+  charge, audit de sécurité exhaustif. La 0007 (PR #12) n'existe pas dans le dépôt.
+
+## B. Défauts de la 0009 corrigés par des migrations ADDITIVES
+| Migration | Défaut corrigé | Effet si absente |
+|---|---|---|
+| 0014 | La règle `invitations_read_invited` lisait `auth.users` (interdit à `authenticated`) | Toute lecture directe de `user_invitations` par un compte connecté échoue (le code actuel utilise `service_role`, donc rien ne casse aujourd'hui) |
+| 0015 | `request_is_service_role()` plante si `request.jwt.claims` est une chaîne vide | UPDATE de `profiles` hors PostgREST (éditeur SQL, maintenance) en erreur sur une connexion déjà utilisée |
+| 0011 | (nouveau) permissions, renouvellement, audit des jetons MCP | La création de jeton échoue : à exécuter AVANT d'activer le drapeau |
+
+Règle d'exploitation : le garde de rôle n'exempte que les admins et `service_role`. Pour promouvoir un compte depuis l'éditeur SQL,
+commencer la transaction par `select set_config('request.jwt.claims', '{"role":"service_role"}', true);`.
+
+## C. Séquence recommandée (chaque ligne = un accord distinct)
+1. **Instantané** de la base de production (sauvegarde XCloud/Postgres), et vérification que la sauvegarde est présente.
+2. Lecture seule : `select status, role, count(*) from public.profiles group by 1,2;` (fait le 8/11 : 1 admin actif).
+3. Exécuter **0014**, puis **0015** (éditeur SQL, une par une, relire le résultat).
+4. Fusionner la PR #38 dans `main` (déclenche un déploiement si le webhook est branché ; sinon déploiement manuel).
+5. Contrôles post-déploiement : connexion admin, création de projet, appel MCP legacy (27 outils), `/settings/mcp` répond
+   « pas encore activée » (503 attendu).
+6. Rotation des secrets (fenêtre séparée, plan à rédiger avec ChatGPT).
+7. Exécuter **0011**, puis seulement alors activer `MCP_USER_TOKENS=true` dans XCloud et redéployer.
+
+## D. Retour arrière
+- Code : redéployer le commit précédent de `main` (`93bcab6` au 8/11). Aucune perte de données.
+- 0014 : recréer l'ancienne règle (réintroduit son défaut). 0015 : recréer la fonction de la 0009 (réintroduit le défaut).
+- 0011 : `drop table public.mcp_token_audit;` et suppression des colonnes `scopes`, `rotated_from` — **perd les permissions et l'audit**.
+- Aucune migration n'est annulée automatiquement : on corrige en avançant.

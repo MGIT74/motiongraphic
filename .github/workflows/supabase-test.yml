@@ -50,6 +50,15 @@ jobs:
             echo "::endgroup::"
           done
 
+      # Idempotence : les migrations ajoutées après 0010 doivent pouvoir être rejouées sans erreur ni effet.
+      - name: Rejouer 0011, 0014, 0015 (idempotence)
+        run: |
+          for i in 1 2; do
+            for f in supabase/migrations/0011_*.sql supabase/migrations/0014_*.sql supabase/migrations/0015_*.sql; do
+              psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+            done
+          done
+
       - name: RLS multi-utilisateurs (rls-users.sql)
         run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/rls-users.sql
 
