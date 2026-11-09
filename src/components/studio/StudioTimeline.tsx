@@ -351,18 +351,6 @@ export default function StudioTimeline({
           aria-label="Trim droit — glisser pour changer la durée"
           data-trim="end"
         />
-        {onToggleHidden ? (
-          <span
-            className="absolute right-12 z-10 inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-white/80 opacity-60 hover:opacity-100 group-hover:opacity-100"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => onToggleHidden([element.id], !element.hidden)}
-            title={element.hidden ? "Afficher ce calque" : "Masquer ce calque"}
-            role="button"
-            aria-label={element.hidden ? "Afficher ce calque" : "Masquer ce calque"}
-          >
-            {element.hidden ? <EyeOff className="pointer-events-none h-3 w-3" aria-hidden="true" /> : <Eye className="pointer-events-none h-3 w-3" aria-hidden="true" />}
-          </span>
-        ) : null}
         <span
           className="absolute right-4 z-10 inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-red-300 opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-70"
           onPointerDown={(event) => event.stopPropagation()}
@@ -422,23 +410,46 @@ export default function StudioTimeline({
               {compact ? project.scenes.length : `TL · ${project.scenes.length} scènes`}
             </div>
             {lanes.map((lane) => {
-              const ids = lane.id === "motion" ? motionElements : lane.id === "media" ? mediaElements : [];
-              const allHidden = lane.id === "audio" ? !!project.audio?.muted : ids.length > 0 && ids.every((el) => el.hidden);
-              const canToggle = lane.id === "audio" ? !!project.audio && !!onToggleAudioMuted : ids.length > 0 && !!onToggleHidden;
+              const isAudio = lane.id === "audio";
+              const list = lane.id === "motion" ? motionElements : lane.id === "media" ? mediaElements : [];
+              const laneMap = lane.id === "motion" ? motionLanes.map : mediaLanes.map;
+              const rowCount = isAudio ? 1 : Math.max(1, lane.id === "motion" ? motionLanes.count : mediaLanes.count);
+              const eye = (hidden: boolean, enabled: boolean, onClick: () => void, label: string) => (
+                <button
+                  type="button"
+                  disabled={!enabled}
+                  onClick={onClick}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted hover:bg-line hover:text-ink disabled:opacity-30"
+                  aria-label={hidden ? `Afficher ${label}` : `Masquer ${label}`}
+                  title={hidden ? `Afficher ${label}` : `Masquer ${label}`}
+                >
+                  {hidden ? <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Eye className="h-3.5 w-3.5" aria-hidden="true" />}
+                </button>
+              );
               return (
-                <div key={lane.id} className={`flex items-center gap-2 border-b border-line/50 ${compact ? "justify-center px-0" : "px-3"}`} style={{ height: lane.height }} title={lane.label}>
-                  <lane.icon className={`h-3.5 w-3.5 ${allHidden ? "text-muted/40" : "text-muted"}`} aria-hidden="true" />
-                  <span className={compact ? "sr-only" : `flex-1 text-[11px] font-medium ${allHidden ? "text-ink/40 line-through" : "text-ink/80"}`}>{lane.label}</span>
-                  <button
-                    type="button"
-                    disabled={!canToggle}
-                    onClick={() => (lane.id === "audio" ? onToggleAudioMuted?.() : onToggleHidden?.(ids.map((el) => el.id), !allHidden))}
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted hover:bg-line hover:text-ink disabled:opacity-30"
-                    aria-label={allHidden ? `Afficher la piste ${lane.label}` : `Masquer la piste ${lane.label}`}
-                    title={allHidden ? `Afficher la piste ${lane.label}` : `Masquer la piste ${lane.label}`}
-                  >
-                    {allHidden ? <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Eye className="h-3.5 w-3.5" aria-hidden="true" />}
-                  </button>
+                <div key={lane.id} className="border-b border-line/50" style={{ height: lane.height }} title={lane.label}>
+                  {isAudio ? (
+                    <div className={`flex h-full items-center gap-2 ${compact ? "justify-center px-0" : "px-3"}`}>
+                      <lane.icon className={`h-3.5 w-3.5 ${project.audio?.muted ? "text-muted/40" : "text-muted"}`} aria-hidden="true" />
+                      <span className={compact ? "sr-only" : `flex-1 text-[11px] font-medium ${project.audio?.muted ? "text-ink/40 line-through" : "text-ink/80"}`}>{lane.label}</span>
+                      {eye(!!project.audio?.muted, !!project.audio && !!onToggleAudioMuted, () => onToggleAudioMuted?.(), "la musique")}
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ height: lane.id === "motion" ? motionTop - 32 : mediaTop - (32 + motionPx + 12) }} />
+                      {Array.from({ length: rowCount }, (_, row) => {
+                        const rowEls = list.filter((el) => (laneMap.get(el.id) ?? 0) === row);
+                        const rowHidden = rowEls.length > 0 && rowEls.every((el) => el.hidden);
+                        return (
+                          <div key={row} className={`flex items-center gap-2 ${compact ? "justify-center px-0" : "px-3"}`} style={{ height: LANE_PX }}>
+                            {row === 0 ? <lane.icon className="h-3.5 w-3.5 text-muted" aria-hidden="true" /> : <span className="w-3.5" />}
+                            <span className={compact ? "sr-only" : "flex-1 text-[11px] font-medium text-ink/80"}>{row === 0 ? lane.label : ""}</span>
+                            {eye(rowHidden, rowEls.length > 0 && !!onToggleHidden, () => onToggleHidden?.(rowEls.map((el) => el.id), !rowHidden), `la ligne ${row + 1} (${lane.label})`)}
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
               );
             })}
