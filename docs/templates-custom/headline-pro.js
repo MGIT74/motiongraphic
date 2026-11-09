@@ -25,13 +25,14 @@ window.__MGS_TIMELINE__ = {
     stage.style.background = bg;
 
     var W = window.innerWidth, H = window.innerHeight;
-    var key = [text, ink, accent, W, H, lh, ls, wsp, al].join("|");
+    var ff = params.fontCss || "'Helvetica Neue',Inter,Arial,sans-serif", fsig = ff + (document.fonts ? document.fonts.size : 0);
+    var key = [text, ink, accent, W, H, lh, ls, wsp, al, fsig].join("|");
     var box = stage.firstChild;
     if (!box || box.getAttribute("data-key") !== key) {
       stage.innerHTML = "";
       box = document.createElement("div");
       box.setAttribute("data-key", key);
-      box.style.cssText = "width:84%;text-align:" + al + ";font-family:'Helvetica Neue',Inter,Arial,sans-serif;font-weight:800;line-height:" + (1.08 * lh) + ";letter-spacing:" + (-0.01 + ls) + "em;word-spacing:" + wsp + "em;color:" + ink + ";";
+      box.style.cssText = "width:84%;text-align:" + al + ";font-family:" + ff + ";font-weight:800;line-height:" + (1.08 * lh) + ";letter-spacing:" + (-0.01 + ls) + "em;word-spacing:" + wsp + "em;color:" + ink + ";";
       stage.appendChild(box);
       var parts = text.split(/(\*[^*]+\*[.,;:!?…»)]*|\s+)/).filter(function (s) { return s && !/^\s+$/.test(s); });
       parts.forEach(function (raw, i) {

@@ -24,13 +24,14 @@ window.__MGS_TIMELINE__ = {
 
     var W = window.innerWidth, H = window.innerHeight;
     var stage = document.getElementById("bn-stage");
-    var key = [raw, ink, accent, W, H, lh, ls, wsp, al].join("|");
+    var ff = params.fontCss || "'Helvetica Neue',Inter,Arial,sans-serif", fsig = ff + (document.fonts ? document.fonts.size : 0);
+    var key = [raw, ink, accent, W, H, lh, ls, wsp, al, fsig].join("|");
     if (!stage || stage.getAttribute("data-key") !== key) {
       if (stage) stage.remove();
       stage = document.createElement("div");
       stage.id = "bn-stage";
       stage.setAttribute("data-key", key);
-      stage.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;align-items:" + (al === "left" ? "flex-start" : al === "right" ? "flex-end" : al === "justify" ? "stretch" : "center") + ";justify-content:center;gap:" + (2.2 * lh) + "vmin;padding:0 " + (al === "left" || al === "right" ? "7vmin" : "0") + ";overflow:hidden;font-family:'Helvetica Neue',Inter,Arial,sans-serif;text-align:" + (al === "justify" ? "justify" : al) + ";word-spacing:" + wsp + "em;";
+      stage.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;align-items:" + (al === "left" ? "flex-start" : al === "right" ? "flex-end" : al === "justify" ? "stretch" : "center") + ";justify-content:center;gap:" + (2.2 * lh) + "vmin;padding:0 " + (al === "left" || al === "right" ? "7vmin" : "0") + ";overflow:hidden;font-family:" + ff + ";text-align:" + (al === "justify" ? "justify" : al) + ";word-spacing:" + wsp + "em;";
       var big = document.createElement("div");
       big.id = "bn-big";
       big.style.cssText = "font-weight:900;line-height:" + lh + ";letter-spacing:" + (-0.03 + ls) + "em;white-space:nowrap;font-variant-numeric:tabular-nums;color:" + accent + ";";

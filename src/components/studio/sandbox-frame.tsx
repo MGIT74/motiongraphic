@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { fontCss } from "@/lib/brand/fonts";
+import { getFontFaces } from "@/lib/brand/font-faces";
 
 /**
  * Runtime de bac à sable déterministe pour les templates « code ».
@@ -120,7 +122,7 @@ const lastLoadIdBySession = new Map<string, string>();
 export default function SandboxTimelineFrame({
   code,
   sourceTemplate,
-  params,
+  params: rawParams,
   time,
   compatible = true,
   preview = false,
@@ -160,6 +162,11 @@ export default function SandboxTimelineFrame({
   /* ------------------------------------------------------------------ */
 
   // Session UNIQUE par instance (aucun cross-talk ; route : ?s=<session>).
+  // Police de marque : le template reçoit `fontCss` (font-family) ; les @font-face partent
+  // séparément en data: (message mgsi:font) car l'iframe n'a pas accès au réseau.
+  const fontId = typeof rawParams.fontFamily === "string" ? rawParams.fontFamily : undefined;
+  const css = fontCss(fontId);
+  const params = useMemo<SandboxParams>(() => (css ? { ...rawParams, fontCss: css } : rawParams), [rawParams, css]);
   const invalidFrame = !code && !sourceTemplate;
   const sessionUid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const sessionId = `sbx-${sessionUid}`;
@@ -328,6 +335,18 @@ export default function SandboxTimelineFrame({
     sendParamsRef.current = sendParamsNow;
   }, [sendParamsNow]);
 
+  const sendFontRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    sendFontRef.current = () => {
+      if (!fontId) return;
+      void getFontFaces(fontId).then(({ css: faces, families }) => {
+        const win = iframeRef.current?.contentWindow;
+        if (win && faces) win.postMessage({ type: "mgsi:font", session: sessionId, css: faces, families }, "*");
+      });
+    };
+    sendFontRef.current();
+  }, [fontId, sessionId]);
+
   /* Reconstruction srcdoc (éditeur live : params inline -> settled). */
   const docKey = keyOf(code ?? `route:${sourceTemplate?.templateId}:${sourceTemplate?.version ?? ""}`, sessionId, JSON.stringify(params));
   const [lastDocKey, setLastDocKey] = useState(docKey);
@@ -426,6 +445,7 @@ export default function SandboxTimelineFrame({
           return;
         }
         if (loadId) lastLoadIdBySession.set(sessionId, loadId);
+        sendFontRef.current();
 
         const incompatible = data.mode === "free" || !compatible;
         setRuntimeIncompatible(incompatible);
@@ -444,6 +464,11 @@ export default function SandboxTimelineFrame({
           queuedSeekRef.current = currentTimeRef.current;
           flushQueuedSeek();
         }
+        return;
+      }
+      if (data.type === "mgsi:font_ready") {
+        // Police chargée dans l'iframe : on re-rend avec les paramètres courants (ack complet + bbox).
+        if (paramsSettledRef.current) sendParamsRef.current(paramsRef.current);
         return;
       }
       if (data.type === "mgsi:error") {
