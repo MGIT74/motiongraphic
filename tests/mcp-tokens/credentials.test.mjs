@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { extractMcpCandidate as x } from "../../src/lib/studio/mcp-credentials.ts";
+const h = (o = {}) => ({ get: (k) => o[k.toLowerCase()] ?? null });
+const U = "https://s.test/api/mcp";
+assert.equal(x(h({ authorization: "Bearer abc" }), U), "abc");
+assert.equal(x(h({ "x-api-key": "k1" }), U), "k1");
+assert.equal(x(h(), U), "");
+assert.equal(x(h(), `${U}?token=mgsi_abc`), "mgsi_abc");
+assert.equal(x(h(), `${U}?token=legacysecret`), "", "admin refusé en URL par défaut");
+assert.equal(x(h(), `${U}?token=legacysecret`, { MCP_QUERY_TOKEN_LEGACY: "true" }), "legacysecret");
+assert.equal(x(h({ authorization: "Bearer hdr" }), `${U}?token=mgsi_q`), "hdr", "l'en-tête prime");
+assert.equal(x(h(), "pas une url"), "");
+console.log("credentials: 8 checks OK");
