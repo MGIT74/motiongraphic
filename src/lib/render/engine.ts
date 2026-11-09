@@ -356,7 +356,7 @@ async function prepareAudio(project: import("@/lib/studio/project-model").Studio
   const total = projectDuration(project);
   const span = Math.max(0.1, total - audio.start);
   const available = asset.duration ? Math.max(0.1, asset.duration - audio.trimStart) : span;
-  const len = Math.min(span, available);
+  const len = Math.min(span, available, audio.length ?? Infinity);
   const fadeOut = Math.min(audio.fadeOut, len);
   const delayMs = Math.round(audio.start * 1000);
   const filter =
