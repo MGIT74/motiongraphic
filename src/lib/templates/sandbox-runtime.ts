@@ -193,14 +193,14 @@ const PRELUDE_V2_SOURCE = `
         Promise.resolve()
           .then(function () { return contract.renderAt(tNow, window.MGSI_CONFIG || {}); })
           .then(function () {
-            nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: tNow, metrics: metrics }); });
+            nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: tNow, metrics: metrics, bbox: measureBox() }); });
           }, function (err) {
             metrics.errors++;
             post({ type: "mgsi:error", seq: data.id, message: String(err && err.message || err) });
             nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: tNow, degraded: true, metrics: metrics }); });
           });
       } else {
-        nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: tNow, metrics: metrics }); });
+        nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: tNow, metrics: metrics, bbox: measureBox() }); });
       }
     } else {
       metrics.ignored++;

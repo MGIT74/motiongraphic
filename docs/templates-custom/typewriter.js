@@ -25,7 +25,7 @@ window.__MGS_TIMELINE__ = {
     stage.style.background = bg;
 
     var W = window.innerWidth, H = window.innerHeight;
-    var key = [text, ink, accent, W, H, fs, lh, ls, wsp, al].join("|");
+    var key = [text, ink, accent, W, H, lh, ls, wsp, al].join("|");
     var box = stage.firstChild;
     var chars;
     if (!box || box.getAttribute("data-key") !== key) {
@@ -79,8 +79,11 @@ window.__MGS_TIMELINE__ = {
         box.style.fontSize = mid + "px";
         if (box.scrollHeight <= H * 0.5 && box.scrollWidth <= box.clientWidth + 1) lo = mid; else hi = mid;
       }
-      box.style.fontSize = (lo * fs) + "px";
+      box.style.fontSize = lo + "px";
+      box.setAttribute("data-base", String(lo));
     }
+    // La taille de police se règle à chaque rendu (sans reconstruire le DOM : curseur fluide).
+    box.style.fontSize = (parseFloat(box.getAttribute("data-base")) * fs) + "px";
 
     chars = box.querySelectorAll(".tw-c");
     var visibleChars = [];

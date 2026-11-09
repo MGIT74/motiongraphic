@@ -65,6 +65,22 @@ export default function StudioCanvas({
     center0: Pt;
   } | null>(null);
   const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    // Un template en code a re-rendu : sa boîte de contenu a changé -> re-mesure (1 fois par image).
+    const stage = stageRef.current;
+    if (!stage) return;
+    let raf = 0;
+    const on = () => {
+      if (dragRef.current) return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setResizeTick((n) => n + 1));
+    };
+    stage.addEventListener("mg-content-box", on);
+    return () => {
+      cancelAnimationFrame(raf);
+      stage.removeEventListener("mg-content-box", on);
+    };
+  }, []);
 
   const sceneStart = sceneOffsets(project)[Math.min(sceneIndex, project.scenes.length - 1)] ?? 0;
   const activeEls = scene.elements.filter((el) => !el.hidden && time >= sceneStart + el.start && time < sceneStart + el.start + el.duration);
