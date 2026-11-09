@@ -37,7 +37,7 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     name: "Kinetic Typography Pro",
     description: "Typographie éditoriale premium : entrée masquée avec profondeur, accent coloré et sortie rythmée.",
     technologies: ["React", "GSAP", "CSS"],
-    defaultConfig: CONFIG({ text: "MAKE IT\\nMOVE", duration: 4.8, accentColor: "#9A7CFF", backgroundColor: "#0B0C12" }),
+    defaultConfig: CONFIG({ text: "MAKE IT\nMOVE", duration: 4.8, accentColor: "#9A7CFF", backgroundColor: "#0B0C12" }),
   },
   "text-reveal-01": {
     key: "text-reveal-01",
