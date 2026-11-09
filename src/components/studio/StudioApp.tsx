@@ -646,6 +646,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
         for (const id of ids) next = updateElement(next, scene.id, id, (el) => ({ ...el, hidden: hidden ? true : undefined }));
         commit(next, "toggle-hidden");
       }}
+      onChangeSceneDuration={updateSceneDuration}
       onChangeAudio={(patch, gesture) => {
         if (!project.audio) return;
         commit(setProjectAudio(project, { ...project.audio, ...patch }), "audio-clip", `audio-clip:${gesture}`);

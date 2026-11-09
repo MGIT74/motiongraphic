@@ -47,6 +47,7 @@ export default function StudioTimeline({
   onToggleHidden,
   onToggleAudioMuted,
   onChangeAudio,
+  onChangeSceneDuration,
   onDropTemplate,
   compact = false,
 }: {
@@ -67,6 +68,8 @@ export default function StudioTimeline({
   onToggleAudioMuted?: () => void;
   /** Déplace / rogne le bloc audio (début, décalage dans le fichier, durée). */
   onChangeAudio?: (patch: Partial<ProjectAudio>, gesture: number) => void;
+  /** Glisser la ligne de séparation de scène : change la durée de la scène qui la précède. */
+  onChangeSceneDuration?: (sceneIndex: number, duration: number) => void;
   /** Template déposé depuis la bibliothèque à l'instant global `time`. */
   onDropTemplate?: (templateKey: string, time: number) => void;
   /** Écran étroit : pistes plus basses, libellés en icônes, poignées plus larges (doigt). */
@@ -135,6 +138,32 @@ export default function StudioTimeline({
         const d = Math.max(-Math.min(audio.start, audio.trimStart), Math.min(len0 - 0.5, delta));
         onChangeAudio({ start: roundToFrame(audio.start + d), trimStart: roundToFrame(audio.trimStart + d), length: roundToFrame(len0 - d) }, gesture);
       }
+    };
+    const onUp = () => {
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  /** Glisser le bord droit d'une scène (ligne de séparation) : raccourcit / allonge la séquence. */
+  const onSceneEdgeDown = (index: number, e: PointerEvent) => {
+    const sc = project.scenes[index];
+    if (!sc || !onChangeSceneDuration || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    const startX = e.clientX;
+    const d0 = sc.duration;
+    const snapTo = [sc.elements.reduce((m, el) => Math.max(m, el.start + el.duration), 0)];
+    // eslint-disable-next-line react-hooks/immutability -- confiné au gestionnaire de glissement
+    document.body.style.userSelect = "none";
+    const onMove = (ev: globalThis.PointerEvent) => {
+      let next = d0 + (ev.clientX - startX) / pxPerSec;
+      if (snapOn && !ev.altKey) for (const p of snapTo) if (Math.abs(next - p) < 0.15) next = p;
+      onChangeSceneDuration(index, roundToFrame(Math.max(1, Math.min(600, next))));
     };
     const onUp = () => {
       document.body.style.userSelect = "";
@@ -534,6 +563,16 @@ export default function StudioTimeline({
                 <span className="pointer-events-none absolute -left-0 top-1 z-10 rounded-r-full bg-elevated px-2 py-[2px] font-mono text-[9px] text-muted">
                   {sc.name}
                 </span>
+                {onChangeSceneDuration ? (
+                  <span
+                    onPointerDown={(e) => onSceneEdgeDown(i, e)}
+                    className="group absolute -right-1.5 top-0 bottom-0 z-20 flex w-3 cursor-ew-resize touch-none justify-center"
+                    title="Glisser pour changer la durée de la scène"
+                    aria-label={`Durée de la scène ${sc.name}`}
+                  >
+                    <span className="h-full w-0.5 bg-transparent transition-colors group-hover:bg-accent" />
+                  </span>
+                ) : null}
               </div>
             ))}
 
