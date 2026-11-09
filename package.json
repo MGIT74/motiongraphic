@@ -14,6 +14,7 @@
     "test:export": "node tests/export/export.mp4.mjs",
     "test:parcours": "node tests/parcours/parcours.cjs",
     "test:mcp-tokens": "node --experimental-strip-types tests/mcp-tokens/scopes.test.mjs",
+    "test:settings-mcp": "node tests/settings/mcp-tokens.e2e.cjs",
     "test:users": "NODE_OPTIONS=\"--experimental-strip-types --conditions react-server\" node tests/users/users.test.mjs"
   },
   "dependencies": {

@@ -144,3 +144,17 @@ Mesuré : 15 s de vidéo 1080p rendues en ~57 s (4 cœurs).
 - `render_project` reste refusé pour tout jeton utilisateur tant que le pipeline de rendu multi-utilisateur n'est pas validé, même avec la permission `export`.
 - Routes : `/api/settings/mcp-tokens` (GET, POST, DELETE), `/api/settings/mcp-tokens/{id}/rotate`, `/api/admin/mcp-tokens` (GET, DELETE, admin actif).
 - Garde-fous : 10 jetons actifs maximum par compte, 10 créations/renouvellements par heure (limiteur en mémoire), `last_used_at` réécrit au plus toutes les 5 minutes, audit de chaque création, renouvellement, révocation et refus de permission, aucune valeur de jeton journalisée.
+
+
+## Connexions MCP personnelles (`/settings/mcp`)
+
+Dashboard « Accès MCP » (branche `feat/mcp-tokens-ui`) : chaque
+utilisateur gère SES jetons MCP (création, renouvellement, révocation,
+expiration) — le serveur ne stocke AUCUN jeton en clair : seul le
+empreinte SHA-256 figure en base (`mcp_user_tokens`, migration 0009) ;
+la valeur n'est rendue qu'UNE fois (création/renouvellement) et n'est
+jamais conservée côté client. Les jetons sont inactifs tant que le
+drapeau serveur n'est pas activé (503 clair à l'écran). Architecture
+d'isolation : chaque jeton = identité utilisateur (RLS `user_id =
+auth.uid()`) — voir `src/lib/studio/mcp-tokens.ts` (dormant) et le
+contrat d'API dans `src/components/settings/McpTokensPanel.tsx`.
