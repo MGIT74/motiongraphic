@@ -86,6 +86,40 @@ const PRELUDE_V2_SOURCE = `
     message.session = SESSION;
     try { window.parent.postMessage(message, "*"); } catch (e) { metrics.errors++; }
   }
+  // Boîte englobante du contenu visible (fractions 0..1 du cadre) : sert à la sélection sur le canvas.
+  function measureBox() {
+    try {
+      var W = window.innerWidth, H = window.innerHeight;
+      if (!W || !H) return null;
+      var l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+      var nodes = document.body.getElementsByTagName("*");
+      var n = Math.min(nodes.length, 700);
+      for (var i = 0; i < n; i++) {
+        var el = nodes[i];
+        var tag = String(el.tagName).toLowerCase();
+        if (tag === "script" || tag === "style") continue;
+        var counts = tag === "svg" || tag === "canvas" || tag === "video" || tag === "img";
+        if (!counts) {
+          for (var c = 0; c < el.childNodes.length; c++) {
+            var node = el.childNodes[c];
+            if (node.nodeType === 3 && String(node.textContent || "").replace(/\\s+/g, "") !== "") { counts = true; break; }
+          }
+        }
+        if (!counts) {
+          var cs = getComputedStyle(el);
+          var bg = cs.backgroundColor;
+          if ((bg && bg !== "transparent" && bg.indexOf("rgba(0, 0, 0, 0)") !== 0) || (cs.backgroundImage && cs.backgroundImage !== "none")) counts = true;
+        }
+        if (!counts) continue;
+        var rc = el.getBoundingClientRect();
+        if (rc.width < 1 || rc.height < 1) continue;
+        if (rc.width >= W * 0.94 && rc.height >= H * 0.94) continue;
+        l = Math.min(l, rc.left); t = Math.min(t, rc.top); r = Math.max(r, rc.right); b = Math.max(b, rc.bottom);
+      }
+      if (!isFinite(l) || r - l < 2 || b - t < 2) return null;
+      return { l: Math.max(0, l / W), t: Math.max(0, t / H), r: Math.min(1, r / W), b: Math.min(1, b / H) };
+    } catch (e) { return null; }
+  }
   function nextTick(cb) {
     // Le rendu d'un calque doit suivre renderAt SANS dépendre de rAF (les
     // iframes opaques peuvent être étranglées par le compositing Chromium) :
@@ -123,7 +157,7 @@ const PRELUDE_V2_SOURCE = `
     Promise.resolve()
       .then(function () { return contract.renderAt(t, window.MGSI_CONFIG || {}); })
       .then(function () {
-        nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: t, metrics: metrics }); });
+        nextTick(function () { post({ type: "mgsi:frame", seq: data.id, t: t, metrics: metrics, bbox: measureBox() }); });
       }, function (err) {
         metrics.errors++;
         post({ type: "mgsi:error", seq: data.id, message: String(err && err.message || err) });

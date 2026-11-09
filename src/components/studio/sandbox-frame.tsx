@@ -359,6 +359,7 @@ export default function SandboxTimelineFrame({
             seq?: number;
             t?: number;
             degraded?: boolean;
+            bbox?: unknown;
             mode?: string;
             code?: string;
             message?: string;
@@ -432,6 +433,16 @@ export default function SandboxTimelineFrame({
         return;
       }
       if (data.type === "mgsi:frame" && typeof data.seq === "number") {
+        // Boîte du contenu (sélection sur le canvas) : fractions du cadre, validées avant usage.
+        const bb = data.bbox as { l?: unknown; t?: unknown; r?: unknown; b?: unknown } | null | undefined;
+        const iframeEl = iframeRef.current;
+        if (iframeEl) {
+          if (bb && [bb.l, bb.t, bb.r, bb.b].every((v) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1)) {
+            iframeEl.setAttribute("data-content-box", `${bb.l},${bb.t},${bb.r},${bb.b}`);
+          } else {
+            iframeEl.removeAttribute("data-content-box");
+          }
+        }
         const pending = pendingRef.current.get(data.seq);
         if (!pending) return;
         pendingRef.current.delete(data.seq);
