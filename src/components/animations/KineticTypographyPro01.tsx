@@ -8,7 +8,7 @@ import { buildKineticTypographyPro } from "@/lib/animations/kinetic-typography-p
 const MAX_CHARS = 34;
 export function KineticTypographyPro01Frame({ config }: AnimationComponentProps) {
   const { text, primaryColor, accentColor, backgroundColor } = config;
-  const lines = useMemo(() => (text.trim() || "MAKE IT\\nMOVE").toUpperCase().split("\\n").slice(0, 3).map(line => Array.from(line.slice(0, MAX_CHARS))), [text]);
+  const lines = useMemo(() => (text.trim() || "MAKE IT\nMOVE").toUpperCase().split("\n").slice(0, 3).map(line => Array.from(line.slice(0, MAX_CHARS))), [text]);
   const longest = Math.max(1, ...lines.map(line => line.length));
   const size = Math.min(17, 165 / Math.max(8, longest));
   return (
