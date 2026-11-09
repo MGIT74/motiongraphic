@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
-export type McpPrincipal = { userId: string; kind: "user" | "legacy" };
+export type McpPrincipal = { userId: string; kind: "user" | "legacy"; scopes?: string[]; tokenId?: string };
 const principalStore = new AsyncLocalStorage<McpPrincipal>();
 
 export function withMcpPrincipal<T>(principal: McpPrincipal, run: () => Promise<T>): Promise<T> {
@@ -29,6 +29,15 @@ export async function authenticateMcpRequest(request: Request): Promise<McpPrinc
   if (!candidate) return null;
   if (legacy && safeEqual(candidate, legacy) && process.env.MCP_USER_ID) {
     return { userId: process.env.MCP_USER_ID, kind: "legacy" };
+  }
+  // Jetons MCP personnels (PRÉPARATOIRE V1) : inactifs tant que le drapeau
+  // serveur MCP_USER_TOKENS n'est pas activé explicitement (jamais par
+  // défaut). Vérification : hash, révocation, expiration, compte actif.
+  if (candidate.startsWith("mgsi_") && process.env.MCP_USER_TOKENS === "true") {
+    const { verifyUserToken } = await import("./mcp-tokens");
+    const principal = await verifyUserToken(candidate).catch(() => null);
+    if (principal) return { userId: principal.userId, kind: "user", scopes: principal.scopes, tokenId: principal.tokenId };
+    return null;
   }
   // Activation explicite après revue sécurité et tests d’isolation des ressources.
   if (process.env.MCP_ENABLE_USER_TOKENS !== "true") return null;

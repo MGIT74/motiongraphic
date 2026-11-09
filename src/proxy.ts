@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { tryActivateSuspendedUser, type ActivationOutcome } from "@/lib/admin/activation";
 
 /**
  * Accès privé au Studio, sans mode construction.
@@ -50,9 +51,48 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
   let admin = false;
-  if (user && (isAdmin || isHome || isLogin)) {
-    const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-    admin = (data as { role?: string } | null)?.role === "admin";
+  let suspended = false;
+  if (user && (isAdmin || isHome || isLogin || isPrivate)) {
+    const { data, error } = await supabase.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+    const profile = (data as { role?: string; status?: string } | null);
+    // FAIL-CLOSED (audit) : profil ABSENT ou lecture en erreur →
+    // l"utilisateur ne franchit pas : tentative d"activation (invitation
+    // valide) sinon page de suspension (aucune opé).
+    suspended = profile?.status === "suspended";
+    if ((!profile || error) && isPrivate) {
+      const activation: ActivationOutcome = await tryActivateSuspendedUser(user.id, user.email ?? null);
+      if (activation === "activated") {
+        suspended = false;
+        const recheck2 = await supabase.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+        const fresh = (recheck2 as { data: { role?: string; status?: string } | null }).data;
+        admin = fresh?.role === "admin";
+        suspended = fresh?.status === "suspended";
+      } else if (!isLogin) {
+        return suspendedPage();
+      }
+    }
+    if (profile?.role === "admin") admin = true;
+    if (profile?.status === "suspended") suspended = true;
+    if (suspended && !isHome) {
+      // Garde centrale côté serveur : valider l"invitation AVANT tout
+      // accès (couvre connexion directe, liens, renouvellements, appels
+      // API — pas seulement le formulaire /login). Seule une invitation
+      // en attente valide est consommée (atomique) et activée ici.
+      const activation: ActivationOutcome = await tryActivateSuspendedUser(user.id, user.email ?? null);
+      if (activation === "activated") {
+        // Réévaluer l"identité (rôle de l"invitation) pour la redirection.
+        suspended = false;
+        const recheck = await supabase.from("profiles").select("role, status").eq("id", user.id).maybeSingle();
+        const fresh = (recheck as { data: { role?: string; status?: string } | null }).data;
+        admin = fresh?.role === "admin";
+        suspended = fresh?.status === "suspended";
+      }
+      if (suspended) {
+        // Suspension administrative réelle (ou invitation révoquée/épuisée) :
+        // aucune navigation privée ; les API renvoient 423 et la RLS bloque.
+        return suspendedPage();
+      }
+    }
   }
 
   let destination: string | null = null;
@@ -64,6 +104,22 @@ export async function proxy(request: NextRequest) {
   const result = redirect(request, destination);
   response.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
   return result;
+}
+
+/** Page statique de suspension (aucune donnée, pas de navigation privée). */
+function suspendedPage(): NextResponse {
+  const body = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Compte suspendu — MotionGraphic</title>
+<style>body{font-family:system-ui,sans-serif;background:#0b0c10;color:#e5e7eb;display:grid;place-items:center;min-height:100vh;margin:0}
+main{max-width:32rem;padding:2rem;text-align:center}h1{font-size:1.5rem}p{color:#9ca3af;line-height:1.6}</style></head>
+<body><main><h1>Compte suspendu</h1>
+<p>Ce compte est désactivé. Vos projets restent enregistrés, mais aucune opération n'est possible actuellement.</p>
+<p>Contactez un administrateur de MotionGraphic pour réactiver l'accès.</p></main></body></html>`;
+  return new NextResponse(body, {
+    status: 403,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
 }
 
 function redirect(request: NextRequest, path: string): NextResponse {
