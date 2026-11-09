@@ -55,3 +55,18 @@ ok("limiteur : bloque au-delà du maximum, libère après la fenêtre", () => {
   assert.equal(rateLimited(k, 3, 1000, 5000), false);
 });
 console.log(`\n${n} contrôles OK`);
+
+// Aperçus : limite de débit et de parallélisme pour les comptes non admin
+{
+  const { acquirePreviewSlot, releasePreviewSlot, MAX_PARALLEL_PREVIEWS } = await import("../../src/lib/studio/mcp-scopes.ts");
+  const t0 = 1_000_000;
+  assert.equal(acquirePreviewSlot("u-prev-a", t0), "ok");
+  assert.equal(acquirePreviewSlot("u-prev-b", t0), "ok");
+  assert.equal(MAX_PARALLEL_PREVIEWS, 2);
+  assert.equal(acquirePreviewSlot("u-prev-c", t0), "busy", "3e aperçu parallèle refusé");
+  releasePreviewSlot();
+  releasePreviewSlot();
+  for (let i = 0; i < 20; i += 1) { assert.equal(acquirePreviewSlot("u-prev-d", t0 + i), "ok"); releasePreviewSlot(); }
+  assert.equal(acquirePreviewSlot("u-prev-d", t0 + 100), "rate", "21e aperçu en 10 min refusé");
+  console.log("aperçus : contrôles OK");
+}

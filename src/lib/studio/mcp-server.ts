@@ -944,12 +944,27 @@ export const MCP_PROJECT_TOOLS = [
       },
     },
     run: async (input: McpInput): Promise<McpToolOutput> => {
-      if (requireMcpPrincipal().kind !== "legacy") throw new McpToolError("Aperçu MCP multi-utilisateur temporairement désactivé en attente de validation du moteur.");
       const { projectId } = await needProject(input);
       const { previewFrame } = await import("@/lib/render/engine");
       const time = optNumber(input, "time") ?? 0;
       const width = Math.max(320, Math.min(1920, optNumber(input, "width") ?? 960));
-      const jpeg = await previewFrame(projectId, time, width);
+      // Propriété du projet déjà vérifiée par needProject (RLS + user_id). Les comptes
+      // non admin sont limités en débit et en parallélisme (Chromium coûteux).
+      const principal = requireMcpPrincipal();
+      let slot = false;
+      if (principal.kind !== "legacy") {
+        const { acquirePreviewSlot } = await import("./mcp-scopes");
+        const state = acquirePreviewSlot(principal.userId);
+        if (state === "rate") throw new McpToolError("Trop d'aperçus : 20 maximum par 10 minutes. Réessayez dans un instant.");
+        if (state === "busy") throw new McpToolError("Serveur d'aperçu occupé. Réessayez dans quelques secondes.");
+        slot = true;
+      }
+      let jpeg: Buffer;
+      try {
+        jpeg = await previewFrame(projectId, time, width);
+      } finally {
+        if (slot) (await import("./mcp-scopes")).releasePreviewSlot();
+      }
       return {
         content: [
           { type: "image", data: jpeg.toString("base64"), mimeType: "image/jpeg" },
