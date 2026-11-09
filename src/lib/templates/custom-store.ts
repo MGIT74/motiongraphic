@@ -79,7 +79,7 @@ function demoSeedCTA(): CustomTemplate | null {
     defaultConfig: {
       text: "ESSAYEZ",
       primaryColor: "#F5F5F7",
-      accentColor: "#0A84FF",
+      accentColor: "#A1A1AA",
       backgroundColor: "#000000",
       duration: 2.8,
       speed: 1,

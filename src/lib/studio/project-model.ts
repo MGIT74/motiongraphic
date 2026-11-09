@@ -131,6 +131,8 @@ export interface StudioElement {
   x: number; // 0-100 (% du centre)
   y: number;
   scale: number; // 0.1-3
+  /** Rotation en degrés (-180 à 180), autour du centre de l'élément. */
+  rotation?: number;
   /** Élément média (kind = "media") : image/vidéo importée et son habillage. */
   media?: MediaOptions;
   /**
@@ -298,7 +300,7 @@ export function makeDefaultProject(
         makeElement("kinetic-type-01", "text", {
           text: "Votre SaaS",
           primaryColor: "#F5F5F7",
-          accentColor: "#64D2FF",
+          accentColor: "#A1A1AA",
           backgroundColor: "#000000",
           duration: 3.2,
           speed: 1,
@@ -308,7 +310,7 @@ export function makeDefaultProject(
         makeElement("staggered-cards-01", "cards", {
           text: "UI MOTION",
           primaryColor: "#E7E7EF",
-          accentColor: "#0A84FF",
+          accentColor: "#A1A1AA",
           backgroundColor: "#000000",
           duration: 4.2,
           speed: 1,
@@ -392,6 +394,7 @@ export function validateProject(input: unknown): StudioProject | null {
           x: clampNumber(Number(e.x), 0, 100),
           y: clampNumber(Number(e.y), 0, 100),
           scale: clampNumber(Number(e.scale), 0.2, 3),
+          ...(Number.isFinite(Number(e.rotation)) && Number(e.rotation) !== 0 ? { rotation: clampNumber(Number(e.rotation), -180, 180) } : {}),
           ...(ELEMENT_TIMINGS.includes(e.timing as ElementTiming) ? { timing: e.timing as ElementTiming } : {}),
           ...(media ? { media } : {}),
         });
@@ -498,7 +501,7 @@ export function makeMediaElement(
   const media = sanitizeMediaOptions({ fit: "cover", frame: "none", motion: "none", enter: "fade", trimStart: 0, ...opts, assetId: asset.id }) as MediaOptions;
   const defaultDuration = asset.kind === "video" && asset.duration ? Math.min(asset.duration - media.trimStart, 20) : 4;
   return {
-    ...makeElement(MEDIA_TEMPLATE_KEY, "media", { text: "", primaryColor: "#FFFFFF", accentColor: "#0A84FF", backgroundColor: "transparent", duration: 4, speed: 1 }, {
+    ...makeElement(MEDIA_TEMPLATE_KEY, "media", { text: "", primaryColor: "#FFFFFF", accentColor: "#A1A1AA", backgroundColor: "transparent", duration: 4, speed: 1 }, {
       start: opts.start,
       duration: opts.duration ?? Math.max(1, defaultDuration),
       x: opts.x,
@@ -563,7 +566,7 @@ export function sanitizeBrand(input: unknown): BrandKit | null {
   return {
     ...(typeof b.name === "string" && b.name.trim() ? { name: b.name.trim().slice(0, 60) } : {}),
     primaryColor: isSafeColor(b.primaryColor) ? (b.primaryColor as string) : "#F5F5F7",
-    accentColor: isSafeColor(b.accentColor) ? (b.accentColor as string) : "#0A84FF",
+    accentColor: isSafeColor(b.accentColor) ? (b.accentColor as string) : "#A1A1AA",
     backgroundColor: isSafeColor(b.backgroundColor) ? (b.backgroundColor as string) : "#000000",
     ...(isBrandFont(b.fontFamily) ? { fontFamily: b.fontFamily as string } : {}),
     ...(isSafeLogoUrl(b.logoUrl) ? { logoUrl: b.logoUrl as string } : {}),
@@ -574,7 +577,7 @@ function makeDefaultConfig(): AnimationConfig {
   return {
     text: "MOTION",
     primaryColor: "#F5F5F7",
-    accentColor: "#0A84FF",
+    accentColor: "#A1A1AA",
     backgroundColor: "#000000",
     duration: 4,
     speed: 1,

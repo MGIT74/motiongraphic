@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { AnimationComponentProps } from "@/types/animation";
+import { alignLayout } from "@/lib/animations/config";
 import { useAnimationEngine } from "./engine";
 import { buildKineticType } from "@/lib/animations/builders";
 
@@ -20,6 +21,7 @@ interface AnimatedLetter {
  */
 export function KineticTypography01Frame({ config }: AnimationComponentProps) {
   const { text, primaryColor, accentColor, backgroundColor } = config;
+  const lay = alignLayout(config.align);
   const rows = useMemo<AnimatedLetter[][]>(
     () => {
       let globalIndex = 0;
@@ -39,14 +41,15 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%", containerType: "size" }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size", ...lay.outer }}
     >
       <div
-        className="flex flex-col items-center justify-center gap-1 text-center"
+        className="flex flex-col justify-center gap-1"
+        style={lay.block}
         aria-label={text}
       >
         {rows.map((row, wi) => (
-          <div key={`w-${wi}`} className="flex items-end justify-center">
+          <div key={`w-${wi}`} className="flex items-end" style={lay.row}>
             {row.map(({ char, accent }, li) => (
               <span
                 key={`l-${wi}-${li}`}

@@ -42,7 +42,7 @@ interface Bounds {
 const BASE_PARAMS: SandboxParams = {
   text: "SECURITE",
   primaryColor: "#F5F5F7",
-  accentColor: "#0A84FF",
+  accentColor: "#A1A1AA",
   backgroundColor: "#000000",
   duration: 3,
   speed: 1,

@@ -24,6 +24,8 @@ export interface AnimationConfig {
   fontFamily?: string;
   /** Logo importé (data URL image, ≤ 400 Ko) — utilisé par Logo Reveal. */
   logoUrl?: string;
+  /** Alignement du texte : gauche, centre, droite ou justifié (défaut : centre). */
+  align?: "left" | "center" | "right" | "justify";
 }
 
 export interface AnimationComponentProps {
