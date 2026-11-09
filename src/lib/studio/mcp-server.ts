@@ -266,6 +266,10 @@ const STYLE_PROPERTIES = {
   background_color: { type: "string", description: "Fond de l'élément (#RRGGBB ou 'transparent')." },
   transparent: { type: "boolean", description: "true = fond transparent : le calque se superpose aux calques inférieurs." },
   align: { type: "string", enum: ["left", "center", "right", "justify"], description: "Alignement du texte (gauche, centre, droite, justifié)." },
+  font_size: { type: "number", description: "Taille du texte (multiplicateur 0.3 à 3, défaut 1)." },
+  line_height: { type: "number", description: "Interligne (multiplicateur 0.6 à 2.5, défaut 1)." },
+  letter_spacing: { type: "number", description: "Espacement des lettres (em, -0.1 à 0.6)." },
+  word_spacing: { type: "number", description: "Espacement des mots (em, -0.2 à 1.5)." },
   speed: { type: "number", description: "Vitesse de l'animation (0.25 à 3)." },
   font_family: { type: "string", enum: FONT_IDS, description: "Police de la liste blanche." },
   timing: {
@@ -286,6 +290,10 @@ function applyStyle(config: AnimationConfig, input: McpInput): AnimationConfig {
   const speed = optNumber(input, "speed");
   if (speed !== undefined) next.speed = Math.max(0.25, Math.min(3, speed));
   if (typeof input.align === "string" && ["left", "center", "right", "justify"].includes(input.align)) next.align = input.align as "left" | "center" | "right" | "justify";
+  for (const [key, field, min, max] of [["font_size", "fontSize", 0.3, 3], ["line_height", "lineHeight", 0.6, 2.5], ["letter_spacing", "letterSpacing", -0.1, 0.6], ["word_spacing", "wordSpacing", -0.2, 1.5]] as const) {
+    const v = optNumber(input, key);
+    if (v !== undefined) next[field] = Math.max(min, Math.min(max, v));
+  }
   if (isBrandFont(input.font_family)) next.fontFamily = input.font_family as string;
   return next;
 }

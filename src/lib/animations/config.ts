@@ -56,8 +56,28 @@ export function sanitizeConfig(input: unknown, fallback: AnimationConfig): Anima
     duration: clamp(raw.duration, 1, 30, fallback.duration),
     speed: clamp(raw.speed, 0.25, 3, fallback.speed),
     ...(isBrandFont(raw.fontFamily) ? { fontFamily: raw.fontFamily as string } : fallback.fontFamily ? { fontFamily: fallback.fontFamily } : {}),
+    ...numField("fontSize", raw.fontSize, fallback.fontSize, 0.3, 3),
+    ...numField("lineHeight", raw.lineHeight, fallback.lineHeight, 0.6, 2.5),
+    ...numField("letterSpacing", raw.letterSpacing, fallback.letterSpacing, -0.1, 0.6),
+    ...numField("wordSpacing", raw.wordSpacing, fallback.wordSpacing, -0.2, 1.5),
     ...(isAlign(raw.align) ? { align: raw.align as TextAlign } : fallback.align ? { align: fallback.align } : {}),
     ...(isSafeLogoUrl(raw.logoUrl) ? { logoUrl: raw.logoUrl as string } : {}),
+  };
+}
+
+function numField(key: string, v: unknown, fb: number | undefined, min: number, max: number): Record<string, number> {
+  const n = typeof v === "number" ? v : v === undefined || v === null || v === "" ? NaN : Number(v);
+  if (Number.isFinite(n)) return { [key]: Math.min(max, Math.max(min, n)) };
+  return fb !== undefined ? { [key]: fb } : {};
+}
+
+/** Variables CSS de typographie (taille, interligne, espacements) lues par les templates texte. */
+export function typoVars(config: AnimationConfig): Record<string, string> {
+  return {
+    "--mg-fs": String(config.fontSize ?? 1),
+    "--mg-lh": String(config.lineHeight ?? 1),
+    "--mg-ls": `${config.letterSpacing ?? 0}em`,
+    "--mg-ws": `${config.wordSpacing ?? 0}em`,
   };
 }
 

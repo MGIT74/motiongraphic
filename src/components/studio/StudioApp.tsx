@@ -621,6 +621,17 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
         commit(updateElement(project, sceneId, elementId, (el) => ({ ...el, ...timing })), "timing-element", `timing:${elementId}:${gesture}`)
       }
       onDeleteElement={deleteElement}
+      onToggleHidden={(ids, hidden) => {
+        const scene = project.scenes[sceneIndex];
+        if (!scene) return;
+        let next = project;
+        for (const id of ids) next = updateElement(next, scene.id, id, (el) => ({ ...el, hidden: hidden ? true : undefined }));
+        commit(next, "toggle-hidden");
+      }}
+      onToggleAudioMuted={() => {
+        if (!project.audio) return;
+        commit(setProjectAudio(project, { ...project.audio, muted: project.audio.muted ? undefined : true }), "audio-muted");
+      }}
       onDropTemplate={(templateKey, at) => addElementAt(templateKey, at)}
       compact={compact}
     />

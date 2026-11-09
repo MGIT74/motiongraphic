@@ -6,7 +6,7 @@ import type { ProjectAudio } from "@/lib/studio/project-model";
 /** Volume de la musique à l'instant t (fondus d'entrée et de sortie). */
 export function audioGainAt(audio: ProjectAudio, time: number, projectDuration: number): number {
   const local = time - audio.start;
-  if (local < 0 || time > projectDuration) return 0;
+  if (audio.muted || local < 0 || time > projectDuration) return 0;
   const fadeIn = audio.fadeIn > 0 ? Math.min(1, local / audio.fadeIn) : 1;
   const fadeOut = audio.fadeOut > 0 ? Math.min(1, Math.max(0, (projectDuration - time) / audio.fadeOut)) : 1;
   return audio.volume * fadeIn * fadeOut;

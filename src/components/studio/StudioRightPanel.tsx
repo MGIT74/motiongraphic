@@ -312,6 +312,16 @@ function ElementProperties({
           </select>
         </div>
 
+        <div className={TYPO_TEMPLATES.includes(element.templateKey) ? "col-span-2 flex flex-col gap-3" : "hidden"}>
+          <p className={labelCls}>
+            <Type className="mr-1 inline-block h-3 w-3" aria-hidden="true" /> Typographie
+          </p>
+          <SliderField id="pr-fontsize" label="Taille du texte" unit="×" min={0.3} max={3} step={0.05} reset={1} value={config.fontSize ?? 1} onChange={(v) => onPatchElement(element.id, { config: { ...config, fontSize: Math.round(v * 100) / 100 } })} />
+          <SliderField id="pr-lineheight" label="Interligne (vertical)" unit="×" min={0.6} max={2.5} step={0.05} reset={1} value={config.lineHeight ?? 1} onChange={(v) => onPatchElement(element.id, { config: { ...config, lineHeight: Math.round(v * 100) / 100 } })} />
+          <SliderField id="pr-letterspacing" label="Espace des lettres" unit="em" min={-0.1} max={0.6} step={0.01} reset={0} value={config.letterSpacing ?? 0} onChange={(v) => onPatchElement(element.id, { config: { ...config, letterSpacing: Math.round(v * 100) / 100 } })} />
+          <SliderField id="pr-wordspacing" label="Espace des mots (horizontal)" unit="em" min={-0.2} max={1.5} step={0.02} reset={0} value={config.wordSpacing ?? 0} onChange={(v) => onPatchElement(element.id, { config: { ...config, wordSpacing: Math.round(v * 100) / 100 } })} />
+        </div>
+
         {onMoveLayer ? (
           <div className="col-span-2">
             <p className={labelCls}>
@@ -445,6 +455,8 @@ function SliderField({ id, label, unit, min, max, step, reset, value, onChange }
   );
 }
 
+/** Templates texte qui lisent taille / interligne / espacements. */
+const TYPO_TEMPLATES = ["kinetic-type-01", "elastic-text-01", "text-reveal-01"];
 const QUICK_COLORS = ["#FFFFFF", "#F5F5F7", "#A1A1AA", "#52525B", "#18181B", "#000000", "#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899"];
 const ALIGN_OPTIONS = [
   { id: "left", label: "Aligner à gauche", Icon: AlignLeft },

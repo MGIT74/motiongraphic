@@ -114,6 +114,8 @@ export interface ProjectAudio {
   trimStart: number;
   fadeIn: number;
   fadeOut: number;
+  /** Piste coupée (œil fermé) : ni lue dans le Studio ni mixée à l'export. */
+  muted?: boolean;
 }
 
 export interface StudioElement {
@@ -133,6 +135,8 @@ export interface StudioElement {
   scale: number; // 0.1-3
   /** Rotation en degrés (-180 à 180), autour du centre de l'élément. */
   rotation?: number;
+  /** Calque masqué (œil fermé) : absent de l'aperçu et de l'export. */
+  hidden?: boolean;
   /** Élément média (kind = "media") : image/vidéo importée et son habillage. */
   media?: MediaOptions;
   /**
@@ -395,6 +399,7 @@ export function validateProject(input: unknown): StudioProject | null {
           y: clampNumber(Number(e.y), 0, 100),
           scale: clampNumber(Number(e.scale), 0.2, 3),
           ...(Number.isFinite(Number(e.rotation)) && Number(e.rotation) !== 0 ? { rotation: clampNumber(Number(e.rotation), -180, 180) } : {}),
+          ...(e.hidden === true ? { hidden: true } : {}),
           ...(ELEMENT_TIMINGS.includes(e.timing as ElementTiming) ? { timing: e.timing as ElementTiming } : {}),
           ...(media ? { media } : {}),
         });
@@ -490,6 +495,7 @@ export function sanitizeAudio(input: unknown): ProjectAudio | null {
     trimStart: finiteOr(a.trimStart, 0, 0, 3600),
     fadeIn: finiteOr(a.fadeIn, 0.5, 0, 10),
     fadeOut: finiteOr(a.fadeOut, 1.5, 0, 10),
+    ...(a.muted === true ? { muted: true } : {}),
   };
 }
 

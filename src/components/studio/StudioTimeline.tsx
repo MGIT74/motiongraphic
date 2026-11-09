@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState, type DragEvent, type PointerEvent, type WheelEvent } from "react";
-import { AudioLines, Film, Image as ImageIcon, Magnet, Minus, Plus, Trash2 } from "lucide-react";
+import { AudioLines, Eye, EyeOff, Film, Image as ImageIcon, Magnet, Minus, Plus, Trash2 } from "lucide-react";
 import type { StudioElement, StudioProject } from "@/lib/studio/project-model";
 import { roundToFrame, sceneOffsets } from "@/lib/studio/project-model";
 import { TEMPLATE_DRAG_TYPE } from "./TemplateLibrary";
@@ -44,6 +44,8 @@ export default function StudioTimeline({
   onSeek,
   onChangeTiming,
   onDeleteElement,
+  onToggleHidden,
+  onToggleAudioMuted,
   onDropTemplate,
   compact = false,
 }: {
@@ -58,6 +60,10 @@ export default function StudioTimeline({
   /** `gesture` : identifiant du glissement en cours (une étape d'annulation par glissement). */
   onChangeTiming: (sceneId: string, elementId: string, timing: { start: number; duration: number }, gesture: number) => void;
   onDeleteElement: (elementId: string) => void;
+  /** Affiche/masque des calques (œil). */
+  onToggleHidden?: (elementIds: string[], hidden: boolean) => void;
+  /** Coupe/rétablit la piste audio. */
+  onToggleAudioMuted?: () => void;
   /** Template déposé depuis la bibliothèque à l'instant global `time`. */
   onDropTemplate?: (templateKey: string, time: number) => void;
   /** Écran étroit : pistes plus basses, libellés en icônes, poignées plus larges (doigt). */
@@ -288,10 +294,11 @@ export default function StudioTimeline({
       : selected
         ? "border-accent bg-accent/25 text-white"
         : "border-line bg-elevated text-muted hover:border-accent/40";
+    const zIndex = sceneElements.findIndex((el) => el.id === element.id) + 1;
     return (
       <div
         key={element.id}
-        className={`group absolute flex items-center overflow-hidden rounded-lg border-2 text-[10px] font-semibold uppercase tracking-wider ${active ? "z-20 shadow-lg" : "transition-colors"} ${tone}`}
+        className={`group absolute flex items-center overflow-hidden rounded-lg border-2 text-[10px] font-semibold uppercase tracking-wider ${active ? "z-20 shadow-lg" : "transition-colors"} ${element.hidden ? "opacity-40" : ""} ${tone}`}
         style={{
           left: (sceneOffset + start) * pxPerSec,
           width: blockWidth,
@@ -321,7 +328,13 @@ export default function StudioTimeline({
           data-trim="start"
         />
         {isMedia ? <ImageIcon className="ml-3.5 h-3 w-3 shrink-0" aria-hidden="true" /> : null}
-        <span className={`truncate ${isMedia ? "px-1.5" : "pl-4 pr-2"}`}>{element.label}</span>
+        <span
+          className="ml-1 shrink-0 rounded bg-black/40 px-1 font-mono text-[9px] leading-4 text-white/80"
+          title={`Calque ${zIndex}/${sceneElements.length} — plus le numéro est élevé, plus il est au premier plan`}
+        >
+          {zIndex}
+        </span>
+        <span className={`truncate ${isMedia ? "px-1.5" : "pl-1.5 pr-2"}`}>{element.label}</span>
         {/* Partie au-delà de la fin de la scène : coupée à l'export */}
         {overflow > 0 ? (
           <span
@@ -338,6 +351,18 @@ export default function StudioTimeline({
           aria-label="Trim droit — glisser pour changer la durée"
           data-trim="end"
         />
+        {onToggleHidden ? (
+          <span
+            className="absolute right-12 z-10 inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-white/80 opacity-60 hover:opacity-100 group-hover:opacity-100"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => onToggleHidden([element.id], !element.hidden)}
+            title={element.hidden ? "Afficher ce calque" : "Masquer ce calque"}
+            role="button"
+            aria-label={element.hidden ? "Afficher ce calque" : "Masquer ce calque"}
+          >
+            {element.hidden ? <EyeOff className="pointer-events-none h-3 w-3" aria-hidden="true" /> : <Eye className="pointer-events-none h-3 w-3" aria-hidden="true" />}
+          </span>
+        ) : null}
         <span
           className="absolute right-4 z-10 inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-red-300 opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-70"
           onPointerDown={(event) => event.stopPropagation()}
@@ -396,12 +421,27 @@ export default function StudioTimeline({
             <div className={`flex h-8 items-center border-b border-line font-mono text-[10px] text-muted ${compact ? "justify-center px-0" : "px-3"}`}>
               {compact ? project.scenes.length : `TL · ${project.scenes.length} scènes`}
             </div>
-            {lanes.map((lane) => (
-              <div key={lane.id} className={`flex items-center gap-2 border-b border-line/50 ${compact ? "justify-center px-0" : "px-3"}`} style={{ height: lane.height }} title={lane.label}>
-                <lane.icon className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
-                <span className={compact ? "sr-only" : "text-[11px] font-medium text-ink/80"}>{lane.label}</span>
-              </div>
-            ))}
+            {lanes.map((lane) => {
+              const ids = lane.id === "motion" ? motionElements : lane.id === "media" ? mediaElements : [];
+              const allHidden = lane.id === "audio" ? !!project.audio?.muted : ids.length > 0 && ids.every((el) => el.hidden);
+              const canToggle = lane.id === "audio" ? !!project.audio && !!onToggleAudioMuted : ids.length > 0 && !!onToggleHidden;
+              return (
+                <div key={lane.id} className={`flex items-center gap-2 border-b border-line/50 ${compact ? "justify-center px-0" : "px-3"}`} style={{ height: lane.height }} title={lane.label}>
+                  <lane.icon className={`h-3.5 w-3.5 ${allHidden ? "text-muted/40" : "text-muted"}`} aria-hidden="true" />
+                  <span className={compact ? "sr-only" : `flex-1 text-[11px] font-medium ${allHidden ? "text-ink/40 line-through" : "text-ink/80"}`}>{lane.label}</span>
+                  <button
+                    type="button"
+                    disabled={!canToggle}
+                    onClick={() => (lane.id === "audio" ? onToggleAudioMuted?.() : onToggleHidden?.(ids.map((el) => el.id), !allHidden))}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted hover:bg-line hover:text-ink disabled:opacity-30"
+                    aria-label={allHidden ? `Afficher la piste ${lane.label}` : `Masquer la piste ${lane.label}`}
+                    title={allHidden ? `Afficher la piste ${lane.label}` : `Masquer la piste ${lane.label}`}
+                  >
+                    {allHidden ? <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Eye className="h-3.5 w-3.5" aria-hidden="true" />}
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           {/* Zone temporelle */}
@@ -477,7 +517,7 @@ export default function StudioTimeline({
                 const length = Math.max(0.5, Math.min((asset?.duration ?? duration) - audio.trimStart, duration - audio.start));
                 return (
                   <span
-                    className="absolute flex items-center gap-1.5 overflow-hidden rounded-lg border-2 border-emerald-500/40 bg-emerald-500/10 px-2 text-[10px] font-semibold text-emerald-200"
+                    className={`absolute flex items-center gap-1.5 overflow-hidden rounded-lg border-2 border-emerald-500/40 bg-emerald-500/10 px-2 text-[10px] font-semibold text-emerald-200 ${audio.muted ? "opacity-40" : ""}`}
                     style={{ left: audio.start * pxPerSec, width: length * pxPerSec, top: 6, height: 44 }}
                     title={asset?.name ?? "Musique"}
                   >

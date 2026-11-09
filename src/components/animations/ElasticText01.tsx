@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { AnimationComponentProps } from "@/types/animation";
-import { alignLayout } from "@/lib/animations/config";
+import { alignLayout, typoVars } from "@/lib/animations/config";
 import { useAnimationEngine } from "./engine";
 import { buildElasticText } from "@/lib/animations/builders";
 
@@ -39,7 +39,7 @@ export function ElasticText01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%", containerType: "size", ...lay.outer }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size", ...lay.outer, ...(typoVars(config) as React.CSSProperties) }}
     >
       <div
         className="flex flex-col justify-center"
@@ -54,17 +54,18 @@ export function ElasticText01Frame({ config }: AnimationComponentProps) {
                 className="inline-block overflow-visible align-bottom"
               >
                 {char === " " ? (
-                  <span className="inline-block" style={{ fontSize: "11.4cqmin", lineHeight: 1.2 }}>&nbsp;</span>
+                  <span className="inline-block" style={{ fontSize: "calc(11.4cqmin * var(--mg-fs))", lineHeight: "calc(1.2 * var(--mg-lh))", letterSpacing: "var(--mg-ls)", wordSpacing: "var(--mg-ws)" }}>&nbsp;</span>
                 ) : (
                   <span
                     data-elastic-letter
                     className="inline-block will-change-transform"
                     style={{
                       color: pop ? accentColor : primaryColor,
-                      fontSize: "11.4cqmin",
+                      fontSize: "calc(11.4cqmin * var(--mg-fs))",
                       fontWeight: 800,
-                      letterSpacing: "0.04em",
-                      lineHeight: 1.2,
+                      letterSpacing: "calc(0.04em + var(--mg-ls))",
+                      wordSpacing: "var(--mg-ws)",
+                      lineHeight: "calc(1.2 * var(--mg-lh))",
                     }}
                   >
                     {char}
