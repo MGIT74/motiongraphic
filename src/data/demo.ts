@@ -79,7 +79,7 @@ const TEMPLATES: DemoTemplateInput[] = [
     config: {
       text: "MOTION",
       primaryColor: "#F5F5F7",
-      accentColor: "#0A84FF",
+      accentColor: "#A1A1AA",
       backgroundColor: "#000000",
       duration: 3.2,
       speed: 1,
@@ -97,7 +97,7 @@ const TEMPLATES: DemoTemplateInput[] = [
     config: {
       text: "CRÉER\nEN CODE",
       primaryColor: "#F5F5F7",
-      accentColor: "#0A84FF",
+      accentColor: "#A1A1AA",
       backgroundColor: "#000000",
       duration: 3.6,
       speed: 1,
@@ -115,7 +115,7 @@ const TEMPLATES: DemoTemplateInput[] = [
     config: {
       text: "BOUNCE",
       primaryColor: "#F5F5F7",
-      accentColor: "#64D2FF",
+      accentColor: "#A1A1AA",
       backgroundColor: "#000000",
       duration: 3,
       speed: 1,
@@ -133,7 +133,7 @@ const TEMPLATES: DemoTemplateInput[] = [
     config: {
       text: "MORPH",
       primaryColor: "#F5F5F7",
-      accentColor: "#64D2FF",
+      accentColor: "#A1A1AA",
       backgroundColor: "#000000",
       duration: 6,
       speed: 1,
@@ -151,7 +151,7 @@ const TEMPLATES: DemoTemplateInput[] = [
     config: {
       text: "UI MOTION",
       primaryColor: "#E7E7EF",
-      accentColor: "#0A84FF",
+      accentColor: "#A1A1AA",
       backgroundColor: "#000000",
       duration: 4.2,
       speed: 1,
@@ -169,7 +169,7 @@ const TEMPLATES: DemoTemplateInput[] = [
     config: {
       text: "STUDIO",
       primaryColor: "#F5F5F7",
-      accentColor: "#64D2FF",
+      accentColor: "#A1A1AA",
       backgroundColor: "#000000",
       duration: 4.4,
       speed: 1,

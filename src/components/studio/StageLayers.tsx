@@ -111,7 +111,7 @@ function SceneLayers({
             className={onSelectElement ? "absolute inset-0 cursor-pointer" : "absolute inset-0"}
             style={{
               zIndex: layer + 1,
-              transform: `translate(${element.x - 50}%, ${element.y - 50}%) scale(${element.scale})`,
+              transform: `translate(${element.x - 50}%, ${element.y - 50}%) scale(${element.scale})${element.rotation ? ` rotate(${element.rotation}deg)` : ""}`,
               // Un calque transparent ne capte pas les clics hors de son contenu visible.
               pointerEvents: onSelectElement ? "auto" : "none",
             }}

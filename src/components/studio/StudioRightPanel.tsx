@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownToLine, ArrowUpToLine, Check, ChevronDown, ChevronUp, Layers, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Check, ChevronDown, ChevronUp, Layers, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
 import type { ElementTiming, MediaOptions, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
 import { getStudioTemplate, templatesForKind } from "@/lib/studio/template-registry";
@@ -208,6 +208,33 @@ function ElementProperties({
         </div>
 
         <div>
+          <label htmlFor="pr-rotation" className={labelCls}>Rotation (°)</label>
+          <div className="flex items-center gap-2">
+            <input
+              id="pr-rotation"
+              type="range"
+              min={-180}
+              max={180}
+              step={1}
+              value={element.rotation ?? 0}
+              onChange={(e) => onPatchElement(element.id, { rotation: Math.round(Number(e.target.value)) || 0 })}
+              className="min-w-0 flex-1 cursor-pointer"
+              aria-label="Rotation en degrés"
+            />
+            <input
+              type="number"
+              min={-180}
+              max={180}
+              step={1}
+              value={element.rotation ?? 0}
+              onChange={(e) => onPatchElement(element.id, { rotation: Math.max(-180, Math.min(180, Math.round(Number(e.target.value) || 0))) })}
+              className={inputCls + " w-16"}
+              aria-label="Rotation (valeur)"
+            />
+          </div>
+        </div>
+
+        <div>
           <label htmlFor="pr-label" className={labelCls}>Libellé</label>
           <input
             id="pr-label"
@@ -242,6 +269,58 @@ function ElementProperties({
                   />
                 </span>
               </label>
+            ))}
+          </div>
+        </div>
+
+        <div className={element.kind === "media" ? "hidden" : "col-span-2"}>
+          <p className={labelCls}>Couleurs rapides (texte principal)</p>
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onPatchElement(element.id, { config: { ...config, primaryColor: c } })}
+                className="h-6 w-6 rounded-full border border-line"
+                style={{ background: c }}
+                aria-label={`Couleur ${c}`}
+                title={c}
+              />
+            ))}
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {(["primaryColor", "accentColor", "backgroundColor"] as const).map((key) => (
+              <input
+                key={`${key}-${config[key]}`}
+                defaultValue={config[key] === "transparent" ? "" : config[key]}
+                placeholder="#RRGGBB"
+                maxLength={9}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v)) onPatchElement(element.id, { config: { ...config, [key]: v } });
+                }}
+                className={inputCls + " font-mono text-[10px]"}
+                aria-label={`Hex ${key}`}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className={element.kind === "media" ? "hidden" : "col-span-2"}>
+          <p className={labelCls}>Alignement du texte</p>
+          <div className="grid grid-cols-4 gap-1">
+            {ALIGN_OPTIONS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onPatchElement(element.id, { config: { ...config, align: id } })}
+                aria-pressed={(config.align ?? "center") === id}
+                aria-label={label}
+                title={label}
+                className={`flex h-8 items-center justify-center rounded-lg border text-ink ${(config.align ?? "center") === id ? "border-ink bg-line" : "border-line bg-background"}`}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </button>
             ))}
           </div>
         </div>
@@ -378,6 +457,14 @@ function MediaOptionsFields({
     </>
   );
 }
+
+const QUICK_COLORS = ["#FFFFFF", "#F5F5F7", "#A1A1AA", "#52525B", "#18181B", "#000000", "#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899"];
+const ALIGN_OPTIONS = [
+  { id: "left", label: "Aligner à gauche", Icon: AlignLeft },
+  { id: "center", label: "Centrer", Icon: AlignCenter },
+  { id: "right", label: "Aligner à droite", Icon: AlignRight },
+  { id: "justify", label: "Justifier", Icon: AlignJustify },
+] as const;
 
 function toValidHex(color: string): string {
   return /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#000000";

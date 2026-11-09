@@ -56,7 +56,28 @@ export function sanitizeConfig(input: unknown, fallback: AnimationConfig): Anima
     duration: clamp(raw.duration, 1, 30, fallback.duration),
     speed: clamp(raw.speed, 0.25, 3, fallback.speed),
     ...(isBrandFont(raw.fontFamily) ? { fontFamily: raw.fontFamily as string } : fallback.fontFamily ? { fontFamily: fallback.fontFamily } : {}),
+    ...(isAlign(raw.align) ? { align: raw.align as TextAlign } : fallback.align ? { align: fallback.align } : {}),
     ...(isSafeLogoUrl(raw.logoUrl) ? { logoUrl: raw.logoUrl as string } : {}),
+  };
+}
+
+export type TextAlign = "left" | "center" | "right" | "justify";
+export const TEXT_ALIGNS: TextAlign[] = ["left", "center", "right", "justify"];
+function isAlign(v: unknown): v is TextAlign {
+  return typeof v === "string" && (TEXT_ALIGNS as string[]).includes(v);
+}
+
+/** Styles flex communs aux templates texte pour gérer l'alignement. */
+export function alignLayout(align?: TextAlign) {
+  const a = align ?? "center";
+  const flex = a === "left" ? "flex-start" : a === "right" ? "flex-end" : "center";
+  return {
+    /** Conteneur plein cadre (position horizontale du bloc). */
+    outer: { justifyContent: a === "justify" ? "stretch" : flex } as const,
+    /** Bloc de texte (largeur pleine si justifié). */
+    block: { alignItems: a === "justify" ? "stretch" : flex, width: a === "justify" ? "100%" : undefined, textAlign: a === "justify" ? "center" : a } as const,
+    /** Ligne de lettres. */
+    row: { justifyContent: a === "justify" ? "space-between" : flex } as const,
   };
 }
 

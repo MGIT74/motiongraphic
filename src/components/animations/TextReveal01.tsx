@@ -1,6 +1,7 @@
 "use client";
 
 import type { AnimationComponentProps } from "@/types/animation";
+import { alignLayout } from "@/lib/animations/config";
 import { useAnimationEngine } from "./engine";
 import { buildTextReveal } from "@/lib/animations/builders";
 
@@ -12,14 +13,15 @@ import { buildTextReveal } from "@/lib/animations/builders";
  */
 export function TextReveal01Frame({ config }: AnimationComponentProps) {
   const { text, primaryColor, accentColor, backgroundColor } = config;
+  const lay = alignLayout(config.align);
   const lines = text.toUpperCase().split("\n").filter(Boolean);
 
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%", containerType: "size" }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size", ...lay.outer }}
     >
-      <div className="relative flex flex-col items-start justify-center text-center sm:items-center">
+      <div className="relative flex flex-col justify-center" style={lay.block}>
         {lines.map((line, i) => (
           <div key={`line-${i}`} className="overflow-hidden py-1" style={{ paddingBottom: "0.12em" }}>
             <span
@@ -27,6 +29,7 @@ export function TextReveal01Frame({ config }: AnimationComponentProps) {
               className="block will-change-transform"
               style={{
                 color: primaryColor,
+                ...(config.align === "justify" ? { textAlign: "justify" as const, textAlignLast: "justify" as const } : {}),
                 fontSize: "10.8cqmin",
                 fontWeight: 750,
                 letterSpacing: "0.03em",

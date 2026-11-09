@@ -235,7 +235,7 @@ export default function StudioLeftPanel({
 
 const DEFAULT_BRAND: BrandKit = {
   primaryColor: "#F5F5F7",
-  accentColor: "#0A84FF",
+  accentColor: "#A1A1AA",
   backgroundColor: "#000000",
   fontFamily: "system",
 };

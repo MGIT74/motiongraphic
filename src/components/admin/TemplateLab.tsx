@@ -74,7 +74,7 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
     code: SANDBOX_STARTER_CODE("Nouveau template"),
     configText: "MOTION",
     primaryColor: "#F5F5F7",
-    accentColor: "#0A84FF",
+    accentColor: "#A1A1AA",
     backgroundColor: "#000000",
     duration: "4",
     speed: "1",

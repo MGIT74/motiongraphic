@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { AnimationComponentProps } from "@/types/animation";
+import { alignLayout } from "@/lib/animations/config";
 import { useAnimationEngine } from "./engine";
 import { buildElasticText } from "@/lib/animations/builders";
 
@@ -18,6 +19,7 @@ interface ElasticLetter {
  */
 export function ElasticText01Frame({ config }: AnimationComponentProps) {
   const { text, primaryColor, accentColor, backgroundColor } = config;
+  const lay = alignLayout(config.align);
   const words = useMemo<ElasticLetter[][]>(
     () => {
       let globalIndex = 0;
@@ -37,14 +39,15 @@ export function ElasticText01Frame({ config }: AnimationComponentProps) {
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden p-6"
-      style={{ backgroundColor, minHeight: "100%", containerType: "size" }}
+      style={{ backgroundColor, minHeight: "100%", containerType: "size", ...lay.outer }}
     >
       <div
-        className="flex flex-col items-center justify-center"
+        className="flex flex-col justify-center"
+        style={lay.block}
         aria-label={text}
       >
         {words.map((word, wi) => (
-          <div key={`w-${wi}`} className="flex justify-center">
+          <div key={`w-${wi}`} className="flex" style={lay.row}>
             {word.map(({ char, pop }, ci) => (
               <span
                 key={`l-${wi}-${ci}`}

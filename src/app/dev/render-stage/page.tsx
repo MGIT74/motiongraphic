@@ -127,7 +127,7 @@ const FREE_CODE_TEMPLATE_INPUT: StudioCustomTemplateInput = {
   category: "ui-motion",
   sourceKind: "code",
   elementKind: "cards",
-  defaultConfig: { text: "FREE", primaryColor: "#F5F5F7", accentColor: "#0A84FF", backgroundColor: "#000000", duration: 1, speed: 1 },
+  defaultConfig: { text: "FREE", primaryColor: "#F5F5F7", accentColor: "#A1A1AA", backgroundColor: "#000000", duration: 1, speed: 1 },
   code: "var x = 1; // sans contrat __MGS_TIMELINE__",
   capabilities: { studioCompatible: false, exportCompatible: false, reasons: ["Pas de contrat renderAt(time)"] },
   version: 1,

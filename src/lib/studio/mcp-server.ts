@@ -265,6 +265,7 @@ const STYLE_PROPERTIES = {
   accent_color: { type: "string", description: "Couleur d'accent (#RRGGBB)." },
   background_color: { type: "string", description: "Fond de l'élément (#RRGGBB ou 'transparent')." },
   transparent: { type: "boolean", description: "true = fond transparent : le calque se superpose aux calques inférieurs." },
+  align: { type: "string", enum: ["left", "center", "right", "justify"], description: "Alignement du texte (gauche, centre, droite, justifié)." },
   speed: { type: "number", description: "Vitesse de l'animation (0.25 à 3)." },
   font_family: { type: "string", enum: FONT_IDS, description: "Police de la liste blanche." },
   timing: {
@@ -284,6 +285,7 @@ function applyStyle(config: AnimationConfig, input: McpInput): AnimationConfig {
   if (input.transparent === false && next.backgroundColor === "transparent") next.backgroundColor = "#000000";
   const speed = optNumber(input, "speed");
   if (speed !== undefined) next.speed = Math.max(0.25, Math.min(3, speed));
+  if (typeof input.align === "string" && ["left", "center", "right", "justify"].includes(input.align)) next.align = input.align as "left" | "center" | "right" | "justify";
   if (isBrandFont(input.font_family)) next.fontFamily = input.font_family as string;
   return next;
 }
@@ -632,6 +634,7 @@ export const MCP_PROJECT_TOOLS = [
         x: { type: "number" },
         y: { type: "number" },
         scale: { type: "number" },
+        rotation: { type: "number", description: "Rotation en degrés (-180 à 180)." },
         text: { type: "string" },
         ...STYLE_PROPERTIES,
         ...MEDIA_PROPERTIES,
@@ -658,6 +661,10 @@ export const MCP_PROJECT_TOOLS = [
         if (optNumber(input, "x") !== undefined) patched.x = Math.max(0, Math.min(100, optNumber(input, "x") as number));
         if (optNumber(input, "y") !== undefined) patched.y = Math.max(0, Math.min(100, optNumber(input, "y") as number));
         if (optNumber(input, "scale") !== undefined) patched.scale = Math.max(0.2, Math.min(3, optNumber(input, "scale") as number));
+        if (optNumber(input, "rotation") !== undefined) {
+          const rot = Math.round(Math.max(-180, Math.min(180, optNumber(input, "rotation") as number)));
+          if (rot === 0) delete patched.rotation; else patched.rotation = rot;
+        }
         if (typeof input.label === "string") patched.label = input.label.slice(0, 60);
         if (typeof input.text === "string") patched.config = { ...patched.config, text: input.text.slice(0, 120) };
         patched.config = applyStyle(patched.config, input);
@@ -911,7 +918,7 @@ export const MCP_PROJECT_TOOLS = [
     },
     run: async (input: McpInput) => {
       const { project, projectId, userId } = await needProject(input);
-      const current = project.brand ?? { primaryColor: "#F5F5F7", accentColor: "#0A84FF", backgroundColor: "#000000" };
+      const current = project.brand ?? { primaryColor: "#F5F5F7", accentColor: "#A1A1AA", backgroundColor: "#000000" };
       const brand = sanitizeBrand({
         ...current,
         ...(typeof input.name === "string" ? { name: input.name } : {}),

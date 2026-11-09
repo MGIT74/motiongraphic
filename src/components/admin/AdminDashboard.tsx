@@ -19,7 +19,7 @@ const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DEFAULT_NEW_CONFIG: AnimationConfig = {
   text: "MOTION",
   primaryColor: "#F5F5F7",
-  accentColor: "#0A84FF",
+  accentColor: "#A1A1AA",
   backgroundColor: "#000000",
   duration: 4,
   speed: 1,
@@ -79,7 +79,7 @@ function editorFromRow(row: AnimationRowMapped): EditorState {
     isFeatured: row.is_featured,
     configText: typeof cfg.text === "string" ? cfg.text : "",
     primaryColor: typeof cfg.primaryColor === "string" ? cfg.primaryColor : "#F5F5F7",
-    accentColor: typeof cfg.accentColor === "string" ? cfg.accentColor : "#0A84FF",
+    accentColor: typeof cfg.accentColor === "string" ? cfg.accentColor : "#A1A1AA",
     backgroundColor: typeof cfg.backgroundColor === "string" ? cfg.backgroundColor : "#000000",
     speed: String(cfg.speed ?? 1),
     promptWeb: row.prompts?.find((p) => p.type === "web")?.content ?? "",
