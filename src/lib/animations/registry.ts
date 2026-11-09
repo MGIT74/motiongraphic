@@ -32,6 +32,14 @@ export const COMPONENT_REGISTRY: Record<ComponentKey, ComponentMeta> = {
     technologies: ["React", "GSAP", "SVG"],
     defaultConfig: CONFIG({ text: "MOTION", duration: 3.2 }),
   },
+  "kinetic-typography-pro-01": {
+    key: "kinetic-typography-pro-01",
+    name: "Kinetic Typography Pro",
+    description: "Typographie éditoriale premium : entrée masquée avec profondeur, accent coloré et sortie rythmée.",
+    technologies: ["React", "GSAP", "CSS"],
+    defaultConfig: CONFIG({ text: "MAKE IT\
+MOVE", duration: 4.8, accentColor: "#9A7CFF", backgroundColor: "#0B0C12" }),
+  },
   "text-reveal-01": {
     key: "text-reveal-01",
     name: "Text Reveal (Masque)",
