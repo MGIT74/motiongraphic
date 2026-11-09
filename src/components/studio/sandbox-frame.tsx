@@ -488,6 +488,9 @@ export default function SandboxTimelineFrame({
         ref={iframeRef}
         sandbox="allow-scripts"
         className="absolute inset-0 h-full w-full border-0"
+        // L'app est en color-scheme: dark alors que le document du template est « normal » : sans cela,
+        // le navigateur peint un fond blanc opaque derrière l'iframe (templates jamais transparents).
+        style={{ colorScheme: "normal" }}
         src={sandboxSrc ?? undefined}
         srcDoc={sandboxSrc ? undefined : doc}
         tabIndex={-1}
