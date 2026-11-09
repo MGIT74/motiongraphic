@@ -1,6 +1,7 @@
 "use client";
 
 import gsap from "gsap";
+import { buildKineticTypographyPro } from "./kinetic-typography-pro";
 import type { AnimationConfig } from "@/types/animation";
 
 /**
@@ -292,6 +293,7 @@ export function buildLogoReveal(
 /** Registre des builders, par clé de template. */
 export const ANIMATION_BUILDERS: Record<string, AnimationBuilder> = {
   "kinetic-type-01": buildKineticType,
+  "kinetic-typography-pro-01": buildKineticTypographyPro,
   "text-reveal-01": buildTextReveal,
   "elastic-text-01": buildElasticText,
   "shape-morph-01": buildShapeMorph,
