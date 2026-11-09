@@ -25,14 +25,16 @@ window.__MGS_TIMELINE__ = {
     stage.style.background = bg;
 
     var W = window.innerWidth, H = window.innerHeight;
-    var key = [text, ink, accent, W, H, lh, ls, wsp, al].join("|");
+    // Reconstruit seulement si le texte ou le format (ratio) change : couleurs, interligne, espacements,
+    // alignement et taille de police sont appliqués à chaque rendu, sans rebuild (curseur et sélection fluides).
+    var key = [text, Math.round((W / H) * 40)].join("|");
     var box = stage.firstChild;
     var chars;
     if (!box || box.getAttribute("data-key") !== key) {
       stage.innerHTML = "";
       box = document.createElement("div");
       box.setAttribute("data-key", key);
-      box.style.cssText = "width:84%;text-align:" + al + ";font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;font-weight:700;line-height:" + (1.28 * lh) + ";letter-spacing:" + ls + "em;word-spacing:" + wsp + "em;color:" + ink + ";";
+      box.style.cssText = "max-width:84%;font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;font-weight:700;line-height:1.28;";
       stage.appendChild(box);
       var parts = text.split(/(\*[^*]+\*[.,;:!?…»)]*)/).filter(function (s) { return s; });
       var wordEl = null;
@@ -66,7 +68,8 @@ window.__MGS_TIMELINE__ = {
           var c = document.createElement("span");
           c.className = "tw-c";
           c.textContent = ch;
-          c.style.cssText = "visibility:hidden;" + (isAccent && i < accentLen ? "color:" + accent + ";" : "");
+          c.style.cssText = "visibility:hidden;";
+          if (isAccent && i < accentLen) c.setAttribute("data-ac", "1");
           wordEl.appendChild(c);
         }
       });
@@ -80,10 +83,15 @@ window.__MGS_TIMELINE__ = {
         if (box.scrollHeight <= H * 0.5 && box.scrollWidth <= box.clientWidth + 1) lo = mid; else hi = mid;
       }
       box.style.fontSize = lo + "px";
-      box.setAttribute("data-base", String(lo));
+      box.setAttribute("data-ratio", String(lo / H));
     }
     // La taille de police se règle à chaque rendu (sans reconstruire le DOM : curseur fluide).
-    box.style.fontSize = (parseFloat(box.getAttribute("data-base")) * fs) + "px";
+    box.style.fontSize = (parseFloat(box.getAttribute("data-ratio")) * H * fs) + "px";
+    box.style.lineHeight = String(1.28 * lh);
+    box.style.letterSpacing = ls + "em";
+    box.style.wordSpacing = wsp + "em";
+    box.style.textAlign = al;
+    box.style.color = ink;
 
     chars = box.querySelectorAll(".tw-c");
     var visibleChars = [];
@@ -102,6 +110,8 @@ window.__MGS_TIMELINE__ = {
       el.style.visibility = k < shown ? "visible" : "hidden";
       el.style.opacity = String(1 - ex);
       el.style.boxShadow = "none";
+      el.style.marginRight = "0";
+      el.style.color = el.getAttribute("data-ac") ? accent : "";
     }
     var caretColor = accent;
     var rgba = caretAlpha;
@@ -115,7 +125,6 @@ window.__MGS_TIMELINE__ = {
       } else {
         var last = visibleChars[shown - 1];
         last.style.boxShadow = rgba > 0 ? "0.1em 0 0 " + caretColor : "none";
-        last.style.marginRight = "0.06em";
       }
     }
   },
