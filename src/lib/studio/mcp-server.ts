@@ -6,6 +6,7 @@ import { listAllPublishedTemplates } from "@/lib/templates/registry";
 import { listPublishedCustomTemplates } from "@/lib/templates/custom-store";
 import { customElementKind } from "@/lib/templates/custom-model";
 import { registerCustomStudioTemplates } from "./template-registry";
+import { publishedStudioCustomTemplates } from "@/lib/render/server-projects";
 import { isSafeColor } from "@/lib/animations/config";
 import { BRAND_FONTS, isBrandFont } from "@/lib/brand/fonts";
 import {
@@ -126,25 +127,9 @@ interface ProjectRow {
  * rejette tout projet contenant un template custom (ex. cta-hero-demo).
  */
 async function ensureCustomTemplatesRegistered(): Promise<void> {
-  try {
-    const published = await listPublishedCustomTemplates();
-    registerCustomStudioTemplates(
-      published
-        .filter((t) => t.sourceKind === "component" && t.componentKey)
-        .map((t) => ({
-          id: t.id,
-          slug: t.slug,
-          name: t.name,
-          category: t.category,
-          sourceKind: t.sourceKind,
-          componentKey: t.componentKey,
-          elementKind: customElementKind(t),
-          defaultConfig: t.defaultConfig,
-        }))
-    );
-  } catch {
-    // Source custom indisponible : seuls les templates intégrés seront valides.
-  }
+  // Composants ET templates en code (Typewriter, Big number…) : sinon tout projet qui en
+  // contient est rejeté par validateProject (« données non valides »).
+  registerCustomStudioTemplates(await publishedStudioCustomTemplates());
 }
 
 /** Valide le projet AVANT tout enregistrement : un projet invalide n'est jamais persisté. */
