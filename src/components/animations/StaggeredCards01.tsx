@@ -20,87 +20,44 @@ export function parseCardItems(text: string | undefined): string[] {
   return items.length >= 2 ? items.slice(0, 6) : [];
 }
 
-function MessageCards({
-  items,
-  primary,
-  accent,
-  background,
-}: {
-  items: string[];
-  primary: string;
-  accent: string;
-  background: string;
-}) {
-  const cols = items.length <= 3 ? items.length : items.length === 4 ? 2 : 3;
-  const rows = Math.ceil(items.length / cols);
+function MessageCards({ items, primary, accent, background }: { items: string[]; primary: string; accent: string; background: string }) {
+  const n = items.length;
+  // Paysage / carré : 1 à 3 colonnes, puis 2 lignes. Portrait (@container) : 1 colonne de cartes larges jusqu'à 3 idées, sinon grille 2 colonnes.
+  const cols = n <= 3 ? n : n === 4 ? 2 : 3;
+  const rows = Math.ceil(n / cols);
   const cap = cols === 1 ? 60 : cols === 2 ? 36 : 27;
-  // Largeur bornée par le nombre de lignes pour que la grille tienne dans la hauteur du cadre.
   const width = `min(${cap}cqw, ${((88 / rows) * 1.05 - 2).toFixed(1)}cqh)`;
+  const pcols = n <= 3 ? 1 : 2;
+  const prows = Math.ceil(n / pcols);
+  const par = n <= 3 ? 1.6 : 1.05;
+  const pwidth = `min(${n <= 3 ? 80 : 44}cqw, ${((88 / prows) * par - 3).toFixed(1)}cqh)`;
+  const css = `.mgc-grid{grid-template-columns:repeat(${cols},${width})}.mgc-card{aspect-ratio:1.05}@container mgc (max-aspect-ratio: 1/1){.mgc-grid{grid-template-columns:repeat(${pcols},${pwidth})}.mgc-card{aspect-ratio:${par}}}`;
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-hidden"
-      style={{
-        backgroundColor: background,
-        minHeight: "100%",
-        containerType: "size",
-      }}
+      style={{ backgroundColor: background, minHeight: "100%", containerType: "size", containerName: "mgc" }}
     >
-      <div
-        className="grid justify-center"
-        style={{
-          gridTemplateColumns: `repeat(${cols}, ${width})`,
-          gap: "min(2.4cqw, 3cqh)",
-        }}
-      >
+      <style>{css}</style>
+      <div className="mgc-grid grid justify-center" style={{ gap: "min(2.4cqw, 3cqh)" }}>
         {items.map((label, i) => (
           <div
             key={i}
             data-card
-            className="flex flex-col justify-between rounded-3xl will-change-transform"
+            className="mgc-card flex flex-col justify-between rounded-3xl will-change-transform"
             style={{
               containerType: "inline-size",
-              aspectRatio: "1.05",
-              background:
-                i % 2 === 0
-                  ? "rgba(255,255,255,0.07)"
-                  : "rgba(255,255,255,0.11)",
+              background: i % 2 === 0 ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.11)",
               border: "1px solid rgba(255,255,255,0.14)",
               boxShadow: `0 28px 60px -28px rgba(0,0,0,0.8), 0 0 0 1px ${accent}22 inset`,
             }}
           >
-            <div
-              className="flex h-full flex-col justify-between"
-              style={{ padding: "9cqw" }}
-            >
-              <span
-                className="font-bold tabular-nums"
-                style={{
-                  color: accent,
-                  fontSize: "13cqw",
-                  letterSpacing: "0.08em",
-                }}
-              >
+            <div className="flex h-full flex-col justify-between" style={{ padding: "7cqw" }}>
+              <span className="font-bold tabular-nums" style={{ color: accent, fontSize: "11cqw", letterSpacing: "0.08em" }}>
                 {String(i + 1).padStart(2, "0")}
               </span>
-              <div className="flex flex-col" style={{ gap: "6cqw" }}>
-                <span
-                  data-card-bar
-                  className="block rounded-full"
-                  style={{
-                    height: "1.6cqw",
-                    width: "28cqw",
-                    backgroundColor: accent,
-                  }}
-                />
-                <span
-                  className="font-bold uppercase leading-[1.08]"
-                  style={{
-                    color: primary,
-                    fontSize: "11.5cqw",
-                    letterSpacing: "0.01em",
-                    overflowWrap: "anywhere",
-                  }}
-                >
+              <div className="flex flex-col" style={{ gap: "4cqw" }}>
+                <span data-card-bar className="block rounded-full" style={{ height: "1.4cqw", width: "22cqw", backgroundColor: accent }} />
+                <span className="font-bold uppercase leading-[1.08]" style={{ color: primary, fontSize: "9cqw", letterSpacing: "0.01em", overflowWrap: "break-word", hyphens: "none" }}>
                   {label}
                 </span>
               </div>
