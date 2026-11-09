@@ -16,11 +16,10 @@ import type { ComponentKey } from "@/types/animation";
 export default function StageLayers({
   project,
   time,
-  selectedElementId,
-  onSelectElement,
 }: {
   project: StudioProject;
   time: number;
+  /** Conservés pour compatibilité : la sélection se fait désormais sur le canvas (StudioCanvas). */
   selectedElementId?: string | null;
   onSelectElement?: (elementId: string) => void;
 }) {
@@ -36,8 +35,6 @@ export default function StageLayers({
       project={project}
       sceneIndex={sceneIndex}
       time={time}
-      selectedElementId={selectedElementId}
-      onSelectElement={onSelectElement}
     />
   );
   if (!inTransition) return current;
@@ -82,15 +79,11 @@ function SceneLayers({
   project,
   sceneIndex,
   time,
-  selectedElementId,
-  onSelectElement,
   endState = false,
 }: {
   project: StudioProject;
   sceneIndex: number;
   time: number;
-  selectedElementId?: string | null;
-  onSelectElement?: (elementId: string) => void;
   /** État final de la scène (sous une transition) : chaque calque qui dure jusqu'à la fin, dans son état final. */
   endState?: boolean;
 }) {
@@ -104,40 +97,34 @@ function SceneLayers({
     <div className="absolute inset-0" style={{ backgroundColor: scene.background ?? "#000000" }} data-canvas-surface="">
       {active.map((element, layer) => {
         const localTime = endState ? element.duration : roundToFrame(time - (sceneStart + element.start));
-        const isSelected = element.id === selectedElementId;
+        const fill = element.kind === "media" ? "transparent" : element.config.backgroundColor;
         return (
           <div
             key={element.id}
-            className={onSelectElement ? "absolute inset-0 cursor-pointer" : "absolute inset-0"}
-            style={{
-              zIndex: layer + 1,
-              transform: `translate(${element.x - 50}%, ${element.y - 50}%) scale(${element.scale})${element.rotation ? ` rotate(${element.rotation}deg)` : ""}`,
-              // Un calque transparent ne capte pas les clics hors de son contenu visible.
-              pointerEvents: onSelectElement ? "auto" : "none",
-            }}
-            onMouseDown={
-              onSelectElement
-                ? (e) => {
-                    e.stopPropagation();
-                    onSelectElement(element.id);
-                  }
-                : undefined
-            }
+            className="pointer-events-none absolute inset-0"
+            style={{ zIndex: layer + 1, backgroundColor: fill }}
+            data-element-wrap=""
           >
-            {element.kind === "media" ? (
-              <MediaLayer element={element} asset={project.media.find((m) => m.id === element.media?.assetId)} localTime={localTime} />
-            ) : (
-              <ControlledAnimation
-                templateKey={element.templateKey as ComponentKey}
-                config={element.config}
-                localTime={localTime}
-                elementDuration={element.duration}
-                timing={element.timing}
-              />
-            )}
-            {isSelected ? (
-              <span className="pointer-events-none absolute inset-4 z-10 rounded-2xl border-2 border-accent/60" aria-hidden="true" />
-            ) : null}
+            {/* Le fond reste fixe (plein cadre) ; seul le contenu se déplace, se redimensionne et pivote. */}
+            <div
+              className="absolute inset-0"
+              data-element-layer={element.id}
+              style={{
+                transform: `translate(${element.x - 50}%, ${element.y - 50}%) scale(${element.scale})${element.rotation ? ` rotate(${element.rotation}deg)` : ""}`,
+              }}
+            >
+              {element.kind === "media" ? (
+                <MediaLayer element={element} asset={project.media.find((m) => m.id === element.media?.assetId)} localTime={localTime} />
+              ) : (
+                <ControlledAnimation
+                  templateKey={element.templateKey as ComponentKey}
+                  config={{ ...element.config, backgroundColor: "transparent" }}
+                  localTime={localTime}
+                  elementDuration={element.duration}
+                  timing={element.timing}
+                />
+              )}
+            </div>
           </div>
         );
       })}
