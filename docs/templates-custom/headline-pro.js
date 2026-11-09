@@ -25,7 +25,7 @@ window.__MGS_TIMELINE__ = {
     stage.style.background = bg;
 
     var W = window.innerWidth, H = window.innerHeight;
-    var key = [text, ink, accent, W, H, fs, lh, ls, wsp, al].join("|");
+    var key = [text, ink, accent, W, H, lh, ls, wsp, al].join("|");
     var box = stage.firstChild;
     if (!box || box.getAttribute("data-key") !== key) {
       stage.innerHTML = "";
@@ -75,8 +75,11 @@ window.__MGS_TIMELINE__ = {
         for (var k = 0; k < ws.length; k++) widest = Math.max(widest, ws[k].offsetWidth);
         if (box.scrollHeight <= H * 0.5 && widest <= box.clientWidth * 0.72) lo = mid; else hi = mid;
       }
-      box.style.fontSize = (lo * fs) + "px";
+      box.style.fontSize = lo + "px";
+      box.setAttribute("data-base", String(lo));
     }
+    // La taille de police se règle à chaque rendu (sans reconstruire le DOM : curseur fluide).
+    box.style.fontSize = (parseFloat(box.getAttribute("data-base")) * fs) + "px";
 
     function clamp(x) { return Math.max(0, Math.min(1, x)); }
     function easeOut(x) { return 1 - Math.pow(1 - x, 3); }

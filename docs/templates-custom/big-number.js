@@ -24,7 +24,7 @@ window.__MGS_TIMELINE__ = {
 
     var W = window.innerWidth, H = window.innerHeight;
     var stage = document.getElementById("bn-stage");
-    var key = [raw, ink, accent, W, H, fs, lh, ls, wsp, al].join("|");
+    var key = [raw, ink, accent, W, H, lh, ls, wsp, al].join("|");
     if (!stage || stage.getAttribute("data-key") !== key) {
       if (stage) stage.remove();
       stage = document.createElement("div");
@@ -39,7 +39,8 @@ window.__MGS_TIMELINE__ = {
       rule.style.cssText = "height:0.9vmin;width:16vmin;border-radius:1vmin;background:" + accent + ";transform-origin:" + (al === "left" ? "left" : al === "right" ? "right" : "center") + " center;transform:scaleX(0);";
       var lab = document.createElement("div");
       lab.id = "bn-label";
-      lab.style.cssText = "font-weight:600;line-height:" + (1.15 * lh) + ";letter-spacing:" + ls + "em;max-width:80%;color:" + ink + ";font-size:" + (Math.min(W * 0.055, H * 0.07) * fs) + "px;";
+      lab.style.cssText = "font-weight:600;line-height:" + (1.15 * lh) + ";letter-spacing:" + ls + "em;max-width:80%;color:" + ink + ";font-size:" + Math.min(W * 0.055, H * 0.07) + "px;";
+      lab.setAttribute("data-base", String(Math.min(W * 0.055, H * 0.07)));
       lab.textContent = label;
       stage.appendChild(big); stage.appendChild(rule); stage.appendChild(lab);
       document.body.appendChild(stage);
@@ -51,7 +52,8 @@ window.__MGS_TIMELINE__ = {
         big.style.fontSize = mid + "px";
         if (big.scrollWidth <= W * 0.64) lo = mid; else hi = mid;
       }
-      big.style.fontSize = (lo * fs) + "px";
+      big.style.fontSize = lo + "px";
+      big.setAttribute("data-base", String(lo));
     }
     stage.style.background = bg;
 
@@ -63,6 +65,9 @@ window.__MGS_TIMELINE__ = {
     var big2 = stage.querySelector("#bn-big");
     var rule2 = stage.querySelector("#bn-rule");
     var lab2 = stage.querySelector("#bn-label");
+    // Tailles de police réglées à chaque rendu (sans reconstruire le DOM : curseur fluide).
+    big2.style.fontSize = (parseFloat(big2.getAttribute("data-base")) * fs) + "px";
+    lab2.style.fontSize = (parseFloat(lab2.getAttribute("data-base")) * fs) + "px";
     big2.textContent = prefix + (target * count).toFixed(decimals) + suffix;
     var pop = 1 + 0.06 * (1 - easeOut(clamp((time - 0.15) / 0.5)));
     big2.style.transform = "scale(" + pop + ") translateY(" + (-ex * 30) + "px)";

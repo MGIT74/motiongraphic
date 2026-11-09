@@ -466,7 +466,12 @@ export default function SandboxTimelineFrame({
         const iframeEl = iframeRef.current;
         if (iframeEl) {
           if (bb && [bb.l, bb.t, bb.r, bb.b].every((v) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1)) {
-            iframeEl.setAttribute("data-content-box", `${bb.l},${bb.t},${bb.r},${bb.b}`);
+            const next = `${bb.l},${bb.t},${bb.r},${bb.b}`;
+            if (iframeEl.getAttribute("data-content-box") !== next) {
+              iframeEl.setAttribute("data-content-box", next);
+              // Le canvas re-mesure sa boîte de sélection (elle suit le texte sans à-coup).
+              iframeEl.dispatchEvent(new CustomEvent("mg-content-box", { bubbles: true }));
+            }
           } else {
             iframeEl.removeAttribute("data-content-box");
           }
