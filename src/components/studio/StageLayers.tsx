@@ -97,7 +97,9 @@ function SceneLayers({
     <div className="absolute inset-0" style={{ backgroundColor: scene.background ?? "#000000" }} data-canvas-surface="">
       {active.map((element, layer) => {
         const localTime = endState ? element.duration : roundToFrame(time - (sceneStart + element.start));
-        const fill = element.kind === "media" ? "transparent" : element.config.backgroundColor;
+        // Logique « After Effects » : seul le calque le plus bas peint son fond ; les calques au-dessus
+        // sont transparents, donc on voit tous les calques superposés en même temps.
+        const fill = layer === 0 && element.kind !== "media" ? element.config.backgroundColor : "transparent";
         return (
           <div
             key={element.id}
