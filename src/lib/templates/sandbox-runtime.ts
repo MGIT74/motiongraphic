@@ -178,6 +178,21 @@ const PRELUDE_V2_SOURCE = `
       postReady();
       return;
     }
+    if (data.type === "mgsi:font" && typeof data.css === "string" && data.css.length < 4000000) {
+      // Police de marque : @font-face en data: (CSP font-src data:), puis chargement avant re-rendu.
+      var st = document.getElementById("mgsi-fontfaces");
+      if (!st) { st = document.createElement("style"); st.id = "mgsi-fontfaces"; document.head.appendChild(st); }
+      st.textContent = data.css;
+      var fams = Array.isArray(data.families) ? data.families.slice(0, 6) : [];
+      var loads = [];
+      for (var fi = 0; fi < fams.length; fi++) {
+        try { loads.push(document.fonts.load("700 32px " + JSON.stringify(String(fams[fi])))); } catch (e) {}
+      }
+      Promise.all(loads).then(function () {}, function () {}).then(function () {
+        post({ type: "mgsi:font_ready", metrics: metrics });
+      });
+      return;
+    }
     if (data.type === "mgsi:seek" && typeof data.t === "number" && typeof data.id !== "undefined") {
       handleSeek(data);
     } else if (data.type === "mgsi:set_params" && data.params && typeof data.params === "object") {
