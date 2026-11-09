@@ -141,6 +141,7 @@ export function validateCustomTemplate(
 
 export const RESERVED_SLUGS: string[] = [
   "kinetic-type-01",
+  "kinetic-typography-pro-01",
   "text-reveal-01",
   "elastic-text-01",
   "shape-morph-01",
