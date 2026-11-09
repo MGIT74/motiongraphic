@@ -214,6 +214,23 @@ function ElementProperties({
         </div>
 
         <div className={element.kind === "media" ? "hidden" : "col-span-2"}>
+          <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-line bg-background px-2.5 py-2">
+            <span className="text-[11px] font-medium text-ink">Sans fond (supprimer le fond du calque)</span>
+            <input
+              type="checkbox"
+              checked={config.backgroundColor === "transparent"}
+              onChange={(e) =>
+                onPatchElement(element.id, {
+                  config: { ...config, backgroundColor: e.target.checked ? "transparent" : "#000000" },
+                })
+              }
+              className="h-4 w-4 cursor-pointer accent-[#0A84FF]"
+              aria-label="Sans fond"
+            />
+          </label>
+        </div>
+
+        <div className={element.kind === "media" ? "hidden" : "col-span-2"}>
           <p className={labelCls}>Couleurs rapides (texte principal)</p>
           <div className="flex flex-wrap gap-1.5">
             {QUICK_COLORS.map((c) => (
@@ -263,23 +280,6 @@ function ElementProperties({
               </button>
             ))}
           </div>
-        </div>
-
-        <div className={element.kind === "media" ? "hidden" : "col-span-2"}>
-          <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-line bg-background px-2.5 py-2">
-            <span className="text-[11px] font-medium text-ink">Fond transparent (calque superposable)</span>
-            <input
-              type="checkbox"
-              checked={config.backgroundColor === "transparent"}
-              onChange={(e) =>
-                onPatchElement(element.id, {
-                  config: { ...config, backgroundColor: e.target.checked ? "transparent" : "#000000" },
-                })
-              }
-              className="h-4 w-4 cursor-pointer accent-[#0A84FF]"
-              aria-label="Fond transparent"
-            />
-          </label>
         </div>
 
         <div className="col-span-2">
