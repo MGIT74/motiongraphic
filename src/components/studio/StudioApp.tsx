@@ -602,6 +602,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       sceneIndex={sceneIndex}
       selectedElementId={selectedElementId}
       onSelectElement={setSelectedElementId}
+      onPatchElement={patchElement}
       onDropTemplate={(templateKey) => addElementAt(templateKey, time)}
       compact={compact}
     />
