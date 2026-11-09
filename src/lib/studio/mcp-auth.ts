@@ -1,6 +1,7 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createClient } from "@supabase/supabase-js";
+import { extractMcpCandidate } from "./mcp-credentials";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
 export type McpPrincipal = { userId: string; kind: "user" | "legacy"; scopes?: string[]; tokenId?: string };
@@ -21,11 +22,9 @@ export function requireMcpPrincipal(): McpPrincipal {
  * Un jeton utilisateur n'est jamais traité comme le jeton administrateur.
  */
 export async function authenticateMcpRequest(request: Request): Promise<McpPrincipal | null> {
-  const authorization = request.headers.get("authorization")?.trim() ?? "";
-  const bearer = /^Bearer\s+(.+)$/i.exec(authorization)?.[1]?.trim() ?? "";
-  const alternate = request.headers.get("x-auth-token")?.trim() || request.headers.get("x-api-key")?.trim() || "";
+  const bearer = /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization")?.trim() ?? "")?.[1]?.trim() ?? "";
   const legacy = process.env.MCP_ACCESS_TOKEN;
-  const candidate = bearer || alternate.replace(/^Bearer\s+/i, "").trim();
+  const candidate = extractMcpCandidate(request.headers, request.url, process.env);
   if (!candidate) return null;
   if (legacy && safeEqual(candidate, legacy) && process.env.MCP_USER_ID) {
     return { userId: process.env.MCP_USER_ID, kind: "legacy" };
