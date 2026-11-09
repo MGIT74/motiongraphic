@@ -7,6 +7,7 @@ import { sceneOffsets } from "@/lib/studio/project-model";
 import { supportsFontSize } from "@/lib/studio/typography";
 import { boxCenter, localToStage, measureContentBox, placeContentAt, stageToLocal, wrapperCenter, type Box, type Pt } from "./canvas-geometry";
 import StageLayers, { activeElementCount } from "./StageLayers";
+import { ALIGN_EVENT, type AlignEdge } from "./align-events";
 import { TEMPLATE_DRAG_TYPE } from "./TemplateLibrary";
 
 /**
@@ -99,6 +100,41 @@ export default function StudioCanvas({
     const layer = findLayer(selected.id);
     setMeasured(layer ? { box: measureContentBox(layer, stage), scale: selected.scale, x: selected.x, y: selected.y, W: stage.clientWidth, H: stage.clientHeight, fs: selected.config.fontSize ?? 1 } : null);
   }, [selected, time, playing, project, findLayer, resizeTick, dragging]);
+
+  // « Aligner sur la page » (panneau droit) : on décale le calque pour que la boîte
+  // visible du contenu (pivotée comprise) touche le bord ou le centre de la scène.
+  useEffect(() => {
+    const onAlign = (ev: Event) => {
+      const stage = stageRef.current;
+      const { id, edge } = (ev as CustomEvent<{ id: string; edge: AlignEdge }>).detail;
+      if (!stage || !selected || selected.id !== id || !measured || !onPatchElement) return;
+      const W = stage.clientWidth;
+      const H = stage.clientHeight;
+      const cur = displayBox(measured, selected);
+      const xf = { x: selected.x, y: selected.y, scale: selected.scale, rotation: selected.rotation ?? 0 };
+      const pts = [
+        { x: cur.l, y: cur.t },
+        { x: cur.r, y: cur.t },
+        { x: cur.r, y: cur.b },
+        { x: cur.l, y: cur.b },
+      ].map((p) => localToStage(p, xf, W, H));
+      const l = Math.min(...pts.map((p) => p.x));
+      const r = Math.max(...pts.map((p) => p.x));
+      const t = Math.min(...pts.map((p) => p.y));
+      const b = Math.max(...pts.map((p) => p.y));
+      let dx = 0;
+      let dy = 0;
+      if (edge === "left") dx = -l;
+      else if (edge === "right") dx = W - r;
+      else if (edge === "hcenter") dx = W / 2 - (l + r) / 2;
+      else if (edge === "top") dy = -t;
+      else if (edge === "bottom") dy = H - b;
+      else dy = H / 2 - (t + b) / 2;
+      onPatchElement(id, { x: Math.round((selected.x + (dx / W) * 100) * 100) / 100, y: Math.round((selected.y + (dy / H) * 100) * 100) / 100 });
+    };
+    window.addEventListener(ALIGN_EVENT, onAlign);
+    return () => window.removeEventListener(ALIGN_EVENT, onAlign);
+  }, [selected, measured, onPatchElement]);
 
   const stagePoint = (e: { clientX: number; clientY: number }): Pt => {
     const r = stageRef.current!.getBoundingClientRect();
