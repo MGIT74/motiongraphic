@@ -41,6 +41,17 @@ import type { AnimationConfig } from "@/types/animation";
  * publié (version incrémentée). Le code source n'est JAMAIS exécuté dans
  * l'app : rendu exclusif en bac à sable isolé (iframe sandbox + postMessage).
  */
+/** Identifiant UUID v4 : la colonne custom_templates.id est de type uuid. */
+function newTemplateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const h = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 export default function TemplateLab({ backend }: { backend: "demo" | "supabase" }) {
   const [templates, setTemplates] = useState<CustomTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,7 +92,7 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
         ? (f.componentKey as CustomTemplate["componentKey"])
         : undefined;
     return sanitizeCustomTemplate({
-      id: f.id ?? `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+      id: f.id ?? newTemplateId(),
       slug: f.slug.trim(),
       name: f.name.trim(),
       category: f.category,
