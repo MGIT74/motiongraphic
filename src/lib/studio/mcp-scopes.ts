@@ -56,3 +56,16 @@ export function rateLimited(key: string, max = 10, windowMs = 3600_000, now = Da
   hits.set(key, recent);
   return false;
 }
+
+/** Aperçus MCP des utilisateurs (non admin) : 20 par 10 min et par utilisateur, 2 en parallèle sur le serveur. */
+let previewsRunning = 0;
+export const MAX_PARALLEL_PREVIEWS = 2;
+export function acquirePreviewSlot(userId: string, now = Date.now()): "ok" | "rate" | "busy" {
+  if (rateLimited(`preview:${userId}`, 20, 600_000, now)) return "rate";
+  if (previewsRunning >= MAX_PARALLEL_PREVIEWS) return "busy";
+  previewsRunning += 1;
+  return "ok";
+}
+export function releasePreviewSlot(): void {
+  previewsRunning = Math.max(0, previewsRunning - 1);
+}
