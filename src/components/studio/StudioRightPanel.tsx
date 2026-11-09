@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Baseline, Check, Sparkles, X, ChevronDown, ChevronUp, Move, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Baseline, Check, Eye, EyeOff, GripVertical, Sparkles, X, Move, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
 import { supportsFontSize } from "@/lib/studio/typography";
 import type { ElementTiming, MediaOptions, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
@@ -29,6 +29,7 @@ export default function StudioRightPanel({
   onMoveLayer,
   fxOpen = false,
   onToggleFx,
+  onSelectElement,
   variant = "sidebar",
 }: {
   project: StudioProject;
@@ -39,10 +40,11 @@ export default function StudioRightPanel({
   /** Bouton « fx » : ouvre / ferme la galerie de styles sur la scène. */
   fxOpen?: boolean;
   onToggleFx?: () => void;
+  onSelectElement?: (elementId: string) => void;
   onChangeTemplate: (elementId: string, newTemplateKey: string) => void;
   onPatchElement: (elementId: string, patch: Partial<StudioElement>) => void;
   onDeleteElement: (elementId: string) => void;
-  onMoveLayer?: (elementId: string, target: "up" | "down" | "front" | "back") => void;
+  onMoveLayer?: (elementId: string, target: "up" | "down" | "front" | "back" | number) => void;
 }) {
   return (
     <aside
@@ -64,7 +66,7 @@ export default function StudioRightPanel({
         </div>
       ) : (
         <>
-          <ElementProperties selection={selection} onPatchElement={onPatchElement} onDeleteElement={onDeleteElement} onMoveLayer={onMoveLayer} fxOpen={fxOpen} onToggleFx={onToggleFx} />
+          <ElementProperties selection={selection} onPatchElement={onPatchElement} onDeleteElement={onDeleteElement} onMoveLayer={onMoveLayer} fxOpen={fxOpen} onToggleFx={onToggleFx} onSelectElement={onSelectElement} />
           {variant === "sheet" && fxOpen && selection.element.kind !== "media" ? (
             <CompatibleStyles
               element={selection.element}
@@ -91,13 +93,15 @@ function ElementProperties({
   onMoveLayer,
   fxOpen,
   onToggleFx,
+  onSelectElement,
 }: {
+  onSelectElement?: (elementId: string) => void;
   fxOpen: boolean;
   onToggleFx?: () => void;
   selection: StudioSelection;
   onPatchElement: (elementId: string, patch: Partial<StudioElement>) => void;
   onDeleteElement: (elementId: string) => void;
-  onMoveLayer?: (elementId: string, target: "up" | "down" | "front" | "back") => void;
+  onMoveLayer?: (elementId: string, target: "up" | "down" | "front" | "back" | number) => void;
 }) {
   const { element, scene } = selection;
   const template = getStudioTemplate(element.templateKey);
@@ -300,32 +304,14 @@ function ElementProperties({
             <SliderField id="pr-scale" label="Échelle" unit="×" min={0.2} max={3} step={0.05} reset={1} value={element.scale} onChange={(v) => onPatchElement(element.id, { scale: Math.round(v * 100) / 100 })} />
             <SliderField id="pr-rotation" label="Rotation" unit="°" min={-180} max={180} step={1} reset={0} value={element.rotation ?? 0} onChange={(v) => onPatchElement(element.id, { rotation: Math.round(v) })} />
             {onMoveLayer ? (
-              <div>
-                <p className={labelCls}>
-                  Calque {scene.elements.findIndex((el) => el.id === element.id) + 1}/{scene.elements.length}
-                </p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {(
-                    [
-                      ["back", "Tout au fond", ArrowDownToLine],
-                      ["down", "Descendre", ChevronDown],
-                      ["up", "Monter", ChevronUp],
-                      ["front", "Premier plan", ArrowUpToLine],
-                    ] as const
-                  ).map(([target, label, Icon]) => (
-                    <button
-                      key={target}
-                      type="button"
-                      onClick={() => onMoveLayer(element.id, target)}
-                      className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-line text-muted transition-colors hover:border-accent/50 hover:text-ink"
-                      aria-label={label}
-                      title={label}
-                    >
-                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <LayersList
+                elements={scene.elements}
+                selectedId={element.id}
+                onSelect={onSelectElement}
+                onMove={onMoveLayer}
+                onToggleHidden={(id, hidden) => onPatchElement(id, { hidden: hidden ? true : undefined })}
+                labelCls={labelCls}
+              />
             ) : null}
           </>
         ) : null}
@@ -397,6 +383,59 @@ function ElementProperties({
         ) : null}
       </div>
     </section>
+  );
+}
+
+function LayersList({ elements, selectedId, onSelect, onMove, onToggleHidden, labelCls }: {
+  elements: StudioElement[];
+  selectedId: string;
+  onSelect?: (id: string) => void;
+  onMove: (id: string, target: number) => void;
+  onToggleHidden: (id: string, hidden: boolean) => void;
+  labelCls: string;
+}) {
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  // Premier plan en haut : on affiche la liste inversée.
+  const rows = elements.map((el, index) => ({ el, index })).reverse();
+  const end = () => { setDragId(null); setOverIndex(null); };
+
+  return (
+    <div>
+      <p className={labelCls}>
+        Calques · glisser pour réordonner (haut = premier plan)
+      </p>
+      <ul className="flex flex-col gap-1" onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverIndex(null); }}>
+        {rows.map(({ el, index }) => {
+          const active = el.id === selectedId;
+          const showLine = dragId !== null && overIndex === index && dragId !== el.id;
+          return (
+            <li
+              key={el.id}
+              draggable
+              onDragStart={(e) => { setDragId(el.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", el.id); }}
+              onDragOver={(e) => { if (dragId === null) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverIndex(index); }}
+              onDrop={(e) => { e.preventDefault(); if (dragId && dragId !== el.id) onMove(dragId, index); end(); }}
+              onDragEnd={end}
+              onClick={() => onSelect?.(el.id)}
+              className={`flex cursor-grab items-center gap-1.5 rounded-lg border px-1.5 py-1.5 text-xs active:cursor-grabbing ${active ? "border-accent/70 bg-accent/10" : "border-line bg-background"} ${dragId === el.id ? "opacity-40" : ""} ${showLine ? "shadow-[0_-2px_0_0_#0A84FF]" : ""} ${el.hidden ? "text-muted" : "text-ink"}`}
+            >
+              <GripVertical className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+              <span className="w-4 shrink-0 text-center font-mono text-[10px] text-muted">{index + 1}</span>
+              <span className="min-w-0 flex-1 truncate">{el.kind === "media" ? el.label : el.config.text || el.label}</span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onToggleHidden(el.id, !el.hidden); }}
+                className="shrink-0 cursor-pointer rounded-md p-1 text-muted hover:text-ink"
+                aria-label={el.hidden ? "Afficher le calque" : "Masquer le calque"}
+              >
+                {el.hidden ? <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Eye className="h-3.5 w-3.5" aria-hidden="true" />}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
