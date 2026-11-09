@@ -77,8 +77,19 @@ export default function StudioCanvas({
       raf = requestAnimationFrame(() => setResizeTick((n) => n + 1));
     };
     stage.addEventListener("mg-content-box", on);
+    // La scène change de taille (bandeau fx, panneaux, fenêtre) : la boîte de sélection
+    // doit être re-mesurée, d'abord tout de suite puis une fois le contenu remis en page.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const ro = new ResizeObserver(() => {
+      on();
+      clearTimeout(timer);
+      timer = setTimeout(on, 150);
+    });
+    ro.observe(stage);
     return () => {
       cancelAnimationFrame(raf);
+      clearTimeout(timer);
+      ro.disconnect();
       stage.removeEventListener("mg-content-box", on);
     };
   }, []);
