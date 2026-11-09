@@ -246,6 +246,34 @@ export default function SandboxTimelineFrame({
     };
   }, [sessionId, seekNow]);
 
+  /* Redimensionnement du cadre (échelle du calque dans le Studio) : le template calcule sa
+   * mise en page depuis la taille de sa fenêtre ; sans nouveau rendu il resterait rogné. */
+  useEffect(() => {
+    const el = iframeRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let first = true;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      if (first) {
+        first = false;
+        return;
+      }
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!paramsSettledRef.current) {
+          queuedSeekRef.current = currentTimeRef.current;
+          return;
+        }
+        seekNow(currentTimeRef.current);
+      });
+    });
+    observer.observe(el);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [seekNow, doc, sessionId]);
+
   /* Changement de PARAMÈTRES après le chargement : SET_PARAMS (un seul en
    * vol ; son acquittement débloque le SEEK éventuellement en file). */
   useEffect(() => {
