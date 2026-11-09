@@ -2,8 +2,8 @@
 
 import { useCallback, useMemo, useRef, useState, type DragEvent, type PointerEvent, type WheelEvent } from "react";
 import { AudioLines, Eye, EyeOff, Film, Image as ImageIcon, Magnet, Minus, Plus, Trash2 } from "lucide-react";
-import type { StudioElement, StudioProject } from "@/lib/studio/project-model";
-import { roundToFrame, sceneOffsets } from "@/lib/studio/project-model";
+import type { ProjectAudio, StudioElement, StudioProject } from "@/lib/studio/project-model";
+import { audioClipLength, roundToFrame, sceneOffsets } from "@/lib/studio/project-model";
 import { TEMPLATE_DRAG_TYPE } from "./TemplateLibrary";
 
 const ZOOM_MIN = 24;
@@ -46,6 +46,7 @@ export default function StudioTimeline({
   onDeleteElement,
   onToggleHidden,
   onToggleAudioMuted,
+  onChangeAudio,
   onDropTemplate,
   compact = false,
 }: {
@@ -64,6 +65,8 @@ export default function StudioTimeline({
   onToggleHidden?: (elementIds: string[], hidden: boolean) => void;
   /** Coupe/rétablit la piste audio. */
   onToggleAudioMuted?: () => void;
+  /** Déplace / rogne le bloc audio (début, décalage dans le fichier, durée). */
+  onChangeAudio?: (patch: Partial<ProjectAudio>, gesture: number) => void;
   /** Template déposé depuis la bibliothèque à l'instant global `time`. */
   onDropTemplate?: (templateKey: string, time: number) => void;
   /** Écran étroit : pistes plus basses, libellés en icônes, poignées plus larges (doigt). */
@@ -107,6 +110,40 @@ export default function StudioTimeline({
   );
 
   const scrub = (clientX: number) => onSeek(roundToFrame(timeFromEvent(clientX)));
+
+  /** Glisser le bloc audio : déplacer, rogner le début ou la fin. */
+  const onAudioDown = (mode: "move" | "trim-start" | "trim-end", e: PointerEvent) => {
+    const audio = project.audio;
+    if (!audio || !onChangeAudio || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    const assetDur = project.media.find((m) => m.id === audio.assetId)?.duration;
+    const len0 = audioClipLength(audio, assetDur, duration);
+    const startX = e.clientX;
+    const gesture = ++gestureRef.current;
+    document.body.style.userSelect = "none";
+    const onMove = (ev: globalThis.PointerEvent) => {
+      const delta = (ev.clientX - startX) / pxPerSec;
+      if (mode === "move") {
+        const start = Math.max(0, Math.min(duration - 0.5, audio.start + delta));
+        onChangeAudio({ start: roundToFrame(start) }, gesture);
+      } else if (mode === "trim-end") {
+        const max = assetDur !== undefined ? assetDur - audio.trimStart : 3600;
+        onChangeAudio({ length: roundToFrame(Math.max(0.5, Math.min(max, len0 + delta))) }, gesture);
+      } else {
+        const d = Math.max(-Math.min(audio.start, audio.trimStart), Math.min(len0 - 0.5, delta));
+        onChangeAudio({ start: roundToFrame(audio.start + d), trimStart: roundToFrame(audio.trimStart + d), length: roundToFrame(len0 - d) }, gesture);
+      }
+    };
+    const onUp = () => {
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
   const onPlayheadDown = (e: PointerEvent) => {
     (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -525,14 +562,25 @@ export default function StudioTimeline({
               {project.audio ? (() => {
                 const audio = project.audio;
                 const asset = project.media.find((m) => m.id === audio.assetId);
-                const length = Math.max(0.5, Math.min((asset?.duration ?? duration) - audio.trimStart, duration - audio.start));
+                const length = audioClipLength(audio, asset?.duration, duration);
                 return (
                   <span
-                    className={`absolute flex items-center gap-1.5 overflow-hidden rounded-lg border-2 border-emerald-500/40 bg-emerald-500/10 px-2 text-[10px] font-semibold text-emerald-200 ${audio.muted ? "opacity-40" : ""}`}
+                    onPointerDown={(e) => onAudioDown("move", e)}
+                    className={`pointer-events-auto absolute flex cursor-grab touch-none select-none items-center gap-1.5 overflow-hidden rounded-lg border-2 border-emerald-500/40 bg-emerald-500/10 px-3 text-[10px] font-semibold text-emerald-200 active:cursor-grabbing ${audio.muted ? "opacity-40" : ""}`}
                     style={{ left: audio.start * pxPerSec, width: length * pxPerSec, top: 6, height: 44 }}
-                    title={asset?.name ?? "Musique"}
+                    title={`${asset?.name ?? "Musique"} — glisser pour déplacer, bords pour raccourcir`}
                   >
+                    <span
+                      onPointerDown={(e) => onAudioDown("trim-start", e)}
+                      className="absolute inset-y-0 left-0 w-2.5 cursor-ew-resize bg-emerald-400/40 hover:bg-emerald-400/70"
+                      aria-label="Raccourcir le début"
+                    />
                     ♪ <span className="truncate">{asset?.name ?? "Musique"}</span>
+                    <span
+                      onPointerDown={(e) => onAudioDown("trim-end", e)}
+                      className="absolute inset-y-0 right-0 w-2.5 cursor-ew-resize bg-emerald-400/40 hover:bg-emerald-400/70"
+                      aria-label="Raccourcir la fin"
+                    />
                   </span>
                 );
               })() : (

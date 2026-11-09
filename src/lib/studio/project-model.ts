@@ -114,6 +114,8 @@ export interface ProjectAudio {
   trimStart: number;
   fadeIn: number;
   fadeOut: number;
+  /** Durée jouée (s) à partir de trimStart ; absente = jusqu'à la fin du fichier ou du projet. */
+  length?: number;
   /** Piste coupée (œil fermé) : ni lue dans le Studio ni mixée à l'export. */
   muted?: boolean;
 }
@@ -495,8 +497,21 @@ export function sanitizeAudio(input: unknown): ProjectAudio | null {
     trimStart: finiteOr(a.trimStart, 0, 0, 3600),
     fadeIn: finiteOr(a.fadeIn, 0.5, 0, 10),
     fadeOut: finiteOr(a.fadeOut, 1.5, 0, 10),
+    ...(a.length !== undefined && a.length !== null ? { length: finiteOr(a.length, 1, 0.1, 3600) } : {}),
     ...(a.muted === true ? { muted: true } : {}),
   };
+}
+
+/** Durée réelle (s) du bloc audio sur la timeline : fichier, projet et réglage « length » combinés. */
+export function audioClipLength(audio: ProjectAudio, assetDuration: number | undefined, projectDuration: number): number {
+  return Math.max(
+    0.5,
+    Math.min(
+      assetDuration !== undefined ? assetDuration - audio.trimStart : Infinity,
+      projectDuration - audio.start,
+      audio.length ?? Infinity
+    )
+  );
 }
 
 /** Crée un élément média (image/vidéo) au premier plan d'une scène. */

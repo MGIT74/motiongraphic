@@ -646,6 +646,10 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
         for (const id of ids) next = updateElement(next, scene.id, id, (el) => ({ ...el, hidden: hidden ? true : undefined }));
         commit(next, "toggle-hidden");
       }}
+      onChangeAudio={(patch, gesture) => {
+        if (!project.audio) return;
+        commit(setProjectAudio(project, { ...project.audio, ...patch }), "audio-clip", `audio-clip:${gesture}`);
+      }}
       onToggleAudioMuted={() => {
         if (!project.audio) return;
         commit(setProjectAudio(project, { ...project.audio, muted: project.audio.muted ? undefined : true }), "audio-muted");
@@ -703,7 +707,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       />
 
       <MediaRuntimeContext.Provider value={{ urls: mediaUrls, deterministic: false, playing }}>
-      <AudioTrack audio={project.audio} url={project.audio ? mediaUrls[project.audio.assetId] : undefined} time={time} playing={playing} projectDuration={duration} />
+      <AudioTrack audio={project.audio} url={project.audio ? mediaUrls[project.audio.assetId] : undefined} time={time} playing={playing} projectDuration={duration} assetDuration={project.audio ? project.media.find((m) => m.id === project.audio?.assetId)?.duration : undefined} />
       {compact ? (
         <>
           <div className="flex min-h-0 flex-1 flex-col">
