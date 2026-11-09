@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEve
 import { MousePointerClick, Play } from "lucide-react";
 import type { StudioElement, StudioProject } from "@/lib/studio/project-model";
 import { sceneOffsets } from "@/lib/studio/project-model";
+import { supportsFontSize } from "@/lib/studio/typography";
 import { boxCenter, localToStage, measureContentBox, placeContentAt, stageToLocal, wrapperCenter, type Box, type Pt } from "./canvas-geometry";
 import StageLayers, { activeElementCount } from "./StageLayers";
 import { TEMPLATE_DRAG_TYPE } from "./TemplateLibrary";
@@ -43,7 +44,7 @@ export default function StudioCanvas({
   const empty = activeElementCount(project, time) === 0;
 
   const stageRef = useRef<HTMLDivElement>(null);
-  const [measured, setMeasured] = useState<{ box: Box; scale: number; x: number; y: number; W: number; H: number } | null>(null);
+  const [measured, setMeasured] = useState<{ box: Box; scale: number; x: number; y: number; W: number; H: number; fs: number } | null>(null);
   const [resizeTick, setResizeTick] = useState(0);
   useEffect(() => {
     const on = () => setResizeTick((n) => n + 1);
@@ -53,6 +54,9 @@ export default function StudioCanvas({
   const [guides, setGuides] = useState<{ v: boolean; h: boolean }>({ v: false, h: false });
   const dragRef = useRef<{
     mode: "move" | "scale" | "rotate";
+    /** Poignées d'angle : change la taille de police (templates texte) au lieu de l'échelle. */
+    fontMode: boolean;
+    fs0: number;
     id: string;
     start: Pt;
     xf: { x: number; y: number; scale: number; rotation: number };
@@ -77,8 +81,8 @@ export default function StudioCanvas({
       return;
     }
     const layer = findLayer(selected.id);
-    setMeasured(layer ? { box: measureContentBox(layer, stage), scale: selected.scale, x: selected.x, y: selected.y, W: stage.clientWidth, H: stage.clientHeight } : null);
-  }, [selected, time, playing, project, findLayer, resizeTick]);
+    setMeasured(layer ? { box: measureContentBox(layer, stage), scale: selected.scale, x: selected.x, y: selected.y, W: stage.clientWidth, H: stage.clientHeight, fs: selected.config.fontSize ?? 1 } : null);
+  }, [selected, time, playing, project, findLayer, resizeTick, dragging]);
 
   const stagePoint = (e: { clientX: number; clientY: number }): Pt => {
     const r = stageRef.current!.getBoundingClientRect();
@@ -96,13 +100,15 @@ export default function StudioCanvas({
     const bc = boxCenter(cur);
     dragRef.current = {
       mode,
+      fontMode: mode === "scale" && supportsFontSize(el.templateKey, el.kind),
+      fs0: el.config.fontSize ?? 1,
       id: el.id,
       start: stagePoint(e),
       xf,
       v0: { x: bc.x - c.x, y: bc.y - c.y },
       center0: localToStage(bc, xf, W, H),
     };
-    setMeasured({ box: cur, scale: el.scale, x: el.x, y: el.y, W, H });
+    setMeasured({ box: cur, scale: el.scale, x: el.x, y: el.y, W, H, fs: el.config.fontSize ?? 1 });
     setDragging(true);
     stage.setPointerCapture(e.pointerId);
     e.preventDefault();
@@ -135,7 +141,7 @@ export default function StudioCanvas({
       const p = stageToLocal(q, { x: el.x, y: el.y, scale: el.scale, rotation: el.rotation }, W, H);
       const inside = p.x >= b.l - pad && p.x <= b.r + pad && p.y >= b.t - pad && p.y <= b.b + pad;
       if (!inside) continue;
-      const m = { box: b, scale: el.scale, x: el.x, y: el.y, W, H };
+      const m = { box: b, scale: el.scale, x: el.x, y: el.y, W, H, fs: el.config.fontSize ?? 1 };
       if (b.full) fallback ??= { el, m };
       else {
         hit = { el, m };
@@ -174,10 +180,18 @@ export default function StudioCanvas({
     } else if (d.mode === "scale") {
       const d0 = Math.hypot(d.start.x - d.center0.x, d.start.y - d.center0.y) || 1;
       const d1 = Math.hypot(q.x - d.center0.x, q.y - d.center0.y);
-      const scale = Math.round(Math.max(0.2, Math.min(3, d.xf.scale * (d1 / d0))) * 100) / 100;
-      const k = scale / d.xf.scale;
-      const pos = placeContentAt({ x: d.v0.x * k, y: d.v0.y * k }, d.center0, d.xf.rotation, W, H);
-      onPatchElement(d.id, { scale, x: clampPct(pos.x), y: clampPct(pos.y) });
+      if (d.fontMode) {
+        // Les poignées pilotent la taille de police ; l'échelle reste réglable à la main (curseur).
+        const el = activeEls.find((x) => x.id === d.id);
+        if (!el) return;
+        const fontSize = Math.round(Math.max(0.3, Math.min(3, d.fs0 * (d1 / d0))) * 100) / 100;
+        onPatchElement(d.id, { config: { ...el.config, fontSize } });
+      } else {
+        const scale = Math.round(Math.max(0.2, Math.min(3, d.xf.scale * (d1 / d0))) * 100) / 100;
+        const k = scale / d.xf.scale;
+        const pos = placeContentAt({ x: d.v0.x * k, y: d.v0.y * k }, d.center0, d.xf.rotation, W, H);
+        onPatchElement(d.id, { scale, x: clampPct(pos.x), y: clampPct(pos.y) });
+      }
     } else {
       const a0 = Math.atan2(d.start.y - d.center0.y, d.start.x - d.center0.x);
       const a1 = Math.atan2(q.y - d.center0.y, q.x - d.center0.x);
@@ -264,17 +278,25 @@ export default function StudioCanvas({
 }
 
 /** Boîte mesurée à (x, y, scale) ramenée à l'état courant de l'élément (le contenu suit l'échelle autour du centre du calque). */
-function displayBox(m: { box: Box; scale: number; x: number; y: number; W: number; H: number }, el: StudioElement, W = m.W, H = m.H): Box {
+function displayBox(m: { box: Box; scale: number; x: number; y: number; W: number; H: number; fs: number }, el: StudioElement, W = m.W, H = m.H): Box {
   const k = el.scale / m.scale;
   const c0 = wrapperCenter({ x: m.x, y: m.y, scale: m.scale }, W, H);
   const c1 = wrapperCenter({ x: el.x, y: el.y, scale: el.scale }, W, H);
-  return {
-    l: c1.x + (m.box.l - c0.x) * k,
-    t: c1.y + (m.box.t - c0.y) * k,
-    r: c1.x + (m.box.r - c0.x) * k,
-    b: c1.y + (m.box.b - c0.y) * k,
-    full: m.box.full,
-  };
+  let l = c1.x + (m.box.l - c0.x) * k;
+  let t = c1.y + (m.box.t - c0.y) * k;
+  let r = c1.x + (m.box.r - c0.x) * k;
+  let b = c1.y + (m.box.b - c0.y) * k;
+  // Taille de police modifiée pendant un glissement : le contenu grossit autour de son centre.
+  const fk = (el.config.fontSize ?? 1) / m.fs;
+  if (Math.abs(fk - 1) > 1e-6) {
+    const cx = (l + r) / 2;
+    const cy = (t + b) / 2;
+    l = cx + (l - cx) * fk;
+    r = cx + (r - cx) * fk;
+    t = cy + (t - cy) * fk;
+    b = cy + (b - cy) * fk;
+  }
+  return { l, t, r, b, full: m.box.full };
 }
 
 /** Boîte de sélection : pivotée autour du centre du calque, poignées à taille constante. */

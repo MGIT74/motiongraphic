@@ -70,14 +70,14 @@ window.__MGS_TIMELINE__ = {
           wordEl.appendChild(c);
         }
       });
-      // Taille : la plus grande police dont le texte complet tient dans 84% x 70% du cadre.
+      // Taille de base : tient dans ~50% de la hauteur (marge pour agrandir la police depuis le Studio).
       var all = box.querySelectorAll(".tw-c");
       for (var v = 0; v < all.length; v++) if (all[v].textContent) all[v].style.visibility = "hidden";
       var lo = 10, hi = Math.min(W, H) * 0.22, mid;
       for (var it = 0; it < 14; it++) {
         mid = (lo + hi) / 2;
         box.style.fontSize = mid + "px";
-        if (box.scrollHeight <= H * 0.7 && box.scrollWidth <= box.clientWidth + 1) lo = mid; else hi = mid;
+        if (box.scrollHeight <= H * 0.5 && box.scrollWidth <= box.clientWidth + 1) lo = mid; else hi = mid;
       }
       box.style.fontSize = (lo * fs) + "px";
     }
