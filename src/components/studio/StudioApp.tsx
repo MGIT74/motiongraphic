@@ -455,7 +455,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
 
   const setAudio = (audio: ProjectAudio | null) => commit(setProjectAudio(project, audio), "audio", "audio");
 
-  const moveLayer = (elementId: string, target: "up" | "down" | "front" | "back") => {
+  const moveLayer = (elementId: string, target: "up" | "down" | "front" | "back" | number) => {
     const located = computeSelection(project, elementId);
     if (!located) return;
     commit(moveElementLayer(project, located.scene.id, elementId, target), "move-layer");
@@ -596,6 +596,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       onMoveLayer={moveLayer}
       fxOpen={fxOpen}
       onToggleFx={() => setFxOpen((v) => !v)}
+      onSelectElement={setSelectedElementId}
       variant={variant}
     />
   );
