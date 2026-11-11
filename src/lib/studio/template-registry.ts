@@ -44,6 +44,11 @@ export const STUDIO_TEMPLATES: Record<string, StudioTemplateMeta> = {
     studioCategory: "text-motion",
     timelineDuration: 4,
   }),
+  "kinetic-typography-pro-01": extendMeta(getComponentMeta("kinetic-typography-pro-01"), {
+    elementKind: "text",
+    studioCategory: "text-motion",
+    timelineDuration: 5,
+  }),
   "text-reveal-01": extendMeta(getComponentMeta("text-reveal-01"), {
     elementKind: "text",
     studioCategory: "text-motion",
