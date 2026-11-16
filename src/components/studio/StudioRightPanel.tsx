@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, AlignCenter, AlignJustify, AlignLeft, AlignRight, Baseline, Check, Eye, EyeOff, GripVertical, Sparkles, X, Move, MousePointerClick as MousePointerClickIcon, Palette, Timer, Trash2, Type } from "lucide-react";
 import { requestAlign, type AlignEdge } from "@/components/studio/align-events";
+import LetterColors, { supportsLetterColors } from "@/components/studio/LetterColors";
+import { remapCharColors } from "@/lib/animations/char-colors";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
 import { supportsFontSize } from "@/lib/studio/typography";
 import type { ElementTiming, MediaOptions, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
@@ -124,6 +126,7 @@ function ElementProperties({
   const labelCls = "mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted";
   const patchConfig = (p: Partial<StudioElement["config"]>) => onPatchElement(element.id, { config: { ...config, ...p } });
   const transparent = config.backgroundColor === "transparent";
+  const letterColors = !isMedia && supportsLetterColors(element.templateKey);
 
   return (
     <section className="border-b border-line p-3">
@@ -151,7 +154,10 @@ function ElementProperties({
         <input
           id="pr-text"
           value={config.text}
-          onChange={(e) => patchConfig({ text: e.target.value.slice(0, 120) })}
+          onChange={(e) => {
+            const text = e.target.value.slice(0, 120);
+            patchConfig({ text, charColors: remapCharColors(config.text, text, config.charColors) });
+          }}
           className={inputCls + " mb-2.5"}
           placeholder="Votre texte"
           aria-label="Texte"
@@ -216,11 +222,10 @@ function ElementProperties({
 
             <div>
               <p className={labelCls}>Couleurs</p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {(
                   [
                     ["Texte", "primaryColor"],
-                    ["Accent", "accentColor"],
                     ["Fond", "backgroundColor"],
                   ] as const
                 ).map(([label, key]) => {
@@ -242,7 +247,7 @@ function ElementProperties({
                   );
                 })}
               </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className={letterColors ? "hidden" : "mt-2 flex flex-wrap gap-1.5"}>
                 {QUICK_COLORS.map((c) => (
                   <button
                     key={c}
@@ -257,6 +262,13 @@ function ElementProperties({
               </div>
             </div>
 
+            {letterColors ? (
+              <div>
+                <p className={labelCls}>Couleur des lettres</p>
+                <LetterColors templateKey={element.templateKey} config={config} onChange={(charColors) => patchConfig({ charColors })} />
+              </div>
+            ) : null}
+
             <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-line bg-background px-2.5 py-2">
               <span className="text-[11px] font-medium text-ink">Sans fond</span>
               <input
@@ -270,8 +282,8 @@ function ElementProperties({
 
             <details className="group rounded-lg border border-line bg-background/50">
               <summary className="cursor-pointer select-none px-2.5 py-2 text-[11px] text-muted hover:text-ink">Codes hexadécimaux</summary>
-              <div className="grid grid-cols-3 gap-2 p-2.5 pt-0">
-                {(["primaryColor", "accentColor", "backgroundColor"] as const).map((key) => (
+              <div className="grid grid-cols-2 gap-2 p-2.5 pt-0">
+                {(["primaryColor", "backgroundColor"] as const).map((key) => (
                   <input
                     key={`${key}-${config[key]}`}
                     defaultValue={config[key] === "transparent" ? "" : config[key]}

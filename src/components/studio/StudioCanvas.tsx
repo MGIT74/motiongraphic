@@ -8,6 +8,8 @@ import { supportsFontSize } from "@/lib/studio/typography";
 import { boxCenter, localToStage, measureContentBox, placeContentAt, stageToLocal, wrapperCenter, type Box, type Pt } from "./canvas-geometry";
 import StageLayers, { activeElementCount } from "./StageLayers";
 import { ALIGN_EVENT, type AlignEdge } from "./align-events";
+import CanvasTextEditor from "./CanvasTextEditor";
+import { supportsLetterColors } from "./LetterColors";
 import { TEMPLATE_DRAG_TYPE } from "./TemplateLibrary";
 
 /**
@@ -45,6 +47,7 @@ export default function StudioCanvas({
   const empty = activeElementCount(project, time) === 0;
 
   const stageRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState<{ id: string; x: number; y: number; top: number } | null>(null);
   const [measured, setMeasured] = useState<{ box: Box; scale: number; x: number; y: number; W: number; H: number; fs: number } | null>(null);
   const [resizeTick, setResizeTick] = useState(0);
   useEffect(() => {
@@ -294,6 +297,14 @@ export default function StudioCanvas({
             width: `min(100cqw, calc(100cqh * ${ratio}), 1000px)`,
           }}
           onPointerDown={onStagePointerDown}
+          onDoubleClick={() => {
+            // Double-clic sur le texte sélectionné : édition du texte et des couleurs sur place.
+            const stage = stageRef.current;
+            if (!stage || !selected || !measured || !onPatchElement || !supportsLetterColors(selected.templateKey)) return;
+            const r = stage.getBoundingClientRect();
+            const b = displayBox(measured, selected);
+            setEditing({ id: selected.id, x: r.left + b.l, y: r.top + b.b, top: r.top + b.t });
+          }}
           onPointerMove={onStagePointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
@@ -318,6 +329,9 @@ export default function StudioCanvas({
             project={project}
             time={time}
           />
+          {editing && selected && selected.id === editing.id && onPatchElement && !playing ? (
+            <CanvasTextEditor element={selected} anchor={editing} onPatch={(p) => onPatchElement(selected.id, p)} onClose={() => setEditing(null)} />
+          ) : null}
           {selected && measured && !playing ? <SelectionOverlay element={selected} box={displayBox(measured, selected)} /> : null}
           {guides.v ? <div className="pointer-events-none absolute inset-y-0 left-1/2 z-[97] w-px bg-fuchsia-400/80" aria-hidden="true" /> : null}
           {guides.h ? <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[97] h-px bg-fuchsia-400/80" aria-hidden="true" /> : null}

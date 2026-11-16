@@ -3,11 +3,13 @@
 import { useMemo } from "react";
 import type { AnimationComponentProps } from "@/types/animation";
 import { alignLayout, typoVars } from "@/lib/animations/config";
+import { indexedLines, letterColor } from "@/lib/animations/char-colors";
 import { useAnimationEngine } from "./engine";
 import { buildKineticType } from "@/lib/animations/builders";
 
 interface AnimatedLetter {
   char: string;
+  index: number;
   accent: boolean;
 }
 
@@ -25,15 +27,10 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
   const rows = useMemo<AnimatedLetter[][]>(
     () => {
       let globalIndex = 0;
-      return text
-        .toUpperCase()
-        .split("\n")
-        .filter(Boolean)
-        .map((word) =>
-          word
-            .split("")
-            .map((char) => ({ char, accent: globalIndex++ % 3 === 1 }))
-        );
+      // Lettres d'accent historiques : une sur trois (hors couleurs choisies).
+      return indexedLines(text).map((line) =>
+        line.map(({ char, index }) => ({ char, index, accent: globalIndex++ % 3 === 1 }))
+      );
     },
     [text]
   );
@@ -50,7 +47,7 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
       >
         {rows.map((row, wi) => (
           <div key={`w-${wi}`} className="flex items-end" style={lay.row}>
-            {row.map(({ char, accent }, li) => (
+            {row.map(({ char, index, accent }, li) => (
               <span
                 key={`l-${wi}-${li}`}
                 className="inline-block overflow-hidden align-bottom"
@@ -64,7 +61,7 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
                     data-letter-inner
                     className="inline-block will-change-transform"
                     style={{
-                      color: accent ? accentColor : primaryColor,
+                      color: letterColor(config, index, accent),
                       fontSize: "calc(12cqmin * var(--mg-fs))",
                       fontWeight: 800,
                       letterSpacing: "calc(0.02em + var(--mg-ls))",
@@ -82,7 +79,8 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
                 data-accent-dot
                 className="ml-2 inline-block rounded-full will-change-transform"
                 style={{
-                  background: accentColor,
+                  // Point final : couleur de la dernière lettre colorée (sinon l'accent historique).
+                  background: config.charColors ? (Object.values(config.charColors).at(-1) ?? primaryColor) : accentColor,
                   width: "2.6cqmin",
                   height: "2.6cqmin",
                 }}

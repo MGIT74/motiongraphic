@@ -2,6 +2,7 @@
 
 import type { AnimationComponentProps } from "@/types/animation";
 import { alignLayout, typoVars } from "@/lib/animations/config";
+import { indexedLines, letterColor } from "@/lib/animations/char-colors";
 import { useAnimationEngine } from "./engine";
 import { buildTextReveal } from "@/lib/animations/builders";
 
@@ -14,7 +15,8 @@ import { buildTextReveal } from "@/lib/animations/builders";
 export function TextReveal01Frame({ config }: AnimationComponentProps) {
   const { text, primaryColor, accentColor, backgroundColor } = config;
   const lay = alignLayout(config.align);
-  const lines = text.toUpperCase().split("\n").filter(Boolean);
+  const lines = indexedLines(text);
+  const painted = !!config.charColors && Object.keys(config.charColors).length > 0;
 
   return (
     <div
@@ -37,7 +39,11 @@ export function TextReveal01Frame({ config }: AnimationComponentProps) {
                 lineHeight: "calc(1.1 * var(--mg-lh))",
               }}
             >
-              {line}
+              {painted
+                ? line.map(({ char, index }) => (
+                    <span key={index} style={{ color: letterColor(config, index, false) }}>{char}</span>
+                  ))
+                : line.map((c) => c.char).join("")}
             </span>
           </div>
         ))}

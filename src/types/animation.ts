@@ -34,6 +34,11 @@ export interface AnimationConfig {
   letterSpacing?: number;
   /** Espacement des mots (em ajoutés, −0.2 à 1.5, défaut 0). */
   wordSpacing?: number;
+  /**
+   * Couleur lettre par lettre : position dans `text` → couleur. Présent (même vide) :
+   * les lettres non listées prennent `primaryColor` et les accents automatiques sont coupés.
+   */
+  charColors?: Record<string, string>;
 }
 
 export interface AnimationComponentProps {
