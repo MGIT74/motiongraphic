@@ -640,10 +640,12 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       }
       onDeleteElement={deleteElement}
       onToggleHidden={(ids, hidden) => {
-        const scene = project.scenes[sceneIndex];
-        if (!scene) return;
+        // Une ligne de la timeline peut couvrir plusieurs scènes : chaque élément retrouve la sienne.
         let next = project;
-        for (const id of ids) next = updateElement(next, scene.id, id, (el) => ({ ...el, hidden: hidden ? true : undefined }));
+        for (const id of ids) {
+          const owner = project.scenes.find((sc) => sc.elements.some((el) => el.id === id));
+          if (owner) next = updateElement(next, owner.id, id, (el) => ({ ...el, hidden: hidden ? true : undefined }));
+        }
         commit(next, "toggle-hidden");
       }}
       onChangeSceneDuration={updateSceneDuration}

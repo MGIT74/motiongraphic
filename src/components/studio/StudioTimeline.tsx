@@ -85,11 +85,19 @@ export default function StudioTimeline({
   const offsets = useMemo(() => sceneOffsets(project), [project]);
   const scene = project.scenes[sceneIndex];
   const sceneOffset = offsets[sceneIndex] ?? 0;
-  const sceneElements = useMemo(() => scene?.elements ?? [], [scene]);
-  const motionElements = useMemo(() => sceneElements.filter((el) => el.kind !== "media"), [sceneElements]);
-  const mediaElements = useMemo(() => sceneElements.filter((el) => el.kind === "media"), [sceneElements]);
-  const motionLanes = useMemo(() => assignLanes(motionElements), [motionElements]);
-  const mediaLanes = useMemo(() => assignLanes(mediaElements), [mediaElements]);
+  // Toutes les scènes sont affichées à la suite : chaque élément est placé à
+  // (début de sa scène + son début), et connaît sa scène pour les gestes.
+  const owners = useMemo(() => {
+    const m = new Map<string, { sceneIndex: number; offset: number }>();
+    project.scenes.forEach((sc, i) => sc.elements.forEach((el) => m.set(el.id, { sceneIndex: i, offset: offsets[i] ?? 0 })));
+    return m;
+  }, [project, offsets]);
+  const allElements = useMemo(() => project.scenes.flatMap((sc) => sc.elements), [project]);
+  const motionElements = useMemo(() => allElements.filter((el) => el.kind !== "media"), [allElements]);
+  const mediaElements = useMemo(() => allElements.filter((el) => el.kind === "media"), [allElements]);
+  const motionLanes = useMemo(() => assignLanes(motionElements, owners), [motionElements, owners]);
+  const mediaLanes = useMemo(() => assignLanes(mediaElements, owners), [mediaElements, owners]);
+  const ownerOf = (id: string) => owners.get(id) ?? { sceneIndex, offset: sceneOffset };
 
   const motionPx = motionLanes.count * LANE_PX + 8;
   const mediaPx = mediaLanes.count * LANE_PX + 8;
@@ -223,9 +231,11 @@ export default function StudioTimeline({
   /* ------------------------------- aimantation -------------------------------- */
   /** Repères (temps relatifs à la scène) pour l'élément `exceptId`. */
   const snapPoints = (exceptId: string): number[] => {
+    const { sceneIndex: si, offset } = ownerOf(exceptId);
+    const scene = project.scenes[si];
     if (!scene) return [];
-    const pts = [0, scene.duration, roundToFrame(time - sceneOffset)];
-    for (const el of sceneElements) {
+    const pts = [0, scene.duration, roundToFrame(time - offset)];
+    for (const el of scene.elements) {
       if (el.id === exceptId) continue;
       pts.push(el.start, el.start + el.duration);
     }
@@ -249,6 +259,7 @@ export default function StudioTimeline({
 
   /* ------------------------------ glisser élément ---------------------------- */
   const startElementDrag = (e: PointerEvent, element: StudioElement, mode: DragMode) => {
+    const scene = project.scenes[ownerOf(element.id).sceneIndex];
     if (!scene || e.button !== 0) return;
     e.stopPropagation();
     // Au doigt : un élément non sélectionné se sélectionne d'un toucher, et un balayage
@@ -262,13 +273,20 @@ export default function StudioTimeline({
       };
       const onTapUp = (ev: globalThis.PointerEvent) => {
         cleanup();
-        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 10) onSelectElement(element.id);
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 10) {
+          onSelectElement(element.id);
+          const own = ownerOf(element.id);
+          if (own.sceneIndex !== sceneIndex) onSeek(roundToFrame(own.offset + element.start + 0.05));
+        }
       };
       window.addEventListener("pointerup", onTapUp);
       window.addEventListener("pointercancel", cleanup);
       return;
     }
     onSelectElement(element.id);
+    // Élément d'une autre scène : le curseur y saute pour que le canvas l'affiche.
+    const own = ownerOf(element.id);
+    if (own.sceneIndex !== sceneIndex) onSeek(roundToFrame(own.offset + element.start + 0.05));
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const startX = e.clientX;
     const points = snapPoints(element.id);
@@ -347,6 +365,9 @@ export default function StudioTimeline({
   };
 
   const renderBlock = (element: StudioElement, lane: number, isMedia: boolean) => {
+    const { sceneIndex: si, offset: sceneOffset } = ownerOf(element.id);
+    const scene = project.scenes[si];
+    const sceneElements = scene?.elements ?? [];
     const selected = element.id === selectedElementId;
     const active = drag?.elementId === element.id ? drag : null;
     const start = active ? active.start : element.start;
@@ -432,7 +453,7 @@ export default function StudioTimeline({
   const draggedTooltip = drag ? (
     <span
       className="pointer-events-none absolute z-40 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/85 px-2 py-1 font-mono text-[10px] text-white shadow-lg"
-      style={{ left: (sceneOffset + drag.start + drag.duration / 2) * pxPerSec, top: 6 }}
+      style={{ left: (ownerOf(drag.elementId).offset + drag.start + drag.duration / 2) * pxPerSec, top: 6 }}
       data-drag-tooltip
     >
       {drag.mode === "trim-end" ? `Durée ${fmt(drag.duration)} s` : drag.mode === "trim-start" ? `Début ${fmt(drag.start)} s · durée ${fmt(drag.duration)} s` : `Début ${fmt(drag.start)} s → fin ${fmt(drag.start + drag.duration)} s`}
@@ -576,7 +597,7 @@ export default function StudioTimeline({
               </div>
             ))}
 
-            {/* Piste Motion : animations de la scène courante */}
+            {/* Piste Motion : animations de toutes les scènes */}
             <div className="pointer-events-none absolute" style={{ top: motionTop, height: motionPx, left: 0, right: 0 }}>
               <div className="pointer-events-auto">{motionElements.map((el) => renderBlock(el, motionLanes.map.get(el.id) ?? 0, false))}</div>
               {motionElements.length === 0 ? (
@@ -586,7 +607,7 @@ export default function StudioTimeline({
               ) : null}
             </div>
 
-            {/* Piste Médias : images et vidéos de la scène courante */}
+            {/* Piste Médias : images et vidéos de toutes les scènes */}
             <div className="pointer-events-none absolute border-y border-line/30" style={{ top: mediaTop, height: mediaPx, left: 0, right: 0 }}>
               <div className="pointer-events-auto">{mediaElements.map((el) => renderBlock(el, mediaLanes.map.get(el.id) ?? 0, true))}</div>
               {mediaElements.length === 0 ? (
@@ -631,7 +652,7 @@ export default function StudioTimeline({
             {drag?.guide !== null && drag?.guide !== undefined ? (
               <span
                 className="pointer-events-none absolute bottom-0 z-30 w-px bg-amber-300"
-                style={{ left: (sceneOffset + drag.guide) * pxPerSec, top: 32 }}
+                style={{ left: (ownerOf(drag.elementId).offset + drag.guide) * pxPerSec, top: 32 }}
                 aria-hidden="true"
                 data-snap-guide
               />
@@ -657,16 +678,21 @@ export default function StudioTimeline({
 }
 
 /** Calques qui se chevauchent : une ligne par superposition (attribution gloutonne). */
-function assignLanes(elements: StudioElement[]): { map: Map<string, number>; count: number } {
+function assignLanes(
+  elements: StudioElement[],
+  owners: Map<string, { offset: number }>
+): { map: Map<string, number>; count: number } {
+  // Temps global (début de scène + début de l'élément) : les scènes s'enchaînent sur les mêmes lignes.
   const ends: number[] = [];
   const map = new Map<string, number>();
   for (const el of elements) {
-    let lane = ends.findIndex((end) => end <= el.start + 1e-6);
+    const start = (owners.get(el.id)?.offset ?? 0) + el.start;
+    let lane = ends.findIndex((end) => end <= start + 1e-6);
     if (lane === -1) {
       lane = ends.length;
       ends.push(0);
     }
-    ends[lane] = el.start + el.duration;
+    ends[lane] = start + el.duration;
     map.set(el.id, lane);
   }
   return { map, count: Math.max(1, ends.length) };
