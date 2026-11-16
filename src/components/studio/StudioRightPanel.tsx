@@ -8,7 +8,7 @@ import { remapCharColors } from "@/lib/animations/char-colors";
 import { BRAND_FONTS } from "@/lib/brand/fonts";
 import { supportsFontSize } from "@/lib/studio/typography";
 import type { ElementTiming, MediaOptions, StudioElement, StudioProject, StudioScene } from "@/lib/studio/project-model";
-import { getStudioTemplate, templatesForKind } from "@/lib/studio/template-registry";
+import { getStudioTemplate, isNumbersOnly, templatesForKind } from "@/lib/studio/template-registry";
 import LoopingDemoFrame from "@/components/studio/LoopingDemoFrame";
 import type { ComponentKey } from "@/types/animation";
 
@@ -614,7 +614,11 @@ export function CompatibleStyles({
   onClose?: () => void;
 }) {
   const strip = layout === "strip";
-  const compatible = templatesForKind(element.kind).filter((t) => t.elementKind === element.kind);
+  // Les effets « chiffres uniquement » ne sont proposés que si le texte contient un nombre.
+  const withNumber = /\d/.test(element.config.text);
+  const compatible = templatesForKind(element.kind).filter(
+    (t) => t.elementKind === element.kind && (withNumber || !isNumbersOnly(t.key) || t.key === element.templateKey)
+  );
 
   return (
     <section className={strip ? "min-w-0 shrink-0 border-t border-line bg-surface/95 p-3" : "p-4"}>

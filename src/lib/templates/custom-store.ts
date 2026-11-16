@@ -50,7 +50,7 @@ function toRow(template: CustomTemplate): CustomTemplateRow {
     source_kind: template.sourceKind,
     component_key: template.componentKey ?? null,
     code: template.sourceKind === "code" ? (template.code ?? null) : null,
-    default_config: template.defaultConfig,
+    default_config: template.numbersOnly ? { ...template.defaultConfig, numbersOnly: true } : template.defaultConfig,
     prompt_web: template.promptWeb,
     prompt_after_effects: template.promptAfterEffects,
     version: template.version,

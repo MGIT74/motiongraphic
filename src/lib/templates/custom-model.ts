@@ -47,6 +47,13 @@ export interface CustomTemplate {
   updatedAt: string;
   /** Résultat du dernier passage du validateur (pour affichage admin). */
   validation?: CodeValidationReport;
+  /** Effet conçu pour les chiffres (compteur…) : proposé seulement sur un texte qui contient un nombre. */
+  numbersOnly?: boolean;
+}
+
+/** Vrai si le texte contient au moins un chiffre (cible d'un template « chiffres uniquement »). */
+export function hasNumber(text: string): boolean {
+  return /\d/.test(text);
 }
 
 export interface CodeFinding {
@@ -181,10 +188,15 @@ export function sanitizeCustomTemplate(input: unknown): CustomTemplate | null {
 
     if (sourceKind === "component" && !componentKey) return null;
 
+    // Drapeau « chiffres uniquement » rangé dans default_config (aucune migration) : lu puis retiré de la config.
+    const rawConfig = (typeof raw.defaultConfig === "object" && raw.defaultConfig !== null ? raw.defaultConfig : {}) as Record<string, unknown>;
+    const numbersOnly = raw.numbersOnly === true || rawConfig.numbersOnly === true;
+    const { numbersOnly: _flag, ...configOnly } = rawConfig;
+    void _flag;
     const defaultConfig = componentKey
-      ? sanitizeConfigByKey(componentKey, raw.defaultConfig)
-      : typeof (raw.defaultConfig as AnimationConfig | undefined)?.text === "string"
-        ? (raw.defaultConfig as AnimationConfig)
+      ? sanitizeConfigByKey(componentKey, configOnly)
+      : typeof configOnly.text === "string"
+        ? (configOnly as unknown as AnimationConfig)
         : null;
     if (!defaultConfig) return null;
 
@@ -207,6 +219,7 @@ export function sanitizeCustomTemplate(input: unknown): CustomTemplate | null {
       createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
       updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
       validation: (raw.validation as CodeValidationReport | undefined) ?? undefined,
+      ...(numbersOnly ? { numbersOnly: true } : {}),
     };
   } catch {
     return null;

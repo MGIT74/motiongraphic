@@ -100,6 +100,7 @@ type StudioAppProps = {
     componentKey?: string;
     elementKind: string;
     defaultConfig: import("@/types/animation").AnimationConfig;
+    numbersOnly?: boolean;
   }[];
 };
 
