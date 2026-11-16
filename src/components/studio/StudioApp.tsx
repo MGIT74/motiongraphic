@@ -47,6 +47,7 @@ import StudioTopBar from "./StudioTopBar";
 import StudioLeftPanel, { type LeftPanelTab } from "./StudioLeftPanel";
 import StudioCanvas from "./StudioCanvas";
 import StudioRightPanel, { CompatibleStyles } from "./StudioRightPanel";
+import FxDrawer from "./FxDrawer";
 import StudioTimeline from "./StudioTimeline";
 import ExportButton from "./ExportButton";
 import ProjectsMenu from "./ProjectsMenu";
@@ -615,16 +616,19 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
     />
   );
 
-  const stylesStrip =
-    fxOpen && selection && selection.element.kind !== "media" ? (
-      <CompatibleStyles
-        element={selection.element}
-        project={project}
-        onChange={changeElementTemplate}
-        layout="strip"
-        onClose={() => setFxOpen(false)}
-      />
-    ) : null;
+  const stylesStrip = (
+    <FxDrawer open={fxOpen && !!selection && selection.element.kind !== "media"}>
+      {selection && selection.element.kind !== "media" ? (
+        <CompatibleStyles
+          element={selection.element}
+          project={project}
+          onChange={changeElementTemplate}
+          layout="strip"
+          onClose={() => setFxOpen(false)}
+        />
+      ) : null}
+    </FxDrawer>
+  );
 
   const timeline = (
     <StudioTimeline
@@ -649,6 +653,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
         commit(next, "toggle-hidden");
       }}
       onChangeSceneDuration={updateSceneDuration}
+      onOpenFx={() => setFxOpen(true)}
       onChangeAudio={(patch, gesture) => {
         if (!project.audio) return;
         commit(setProjectAudio(project, { ...project.audio, ...patch }), "audio-clip", `audio-clip:${gesture}`);

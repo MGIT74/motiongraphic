@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState, type DragEvent, type PointerEvent, type WheelEvent } from "react";
-import { AudioLines, Eye, EyeOff, Film, Image as ImageIcon, Magnet, Minus, Plus, Trash2 } from "lucide-react";
+import { AudioLines, Eye, EyeOff, Film, Image as ImageIcon, Magnet, Minus, Plus, Sparkles } from "lucide-react";
 import type { ProjectAudio, StudioElement, StudioProject } from "@/lib/studio/project-model";
 import { audioClipLength, roundToFrame, sceneOffsets } from "@/lib/studio/project-model";
 import { TEMPLATE_DRAG_TYPE } from "./TemplateLibrary";
@@ -48,6 +48,7 @@ export default function StudioTimeline({
   onToggleAudioMuted,
   onChangeAudio,
   onChangeSceneDuration,
+  onOpenFx,
   onDropTemplate,
   compact = false,
 }: {
@@ -70,6 +71,8 @@ export default function StudioTimeline({
   onChangeAudio?: (patch: Partial<ProjectAudio>, gesture: number) => void;
   /** Glisser la ligne de séparation de scène : change la durée de la scène qui la précède. */
   onChangeSceneDuration?: (sceneIndex: number, duration: number) => void;
+  /** Bouton « fx » d'un bloc : ouvre le tiroir des styles pour cet élément. */
+  onOpenFx?: (elementId: string) => void;
   /** Template déposé depuis la bibliothèque à l'instant global `time`. */
   onDropTemplate?: (templateKey: string, time: number) => void;
   /** Écran étroit : pistes plus basses, libellés en icônes, poignées plus larges (doigt). */
@@ -438,14 +441,21 @@ export default function StudioTimeline({
           aria-label="Trim droit — glisser pour changer la durée"
           data-trim="end"
         />
-        <span
-          className="absolute right-4 z-10 inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full text-red-300 opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-70"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={() => onDeleteElement(element.id)}
-          title="Supprimer l'élément"
-        >
-          <Trash2 className="pointer-events-none h-3 w-3" aria-hidden="true" />
-        </span>
+        {onOpenFx && !isMedia ? (
+          <span
+            role="button"
+            className={`absolute right-4 z-10 inline-flex h-5 cursor-pointer items-center gap-0.5 rounded-md px-1.5 text-[10px] font-bold normal-case tracking-normal transition-opacity ${selected ? "bg-accent/30 text-white opacity-100" : "bg-black/40 text-accent opacity-0 group-hover:opacity-90"} hover:opacity-100`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => {
+              onSelectElement(element.id);
+              onOpenFx(element.id);
+            }}
+            title="Styles et animations (fx)"
+          >
+            <Sparkles className="pointer-events-none h-3 w-3" aria-hidden="true" />
+            fx
+          </span>
+        ) : null}
       </div>
     );
   };
