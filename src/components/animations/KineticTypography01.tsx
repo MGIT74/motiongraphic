@@ -50,6 +50,7 @@ export function KineticTypography01Frame({ config }: AnimationComponentProps) {
             {row.map(({ char, index, accent }, li) => (
               <span
                 key={`l-${wi}-${li}`}
+                data-ci={index}
                 className="inline-block overflow-hidden align-bottom"
                 style={{ paddingBottom: "0.06em" }}
               >

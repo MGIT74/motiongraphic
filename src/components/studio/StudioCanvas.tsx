@@ -8,7 +8,7 @@ import { supportsFontSize } from "@/lib/studio/typography";
 import { boxCenter, localToStage, measureContentBox, placeContentAt, stageToLocal, wrapperCenter, type Box, type Pt } from "./canvas-geometry";
 import StageLayers, { activeElementCount } from "./StageLayers";
 import { ALIGN_EVENT, type AlignEdge } from "./align-events";
-import CanvasTextEditor from "./CanvasTextEditor";
+import { replaceSelection, selRange, wordAt, type TextEditState } from "@/lib/studio/text-edit";
 import { supportsLetterColors } from "./LetterColors";
 import { TEMPLATE_DRAG_TYPE } from "./TemplateLibrary";
 
@@ -26,6 +26,8 @@ export default function StudioCanvas({
   onSelectElement,
   onPatchElement,
   onDropTemplate,
+  textEdit = null,
+  onTextEdit,
   compact = false,
 }: {
   project: StudioProject;
@@ -38,6 +40,9 @@ export default function StudioCanvas({
   onPatchElement?: (elementId: string, patch: Partial<StudioElement>) => void;
   /** Template déposé depuis la bibliothèque (ajouté à l'instant courant). */
   onDropTemplate?: (templateKey: string) => void;
+  /** Texte en cours d'édition sur la scène (curseur / sélection de lettres). */
+  textEdit?: TextEditState | null;
+  onTextEdit?: (state: TextEditState | null) => void;
   compact?: boolean;
 }) {
   const [dropping, setDropping] = useState(false);
@@ -47,7 +52,8 @@ export default function StudioCanvas({
   const empty = activeElementCount(project, time) === 0;
 
   const stageRef = useRef<HTMLDivElement>(null);
-  const [editing, setEditing] = useState<{ id: string; x: number; y: number; top: number } | null>(null);
+  const selectingRef = useRef(false);
+  const [editRects, setEditRects] = useState<{ sel: { l: number; t: number; w: number; h: number }[]; caret: { x: number; y: number; h: number } | null } | null>(null);
   const [measured, setMeasured] = useState<{ box: Box; scale: number; x: number; y: number; W: number; H: number; fs: number } | null>(null);
   const [resizeTick, setResizeTick] = useState(0);
   useEffect(() => {
@@ -100,6 +106,7 @@ export default function StudioCanvas({
   const sceneStart = sceneOffsets(project)[Math.min(sceneIndex, project.scenes.length - 1)] ?? 0;
   const activeEls = scene.elements.filter((el) => !el.hidden && time >= sceneStart + el.start && time < sceneStart + el.start + el.duration);
   const selected = activeEls.find((el) => el.id === selectedElementId) ?? null;
+  const editing = textEdit && selected && textEdit.id === selected.id && onTextEdit ? textEdit : null;
 
   const findLayer = useCallback((id: string) => stageRef.current?.querySelector<HTMLElement>(`[data-element-layer="${id}"]`) ?? null, []);
 
@@ -150,6 +157,65 @@ export default function StudioCanvas({
     return () => window.removeEventListener(ALIGN_EVENT, onAlign);
   }, [selected, measured, onPatchElement]);
 
+  // Rectangles de la sélection de lettres et position du curseur (mesurés sur le texte rendu).
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    const layer = editing ? findLayer(editing.id) : null;
+    if (!stage || !editing || !layer) {
+      setEditRects(null);
+      return;
+    }
+    const sr = stage.getBoundingClientRect();
+    const boxes = letterBoxes(layer);
+    const [a, b] = selRange(editing);
+    const sel = boxes
+      .filter((x) => x.index >= a && x.index < b)
+      .map((x) => ({ l: x.r.left - sr.left, t: x.r.top - sr.top, w: x.r.width, h: x.r.height }));
+    let caret: { x: number; y: number; h: number } | null = null;
+    const at = boxes.find((x) => x.index === editing.focus);
+    const before = boxes.find((x) => x.index === editing.focus - 1);
+    if (at) caret = { x: at.r.left - sr.left, y: at.r.top - sr.top, h: at.r.height };
+    else if (before) caret = { x: before.r.right - sr.left, y: before.r.top - sr.top, h: before.r.height };
+    setEditRects({ sel, caret });
+  }, [editing, project, time, resizeTick, findLayer]);
+
+  // Clavier pendant l'édition : saisie, effacement, flèches, Cmd+A, Échap / Entrée pour sortir.
+  useEffect(() => {
+    if (!editing || !selected || !onPatchElement || !onTextEdit) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      const config = selected.config;
+      const len = config.text.length;
+      const [a, b] = selRange(editing);
+      const put = (insert: string, del: "back" | "fwd" | null = null) => {
+        let edit = editing;
+        if (a === b && del === "back") edit = { ...editing, anchor: Math.max(0, a - 1), focus: a };
+        if (a === b && del === "fwd") edit = { ...editing, anchor: a, focus: Math.min(len, a + 1) };
+        const r = replaceSelection(config, edit, insert);
+        onPatchElement(selected.id, { config: r.config });
+        onTextEdit({ id: selected.id, anchor: r.caret, focus: r.caret });
+      };
+      const meta = e.metaKey || e.ctrlKey;
+      if (e.key === "Escape" || (e.key === "Enter" && !e.shiftKey)) onTextEdit(null);
+      else if (e.key === "Enter") put("\n");
+      else if (meta && e.key.toLowerCase() === "a") onTextEdit({ id: selected.id, anchor: 0, focus: len });
+      else if (meta) return; // Cmd+Z, Cmd+C… : laissés au Studio / navigateur
+      else if (e.key === "Backspace") put("", "back");
+      else if (e.key === "Delete") put("", "fwd");
+      else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        const dir = e.key === "ArrowLeft" ? -1 : 1;
+        const f = e.shiftKey ? Math.max(0, Math.min(len, editing.focus + dir)) : a !== b ? (dir < 0 ? a : b) : Math.max(0, Math.min(len, editing.focus + dir));
+        onTextEdit({ id: selected.id, anchor: e.shiftKey ? editing.anchor : f, focus: f });
+      } else if (e.key.length === 1) put(e.key);
+      else return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [editing, selected, onPatchElement, onTextEdit]);
+
   const stagePoint = (e: { clientX: number; clientY: number }): Pt => {
     const r = stageRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -182,6 +248,19 @@ export default function StudioCanvas({
 
   const onStagePointerDown = (e: RPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    if (editing && onTextEdit) {
+      const layer = findLayer(editing.id);
+      const i = layer ? caretAt(layer, e.clientX, e.clientY) : null;
+      if (i !== null) {
+        // Clic dans le texte : place le curseur (Maj : étend la sélection), glisser = sélectionner.
+        e.preventDefault();
+        selectingRef.current = true;
+        stageRef.current?.setPointerCapture(e.pointerId);
+        onTextEdit({ id: editing.id, anchor: e.shiftKey ? editing.anchor : i, focus: i });
+        return;
+      }
+      onTextEdit(null);
+    }
     const stage = stageRef.current;
     if (!stage || !onPatchElement) {
       const target = e.target as HTMLElement;
@@ -224,6 +303,12 @@ export default function StudioCanvas({
   };
 
   const onStagePointerMove = (e: RPointerEvent<HTMLDivElement>) => {
+    if (selectingRef.current && editing && onTextEdit) {
+      const layer = findLayer(editing.id);
+      const i = layer ? caretAt(layer, e.clientX, e.clientY, 400) : null;
+      if (i !== null && i !== editing.focus) onTextEdit({ ...editing, focus: i });
+      return;
+    }
     const d = dragRef.current;
     const stage = stageRef.current;
     if (!d || !stage || !onPatchElement) return;
@@ -274,6 +359,7 @@ export default function StudioCanvas({
   };
 
   const endDrag = (e: RPointerEvent<HTMLDivElement>) => {
+    selectingRef.current = false;
     if (!dragRef.current) return;
     dragRef.current = null;
     setDragging(false);
@@ -297,13 +383,14 @@ export default function StudioCanvas({
             width: `min(100cqw, calc(100cqh * ${ratio}), 1000px)`,
           }}
           onPointerDown={onStagePointerDown}
-          onDoubleClick={() => {
-            // Double-clic sur le texte sélectionné : édition du texte et des couleurs sur place.
-            const stage = stageRef.current;
-            if (!stage || !selected || !measured || !onPatchElement || !supportsLetterColors(selected.templateKey)) return;
-            const r = stage.getBoundingClientRect();
-            const b = displayBox(measured, selected);
-            setEditing({ id: selected.id, x: r.left + b.l, y: r.top + b.b, top: r.top + b.t });
+          onDoubleClick={(e) => {
+            // Double-clic sur le texte sélectionné : édition sur place (comme dans Canva).
+            if (!selected || !onTextEdit || !supportsLetterColors(selected.templateKey)) return;
+            const layer = findLayer(selected.id);
+            const i = layer ? caretAt(layer, e.clientX, e.clientY) : null;
+            if (i === null) return;
+            const [a, b] = wordAt(selected.config.text, Math.min(i, selected.config.text.length - 1));
+            onTextEdit({ id: selected.id, anchor: a, focus: b });
           }}
           onPointerMove={onStagePointerMove}
           onPointerUp={endDrag}
@@ -329,10 +416,8 @@ export default function StudioCanvas({
             project={project}
             time={time}
           />
-          {editing && selected && selected.id === editing.id && onPatchElement && !playing ? (
-            <CanvasTextEditor element={selected} anchor={editing} onPatch={(p) => onPatchElement(selected.id, p)} onClose={() => setEditing(null)} />
-          ) : null}
-          {selected && measured && !playing ? <SelectionOverlay element={selected} box={displayBox(measured, selected)} /> : null}
+          {editing && editRects ? <TextEditOverlay rects={editRects} /> : null}
+          {selected && measured && !playing ? <SelectionOverlay editing={!!editing} element={selected} box={displayBox(measured, selected)} /> : null}
           {guides.v ? <div className="pointer-events-none absolute inset-y-0 left-1/2 z-[97] w-px bg-fuchsia-400/80" aria-hidden="true" /> : null}
           {guides.h ? <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[97] h-px bg-fuchsia-400/80" aria-hidden="true" /> : null}
           {empty ? <EmptyState playing={playing} /> : null}
@@ -377,7 +462,45 @@ function displayBox(m: { box: Box; scale: number; x: number; y: number; W: numbe
 }
 
 /** Boîte de sélection : pivotée autour du centre du calque, poignées à taille constante. */
-function SelectionOverlay({ element, box }: { element: StudioElement; box: Box }) {
+/** Sélection de lettres et curseur clignotant, dessinés par-dessus le texte en édition. */
+function TextEditOverlay({ rects }: { rects: { sel: { l: number; t: number; w: number; h: number }[]; caret: { x: number; y: number; h: number } | null } }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[99]" aria-hidden="true">
+      {rects.sel.map((r, i) => (
+        <span key={i} className="absolute rounded-[2px] bg-[#0A84FF]/40" style={{ left: r.l, top: r.t, width: r.w, height: r.h }} />
+      ))}
+      {rects.caret ? (
+        <span className="absolute w-[2px] animate-pulse bg-white shadow-[0_0_0_1px_rgba(10,132,255,0.8)]" style={{ left: rects.caret.x - 1, top: rects.caret.y, height: rects.caret.h }} />
+      ) : null}
+    </div>
+  );
+}
+
+/** Lettres du calque (data-ci = position dans le texte) et leur boîte écran. */
+function letterBoxes(layer: HTMLElement): { index: number; r: DOMRect }[] {
+  return Array.from(layer.querySelectorAll<HTMLElement>("[data-ci]"))
+    .map((el) => ({ index: Number(el.dataset.ci), r: el.getBoundingClientRect() }))
+    .filter((x) => Number.isFinite(x.index) && x.r.height > 0);
+}
+
+/** Position du curseur (entre deux lettres) la plus proche d'un point écran ; null si loin du texte. */
+function caretAt(layer: HTMLElement, x: number, y: number, pad = 14): number | null {
+  const boxes = letterBoxes(layer);
+  if (boxes.length === 0) return null;
+  const minX = Math.min(...boxes.map((b) => b.r.left)) - pad;
+  const maxX = Math.max(...boxes.map((b) => b.r.right)) + pad;
+  const minY = Math.min(...boxes.map((b) => b.r.top)) - pad;
+  const maxY = Math.max(...boxes.map((b) => b.r.bottom)) + pad;
+  if (x < minX || x > maxX || y < minY || y > maxY) return null;
+  // Ligne la plus proche verticalement, puis lettre la plus proche horizontalement.
+  const dy = (b: { r: DOMRect }) => (y < b.r.top ? b.r.top - y : y > b.r.bottom ? y - b.r.bottom : 0);
+  const best = Math.min(...boxes.map(dy));
+  const line = boxes.filter((b) => dy(b) - best < 2).sort((a, b) => a.r.left - b.r.left);
+  for (const b of line) if (x < b.r.left + b.r.width / 2) return b.index;
+  return line[line.length - 1].index + 1;
+}
+
+function SelectionOverlay({ element, box, editing = false }: { element: StudioElement; box: Box; editing?: boolean }) {
   const handle = 11;
   const corner = (id: string, left: string, top: string, cursor: string) => (
     <span
@@ -393,7 +516,8 @@ function SelectionOverlay({ element, box }: { element: StudioElement; box: Box }
       style={{ transform: element.rotation ? `rotate(${element.rotation}deg)` : undefined, transformOrigin: `${element.x}% ${element.y}%` }}
       aria-hidden="true"
     >
-      <div className="absolute" style={{ left: box.l, top: box.t, width: box.r - box.l, height: box.b - box.t, outline: "2px solid rgba(10,132,255,0.9)" }}>
+      <div className="absolute" style={{ left: box.l, top: box.t, width: box.r - box.l, height: box.b - box.t, outline: editing ? "1px dashed rgba(10,132,255,0.8)" : "2px solid rgba(10,132,255,0.9)" }}>
+        {editing ? null : (<>
         <span className="absolute left-1/2 bg-accent" style={{ top: -26, width: 1.5, height: 26, marginLeft: -0.75 }} />
         <span
           data-handle="rot"
@@ -404,6 +528,7 @@ function SelectionOverlay({ element, box }: { element: StudioElement; box: Box }
         {corner("ne", "100%", "0%", "nesw-resize")}
         {corner("sw", "0%", "100%", "nesw-resize")}
         {corner("se", "100%", "100%", "nwse-resize")}
+        </>)}
       </div>
     </div>
   );

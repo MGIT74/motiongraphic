@@ -33,6 +33,7 @@ export default function StudioRightPanel({
   fxOpen = false,
   onToggleFx,
   onSelectElement,
+  letterRange = null,
   variant = "sidebar",
 }: {
   project: StudioProject;
@@ -44,6 +45,8 @@ export default function StudioRightPanel({
   fxOpen?: boolean;
   onToggleFx?: () => void;
   onSelectElement?: (elementId: string) => void;
+  /** Lettres sélectionnées sur la scène [début, fin[ (édition sur place). */
+  letterRange?: [number, number] | null;
   onChangeTemplate: (elementId: string, newTemplateKey: string) => void;
   onPatchElement: (elementId: string, patch: Partial<StudioElement>) => void;
   onDeleteElement: (elementId: string) => void;
@@ -69,7 +72,7 @@ export default function StudioRightPanel({
         </div>
       ) : (
         <>
-          <ElementProperties selection={selection} onPatchElement={onPatchElement} onDeleteElement={onDeleteElement} onMoveLayer={onMoveLayer} fxOpen={fxOpen} onToggleFx={onToggleFx} onSelectElement={onSelectElement} />
+          <ElementProperties selection={selection} onPatchElement={onPatchElement} onDeleteElement={onDeleteElement} onMoveLayer={onMoveLayer} fxOpen={fxOpen} onToggleFx={onToggleFx} onSelectElement={onSelectElement} letterRange={letterRange} />
           {variant === "sheet" && fxOpen && selection.element.kind !== "media" ? (
             <CompatibleStyles
               element={selection.element}
@@ -97,7 +100,9 @@ function ElementProperties({
   fxOpen,
   onToggleFx,
   onSelectElement,
+  letterRange,
 }: {
+  letterRange: [number, number] | null;
   onSelectElement?: (elementId: string) => void;
   fxOpen: boolean;
   onToggleFx?: () => void;
@@ -265,7 +270,7 @@ function ElementProperties({
             {letterColors ? (
               <div>
                 <p className={labelCls}>Couleur des lettres</p>
-                <LetterColors templateKey={element.templateKey} config={config} onChange={(charColors) => patchConfig({ charColors })} />
+                <LetterColors templateKey={element.templateKey} config={config} range={letterRange} onChange={(charColors) => patchConfig({ charColors })} />
               </div>
             ) : null}
 

@@ -39,11 +39,9 @@ export function TextReveal01Frame({ config }: AnimationComponentProps) {
                 lineHeight: "calc(1.1 * var(--mg-lh))",
               }}
             >
-              {painted
-                ? line.map(({ char, index }) => (
-                    <span key={index} style={{ color: letterColor(config, index, false) }}>{char}</span>
-                  ))
-                : line.map((c) => c.char).join("")}
+              {line.map(({ char, index }) => (
+                <span key={index} data-ci={index} style={painted ? { color: letterColor(config, index, false) } : undefined}>{char}</span>
+              ))}
             </span>
           </div>
         ))}
