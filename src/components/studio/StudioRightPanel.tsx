@@ -600,7 +600,7 @@ export function CompatibleStyles({
   const compatible = templatesForKind(element.kind).filter((t) => t.elementKind === element.kind);
 
   return (
-    <section className={strip ? "shrink-0 border-t border-line bg-surface/95 p-3" : "p-4"}>
+    <section className={strip ? "min-w-0 shrink-0 border-t border-line bg-surface/95 p-3" : "p-4"}>
       <div className={`${strip ? "mb-2" : "mb-3"} flex items-center justify-between gap-2`}>
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
           Styles · {compatible.length} · le texte, les couleurs et la position sont conservés (Cmd+Z pour annuler)
@@ -612,7 +612,17 @@ export function CompatibleStyles({
         ) : null}
       </div>
 
-      <div className={strip ? "flex gap-2.5 overflow-x-auto pb-1" : "flex flex-col gap-2.5"}>
+      <div
+        className={strip ? "flex min-w-0 gap-2.5 overflow-x-auto overscroll-x-contain pb-2" : "flex flex-col gap-2.5"}
+        onWheel={
+          strip
+            ? (e) => {
+                // Molette verticale = défilement horizontal des styles (souris classique).
+                if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY;
+              }
+            : undefined
+        }
+      >
         {compatible.map((template) => {
           const isCurrent = template.key === element.templateKey;
           const previewConfig = {

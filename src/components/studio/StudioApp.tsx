@@ -653,7 +653,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
         commit(next, "toggle-hidden");
       }}
       onChangeSceneDuration={updateSceneDuration}
-      onOpenFx={() => setFxOpen(true)}
+      onOpenFx={(id) => setFxOpen((open) => !(open && selectedElementId === id))}
       onChangeAudio={(patch, gesture) => {
         if (!project.audio) return;
         commit(setProjectAudio(project, { ...project.audio, ...patch }), "audio-clip", `audio-clip:${gesture}`);

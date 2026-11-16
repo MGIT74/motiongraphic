@@ -37,9 +37,9 @@ export default function FxDrawer({ open, children }: { open: boolean; children: 
   return (
     <div
       className="grid shrink-0 overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
-      style={{ gridTemplateRows: shown ? "1fr" : "0fr", opacity: shown ? 1 : 0 }}
+      style={{ gridTemplateRows: shown ? "1fr" : "0fr", gridTemplateColumns: "minmax(0, 1fr)", opacity: shown ? 1 : 0 }}
     >
-      <div className={`min-h-0 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${shown ? "translate-y-0" : "translate-y-3"}`}>{children}</div>
+      <div className={`min-h-0 min-w-0 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${shown ? "translate-y-0" : "translate-y-3"}`}>{children}</div>
     </div>
   );
 }
