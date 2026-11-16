@@ -48,6 +48,7 @@ import StudioLeftPanel, { type LeftPanelTab } from "./StudioLeftPanel";
 import StudioCanvas from "./StudioCanvas";
 import StudioRightPanel, { CompatibleStyles } from "./StudioRightPanel";
 import FxDrawer from "./FxDrawer";
+import type { TextEditState } from "@/lib/studio/text-edit";
 import StudioTimeline from "./StudioTimeline";
 import ExportButton from "./ExportButton";
 import ProjectsMenu from "./ProjectsMenu";
@@ -141,6 +142,12 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
   const compact = useCompactStudio();
   const [sheet, setSheet] = useState<MobileSheetId | null>(null);
   const [fxOpen, setFxOpen] = useState(false);
+  // Texte édité sur la scène (double-clic) : valable seulement pour l'élément sélectionné, à l'arrêt.
+  const [textEditRaw, setTextEdit] = useState<TextEditState | null>(null);
+  const selectElement = (id: string | null) => {
+    if (id !== selectedElementId) setTextEdit(null);
+    setSelectedElementId(id);
+  };
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("saved");
   const [cloudState, setCloudState] = useState<CloudStateKind | null>(null);
 
@@ -205,6 +212,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
   const { time, playing, duration, sceneIndex, seek, setPlaying } = clock;
 
   const selection = computeSelection(project, selectedElementId);
+  const textEdit = textEditRaw && textEditRaw.id === selectedElementId && !playing ? textEditRaw : null;
 
   /* ------------------------------- médias -------------------------------- */
   // URL de lecture signées des médias du projet (renouvelées quand la liste change).
@@ -596,8 +604,9 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       onDeleteElement={deleteElement}
       onMoveLayer={moveLayer}
       fxOpen={fxOpen}
+      letterRange={textEdit && textEdit.anchor !== textEdit.focus ? [Math.min(textEdit.anchor, textEdit.focus), Math.max(textEdit.anchor, textEdit.focus)] : null}
       onToggleFx={() => setFxOpen((v) => !v)}
-      onSelectElement={setSelectedElementId}
+      onSelectElement={selectElement}
       variant={variant}
     />
   );
@@ -609,9 +618,11 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       playing={playing}
       sceneIndex={sceneIndex}
       selectedElementId={selectedElementId}
-      onSelectElement={setSelectedElementId}
+      onSelectElement={selectElement}
       onPatchElement={patchElement}
       onDropTemplate={(templateKey) => addElementAt(templateKey, time)}
+      textEdit={textEdit}
+      onTextEdit={setTextEdit}
       compact={compact}
     />
   );
@@ -637,7 +648,7 @@ function StudioAppInner({ customTemplates = [] }: StudioAppProps) {
       duration={duration}
       sceneIndex={sceneIndex}
       selectedElementId={selectedElementId}
-      onSelectElement={setSelectedElementId}
+      onSelectElement={selectElement}
       onSeek={seek}
       onChangeTiming={(sceneId, elementId, timing, gesture) =>
         commit(updateElement(project, sceneId, elementId, (el) => ({ ...el, ...timing })), "timing-element", `timing:${elementId}:${gesture}`)

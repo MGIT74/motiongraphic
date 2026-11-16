@@ -48,6 +48,7 @@ export function ElasticText01Frame({ config }: AnimationComponentProps) {
             {word.map(({ char, index, pop }, ci) => (
               <span
                 key={`l-${wi}-${ci}`}
+                data-ci={index}
                 className="inline-block overflow-visible align-bottom"
               >
                 {char === " " ? (
