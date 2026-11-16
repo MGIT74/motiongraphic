@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CircleAlert, Loader2, Pencil, Plus, Power, Trash2, Eye, LayoutDashboard, Layers3, FolderOpen, BarChart3, ExternalLink, TrendingUp, Copy, Activity, ArrowUpRight, Film , Code2} from "lucide-react";
+import { CircleAlert, Loader2, Pencil, Plus, Power, Trash2, Eye, LayoutDashboard, Layers3, FolderOpen, BarChart3, ExternalLink, TrendingUp, Copy, Activity, ArrowUpRight, Film , Code2, Clapperboard, Users, Plug } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import TemplateLab from "@/components/admin/TemplateLab";
 import { ANIMATION_SELECT, type AnimationRowLike } from "@/lib/template-mappers";
@@ -376,8 +376,9 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
             className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${tab === "lab" ? "admin-nav-active" : "text-muted hover:bg-elevated hover:text-ink"}`}>
             <Code2 className="h-4 w-4" /> Template Lab
           </button>
-          <a href="/admin/users" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-muted transition-colors hover:bg-elevated hover:text-ink">Gestion des utilisateurs</a>
-          <a href="/settings/mcp" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-muted transition-colors hover:bg-elevated hover:text-ink">Connexions MCP</a>
+          <a href="/studio" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-muted transition-colors hover:bg-elevated hover:text-ink"><Clapperboard className="h-4 w-4" /> Studio</a>
+          <a href="/admin/users" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-muted transition-colors hover:bg-elevated hover:text-ink"><Users className="h-4 w-4" /> Gestion des utilisateurs</a>
+          <a href="/settings/mcp" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-muted transition-colors hover:bg-elevated hover:text-ink"><Plug className="h-4 w-4" /> Connexions MCP</a>
         </aside>
         <div className="min-w-0 space-y-6">
           {tab === "overview" || tab === "analytics" ? (
