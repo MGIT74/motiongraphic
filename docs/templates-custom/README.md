@@ -7,5 +7,6 @@ Sources des templates collés dans le Template Lab (admin). Contrat : `window.__
 - `headline-pro.js` : titre mot à mot, `*mot*` = accent + soulignement.
 - `big-number.js` : `+250% | libellé`, compteur animé.
 - `typewriter.js` : machine à écrire, `*mot*` en accent.
+- `letter-reveal-gradient.js` : lettres qui montent en sortant du flou, dégradé accent → violet.
 
 Pour mettre à jour un template publié : coller le nouveau code dans le Template Lab puis republier.
