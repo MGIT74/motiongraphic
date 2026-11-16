@@ -384,6 +384,7 @@ export const MCP_PROJECT_TOOLS = [
           element_kind: t.meta.elementKind,
           duration: t.meta.timelineDuration,
           source: t.builtIn ? "builtin" : "custom",
+          ...(t.custom?.numbersOnly ? { numbers_only: true, usage: "Effet pour les chiffres : à utiliser sur un texte qui contient un nombre." } : {}),
         }))
       );
     },

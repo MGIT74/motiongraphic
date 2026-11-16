@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { GripVertical } from "lucide-react";
 import type { StudioProject } from "@/lib/studio/project-model";
 import { brandedConfig, FRAME_SECONDS } from "@/lib/studio/project-model";
-import { STUDIO_CATEGORIES, STUDIO_TEMPLATES, type CustomStudioTemplateMeta, type StudioTemplateMeta } from "@/lib/studio/template-registry";
+import { isNumbersOnly, STUDIO_CATEGORIES, STUDIO_TEMPLATES, type CustomStudioTemplateMeta, type StudioTemplateMeta } from "@/lib/studio/template-registry";
 import type { ComponentKey } from "@/types/animation";
 import ControlledAnimation from "./ControlledAnimation";
 
@@ -110,6 +110,8 @@ function TemplateCard({
             <span className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-[1px] text-[8px] font-semibold uppercase tracking-wider text-amber-300">
               non pilotable
             </span>
+          ) : isNumbersOnly(templateKey) ? (
+            <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-[1px] font-mono text-[8px] font-semibold text-accent" title="Effet pour les chiffres">123</span>
           ) : custom.exportCompatible === false ? (
             <span className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-[1px] text-[8px] text-amber-300">MP4 ✗</span>
           ) : null}

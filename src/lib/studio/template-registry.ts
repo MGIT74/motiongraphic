@@ -81,6 +81,12 @@ export const STUDIO_CATEGORIES: { id: StudioCategory; label: string }[] = [
 ];
 
 /** Templates compatibles avec un type d'élément. */
+/** Templates « chiffres uniquement » (Template Lab) : proposés seulement sur un texte avec un nombre. */
+const NUMBERS_ONLY_KEYS = new Set<string>();
+export function isNumbersOnly(templateKey: string): boolean {
+  return NUMBERS_ONLY_KEYS.has(templateKey);
+}
+
 export function templatesForKind(kind: ElementKind): StudioTemplateMeta[] {
   return Object.values(STUDIO_TEMPLATES).filter((t) => t.elementKind === kind);
 }
@@ -131,9 +137,11 @@ export function registerCustomStudioTemplates(
     code?: string;
     capabilities?: TemplateCapabilities;
     version?: number;
+    numbersOnly?: boolean;
   }[]
 ): void {
   for (const template of templates) {
+    NUMBERS_ONLY_KEYS[template.numbersOnly ? "add" : "delete"](template.slug);
     const base = template.componentKey ? STUDIO_TEMPLATES[template.componentKey] : undefined;
 
     /* ---- source « composant » : pilotable par le builder du composant de base ---- */

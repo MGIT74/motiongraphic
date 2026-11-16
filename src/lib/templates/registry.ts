@@ -35,6 +35,7 @@ export interface UnifiedTemplate {
     sourceKind: "component" | "code";
     code?: string;
     version: number;
+    numbersOnly?: boolean;
   };
   meta: {
     defaultConfig: AnimationConfig;
@@ -80,6 +81,7 @@ export function toUnified(template: CustomTemplate): UnifiedTemplate {
       sourceKind: template.sourceKind,
       code: template.sourceKind === "code" ? template.code : undefined,
       version: template.version,
+      ...(template.numbersOnly ? { numbersOnly: true } : {}),
     },
     meta: {
       defaultConfig: template.defaultConfig,

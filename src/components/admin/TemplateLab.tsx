@@ -82,6 +82,7 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
     promptAe: "",
     status: "draft",
     version: 1,
+    numbersOnly: false,
   });
 
   const formToTemplate = (f: EditorForm): CustomTemplate => {
@@ -113,6 +114,7 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
       promptAfterEffects: f.promptAe,
       version: f.version,
       status: f.status,
+      numbersOnly: f.numbersOnly,
     }) as CustomTemplate;
   };
 
@@ -135,6 +137,7 @@ export default function TemplateLab({ backend }: { backend: "demo" | "supabase" 
     promptAe: t.promptAfterEffects,
     status: t.status,
     version: t.version,
+    numbersOnly: t.numbersOnly === true,
   });
 
   const notify = (kind: "ok" | "error", text: string) => {
@@ -585,6 +588,20 @@ function Editor({
             <option value="published">Publié</option>
           </select>
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-background px-3 py-2.5 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={editor.numbersOnly}
+            onChange={(e) => setEditor({ ...editor, numbersOnly: e.target.checked })}
+            className="mt-0.5 h-4 w-4 cursor-pointer accent-[#0A84FF]"
+          />
+          <span>
+            <span className="block text-sm font-medium text-ink">Effet pour les chiffres uniquement</span>
+            <span className="block text-xs text-muted">
+              Compteur, nombre clé… Dans le Studio, il n&apos;est proposé dans les styles (fx) que si le texte contient un nombre, et il porte le badge « 123 ».
+            </span>
+          </span>
+        </label>
         <div className="sm:col-span-2">
           <label htmlFor="tl-desc" className={labelCls}>Description</label>
           <textarea
@@ -839,6 +856,7 @@ interface EditorForm {
   promptAe: string;
   status: CustomTemplateStatus;
   version: number;
+  numbersOnly: boolean;
 }
 
 interface ValidationSummary {

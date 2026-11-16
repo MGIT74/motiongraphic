@@ -27,6 +27,8 @@ export interface StudioCustomTemplateInput {
   code?: string;
   capabilities?: TemplateCapabilities;
   version: number;
+  /** Proposé seulement sur un texte qui contient un nombre. */
+  numbersOnly?: boolean;
 }
 
 export async function listStudioCustomTemplates(): Promise<StudioCustomTemplateInput[]> {
@@ -50,6 +52,7 @@ export async function listStudioCustomTemplates(): Promise<StudioCustomTemplateI
       code: t.sourceKind === "code" ? t.code : undefined,
       capabilities,
       version: t.version,
+      ...(t.numbersOnly ? { numbersOnly: true } : {}),
     };
   });
 }
