@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CircleAlert, Lock } from "lucide-react";
+import { CircleAlert } from "lucide-react";
+import BrandMark from "@/components/brand/LogoMark";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export default function LoginPage() {
@@ -63,8 +64,8 @@ export default function LoginPage() {
     <div className="relative flex min-h-svh items-center justify-center px-5 py-16 pt-32 sm:px-8">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface/70">
-            <Lock className="h-5 w-5 text-accent" aria-hidden="true" />
+          <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-ink text-black">
+            <BrandMark className="h-5 w-9" title="MotionGraphic.si" />
           </span>
           <h1 className="mt-5 text-2xl font-bold tracking-tight">Connexion</h1>
           <p className="mt-1 text-xs text-muted">MotionGraphic Studio — accès privé</p>
