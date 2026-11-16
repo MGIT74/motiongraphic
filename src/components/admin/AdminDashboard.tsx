@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CircleAlert, Loader2, Pencil, Plus, Power, Trash2, Eye, LayoutDashboard, Layers3, FolderOpen, BarChart3, ExternalLink, TrendingUp, Copy, Activity, ArrowUpRight, Film , Code2, Clapperboard, Users, Plug } from "lucide-react";
+import BrandMark from "@/components/brand/LogoMark";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import TemplateLab from "@/components/admin/TemplateLab";
 import { ANIMATION_SELECT, type AnimationRowLike } from "@/lib/template-mappers";
@@ -341,7 +342,7 @@ export default function AdminDashboard({ isAdmin }: { isAdmin: boolean }) {
     <div className="admin-shell">
       <div className="w-full max-w-none px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-surface px-5 py-4">
-        <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-lg font-black text-white">M</div><div><p className="text-base font-bold text-ink">MotionGraphic<span className="text-accent">.si</span></p><p className="text-xs text-muted">Espace administrateur</p></div></div>
+        <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink text-black"><BrandMark className="h-4 w-7" /></div><div><p className="text-base font-bold text-ink">MotionGraphic<span className="text-accent">.si</span></p><p className="text-xs text-muted">Espace administrateur</p></div></div>
         <span className="text-xs text-muted">Administration · Gestion du catalogue</span>
       </div>
       {message ? (

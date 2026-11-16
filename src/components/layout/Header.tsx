@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowRight, Menu, Search, X } from "lucide-react";
+import BrandMark from "@/components/brand/LogoMark";
 
 const NAV = [
   { href: "/explore", label: "Explore" },
@@ -13,12 +14,8 @@ const NAV = [
 
 function LogoMark() {
   return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-ink" aria-hidden="true">
-      <svg viewBox="0 0 20 20" className="h-4.5 w-4.5" fill="none">
-        <rect x="2.5" y="10" width="3.2" height="7" rx="1.2" fill="#000" />
-        <rect x="8.4" y="5" width="3.2" height="12" rx="1.2" fill="#000" />
-        <rect x="14.3" y="2" width="3.2" height="15" rx="1.2" fill="#000" />
-      </svg>
+    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-ink text-black" aria-hidden="true">
+      <BrandMark className="h-3.5 w-6" />
     </span>
   );
 }
