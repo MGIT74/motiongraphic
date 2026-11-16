@@ -3,11 +3,13 @@
 import { useMemo } from "react";
 import type { AnimationComponentProps } from "@/types/animation";
 import { alignLayout, typoVars } from "@/lib/animations/config";
+import { indexedLines, letterColor } from "@/lib/animations/char-colors";
 import { useAnimationEngine } from "./engine";
 import { buildElasticText } from "@/lib/animations/builders";
 
 interface ElasticLetter {
   char: string;
+  index: number;
   pop: boolean;
 }
 
@@ -23,15 +25,10 @@ export function ElasticText01Frame({ config }: AnimationComponentProps) {
   const words = useMemo<ElasticLetter[][]>(
     () => {
       let globalIndex = 0;
-      return text
-        .toUpperCase()
-        .split("\n")
-        .filter(Boolean)
-        .map((word) =>
-          word
-            .split("")
-            .map((char) => ({ char, pop: globalIndex++ % 4 === 2 }))
-        );
+      // Lettres d'accent historiques : une sur quatre (hors couleurs choisies).
+      return indexedLines(text).map((line) =>
+        line.map(({ char, index }) => ({ char, index, pop: globalIndex++ % 4 === 2 }))
+      );
     },
     [text]
   );
@@ -48,7 +45,7 @@ export function ElasticText01Frame({ config }: AnimationComponentProps) {
       >
         {words.map((word, wi) => (
           <div key={`w-${wi}`} className="flex" style={lay.row}>
-            {word.map(({ char, pop }, ci) => (
+            {word.map(({ char, index, pop }, ci) => (
               <span
                 key={`l-${wi}-${ci}`}
                 className="inline-block overflow-visible align-bottom"
@@ -60,7 +57,7 @@ export function ElasticText01Frame({ config }: AnimationComponentProps) {
                     data-elastic-letter
                     className="inline-block will-change-transform"
                     style={{
-                      color: pop ? accentColor : primaryColor,
+                      color: letterColor(config, index, pop),
                       fontSize: "calc(11.4cqmin * var(--mg-fs))",
                       fontWeight: 800,
                       letterSpacing: "calc(0.04em + var(--mg-ls))",

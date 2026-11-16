@@ -62,7 +62,17 @@ export function sanitizeConfig(input: unknown, fallback: AnimationConfig): Anima
     ...numField("wordSpacing", raw.wordSpacing, fallback.wordSpacing, -0.2, 1.5),
     ...(isAlign(raw.align) ? { align: raw.align as TextAlign } : fallback.align ? { align: fallback.align } : {}),
     ...(isSafeLogoUrl(raw.logoUrl) ? { logoUrl: raw.logoUrl as string } : {}),
+    ...sanitizeCharColors(raw.charColors, text.length),
   };
+}
+
+function sanitizeCharColors(v: unknown, length: number): { charColors?: Record<string, string> } {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, c] of Object.entries(v as Record<string, unknown>).slice(0, 200)) {
+    if (/^\d{1,3}$/.test(k) && Number(k) < length && isSafeColor(c)) out[k] = c as string;
+  }
+  return { charColors: out };
 }
 
 function numField(key: string, v: unknown, fb: number | undefined, min: number, max: number): Record<string, number> {
