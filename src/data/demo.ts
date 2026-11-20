@@ -18,6 +18,7 @@ const CATEGORY_IDS = {
 
 const ANIM_IDS = {
   kinetic: "00000000-0000-4000-8000-000000000011",
+  kineticPro: "00000000-0000-4000-8000-000000000018",
   reveal: "00000000-0000-4000-8000-000000000012",
   elastic: "00000000-0000-4000-8000-000000000013",
   morph: "00000000-0000-4000-8000-000000000014",
@@ -68,6 +69,7 @@ interface DemoTemplateInput {
 }
 
 const TEMPLATES: DemoTemplateInput[] = [
+  { id: ANIM_IDS.kineticPro, title: "Kinetic Typography Pro", slug: "kinetic-typography-pro-01", description: "Typographie premium animée, masques et sortie cinématique.", categoryId: "typographie", componentKey: "kinetic-typography-pro-01", config: { text: "MAKE IT\nMOVE", primaryColor: "#FFFFFF", accentColor: "#9A7CFF", backgroundColor: "#0B0C12", duration: 4.8, speed: 1 }, duration: 4.8 },
   {
     id: ANIM_IDS.kinetic,
     title: "Kinetic Typography",

@@ -89,6 +89,7 @@ function jsxPrompt(
 }
 
 const PROMPTS = {
+  "kinetic-typography-pro-01": { web: webPrompt("kinetic-typography-pro-01", { visuel: "Texte premium en deux lignes, masque lettre par lettre et accent violet.", easing: "Entrée power4.out, sortie power3.in, timeline pilotable.", boucle: "Tenue puis sortie inversée." }), after_effects: jsxPrompt("kinetic-typography-pro-01", { compo: "1920×1080, 30 fps, fond sombre, texte blanc et violet.", comportement: "Entrées décalées par lettre, masques, flou et sortie inversée." }) },
   "kinetic-type-01": {
     web: webPrompt("kinetic-type-01", {
       visuel:
