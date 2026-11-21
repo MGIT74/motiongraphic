@@ -140,7 +140,7 @@ function ElementProperties({
           <p className="truncate text-sm font-semibold text-ink">{element.label}</p>
           <p className="truncate text-[11px] text-muted">{template ? template.name : element.templateKey} · {scene.name}</p>
         </div>
-        {!isMedia && onToggleFx ? (
+        {!isMedia && onToggleFx && !element.custom ? (
           <button
             type="button"
             onClick={onToggleFx}
@@ -155,7 +155,7 @@ function ElementProperties({
         ) : null}
       </div>
 
-      {!isMedia ? (
+      {!isMedia && !element.custom ? (
         <input
           id="pr-text"
           value={config.text}
@@ -188,6 +188,38 @@ function ElementProperties({
       <div className="flex flex-col gap-3">
         {activeTab === "style" && !isMedia ? (
           <>
+            {element.custom && element.custom.fields.length > 0 ? (
+              <div className="flex flex-col gap-2.5 rounded-xl border border-accent/30 bg-accent/5 p-2.5">
+                <p className={labelCls + " !mb-0"}>Réglages de l&apos;animation</p>
+                {element.custom.fields.map((f) => {
+                  const value = config.fields?.[f.key];
+                  const set = (v: string | number) => patchConfig({ fields: { ...(config.fields ?? {}), [f.key]: v } });
+                  if (f.type === "color") {
+                    return (
+                      <label key={f.key} className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-ink">{f.label}</span>
+                        <span className="relative h-7 w-16 overflow-hidden rounded-md border border-line">
+                          <input type="color" value={toValidHex(String(value ?? "#FFFFFF"))} onChange={(e) => set(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer" aria-label={f.label} />
+                        </span>
+                      </label>
+                    );
+                  }
+                  if (f.type === "number") {
+                    const min = f.min ?? 0;
+                    const max = f.max ?? Math.max(100, Number(value ?? 0) * 2);
+                    return (
+                      <SliderField key={f.key} id={`cf-${f.key}`} label={f.label} unit="" min={min} max={max} step={f.step ?? (max - min > 20 ? 1 : 0.1)} reset={Number(value ?? min)} value={Number(value ?? min)} onChange={(v) => set(Math.round(v * 100) / 100)} />
+                    );
+                  }
+                  return (
+                    <label key={f.key} className="flex flex-col gap-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted">{f.label}</span>
+                      <input value={String(value ?? "")} onChange={(e) => set(e.target.value.slice(0, 300))} className={inputCls} aria-label={f.label} />
+                    </label>
+                  );
+                })}
+              </div>
+            ) : null}
             <div>
               <label htmlFor="pr-font" className={labelCls}>Police</label>
               <select

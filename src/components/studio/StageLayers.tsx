@@ -130,6 +130,7 @@ function SceneLayers({
                   localTime={localTime}
                   elementDuration={element.duration}
                   timing={element.timing}
+                  custom={element.custom}
                 />
               )}
             </div>
