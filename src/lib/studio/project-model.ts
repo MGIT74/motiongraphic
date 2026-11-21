@@ -3,6 +3,7 @@ import { getStudioTemplate, isStudioTemplateKey, underlyingComponentKeyOf } from
 import { isSafeColor, isSafeLogoUrl, sanitizeConfig } from "@/lib/animations/config";
 import { isBrandFont } from "@/lib/brand/fonts";
 import type { AnimationConfig } from "@/types/animation";
+import { CUSTOM_CODE_KEY, sanitizeCustomAnimation, sanitizeFieldValues, type CustomAnimation } from "@/lib/studio/custom-animation";
 
 /* ------------------------------------------------------------------ */
 
@@ -148,6 +149,8 @@ export interface StudioElement {
    * - "hold" : entrée puis maintien figé (pas de sortie) — idéal en fin de vidéo.
    */
   timing?: ElementTiming;
+  /** Animation sur mesure (code propre au projet, créé par Claude) — templateKey = CUSTOM_CODE_KEY. */
+  custom?: CustomAnimation;
 }
 
 export type ElementTiming = "natural" | "fit" | "hold";
@@ -381,9 +384,14 @@ export function validateProject(input: unknown): StudioProject | null {
         if (typeof e.id !== "string") return null;
         const kind = e.kind as ElementKind;
         const isMedia = kind === "media";
+        if (typeof e.templateKey !== "string") return null;
+        const custom = e.templateKey === CUSTOM_CODE_KEY ? sanitizeCustomAnimation(e.custom) : null;
+        if (e.templateKey === CUSTOM_CODE_KEY && !custom) return null;
         if (isMedia) {
           if (e.templateKey !== MEDIA_TEMPLATE_KEY) return null;
-        } else if (typeof e.templateKey !== "string" || !(isComponentKey(e.templateKey) || isStudioTemplateKey(e.templateKey))) {
+        } else if (custom) {
+          // animation sur mesure : code validé ci-dessus
+        } else if (!(isComponentKey(e.templateKey) || isStudioTemplateKey(e.templateKey))) {
           return null;
         }
         if (kind !== "text" && kind !== "shape" && kind !== "cards" && kind !== "logo" && kind !== "media") return null;
@@ -396,7 +404,9 @@ export function validateProject(input: unknown): StudioProject | null {
           templateKey: e.templateKey,
           start: roundToFrame(clampNumber(Number(e.start), 0, 600)),
           duration: roundToFrame(clampNumber(Number(e.duration), 1, 120)),
-          config: sanitizeConfig(e.config, makeDefaultConfig()),
+          config: custom
+            ? { ...sanitizeConfig(e.config, makeDefaultConfig()), fields: sanitizeFieldValues((e.config as { fields?: unknown } | undefined)?.fields, custom.fields) }
+            : sanitizeConfig(e.config, makeDefaultConfig()),
           x: clampNumber(Number(e.x), 0, 100),
           y: clampNumber(Number(e.y), 0, 100),
           scale: clampNumber(Number(e.scale), 0.2, 3),
@@ -404,6 +414,7 @@ export function validateProject(input: unknown): StudioProject | null {
           ...(e.hidden === true ? { hidden: true } : {}),
           ...(ELEMENT_TIMINGS.includes(e.timing as ElementTiming) ? { timing: e.timing as ElementTiming } : {}),
           ...(media ? { media } : {}),
+          ...(custom ? { custom } : {}),
         });
       }
       scenes.push({
@@ -594,7 +605,7 @@ export function sanitizeBrand(input: unknown): BrandKit | null {
   };
 }
 
-function makeDefaultConfig(): AnimationConfig {
+export function makeDefaultConfig(): AnimationConfig {
   return {
     text: "MOTION",
     primaryColor: "#F5F5F7",

@@ -46,7 +46,10 @@ export default function ControlledAnimation({
   timing,
   preview = false,
   renderStage = false,
+  custom,
 }: {
+  /** Animation sur mesure (code propre au projet) : prioritaire sur le template. */
+  custom?: import("@/lib/studio/custom-animation").CustomAnimation;
   templateKey: ComponentKey;
   config: AnimationConfig;
   /** Temps local (depuis le début de l'élément), en secondes. */
@@ -70,9 +73,9 @@ export default function ControlledAnimation({
 
   // Clé de moteurs : template intégré OU template custom (via composant de base).
   const studioMeta = getStudioTemplate(templateKey);
-  const sandboxCode = studioMeta && "sandboxCode" in studioMeta ? (studioMeta as { sandboxCode?: string }).sandboxCode : undefined;
+  const sandboxCode = custom?.code ?? (studioMeta && "sandboxCode" in studioMeta ? (studioMeta as { sandboxCode?: string }).sandboxCode : undefined);
   const engineKey = isStudioTemplateKey(templateKey) ? baseEngineKeyOf(templateKey) : templateKey;
-  const builder: AnimationBuilder | undefined = ANIMATION_BUILDERS[engineKey] ?? ANIMATION_BUILDERS[templateKey];
+  const builder: AnimationBuilder | undefined = custom ? undefined : (ANIMATION_BUILDERS[engineKey] ?? ANIMATION_BUILDERS[templateKey]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -124,7 +127,9 @@ export default function ControlledAnimation({
       // Templates « code » : le moteur du Studio est maître du temps via le
       // contrat déterministe (SEEK) ; le code est servi par /sandbox/<id>
       // (CSP par en-tête HTTP).
-      const sandboxMeta = studioMeta as
+      const sandboxMeta = (custom
+        ? { sandboxCode: custom.code, timeDriven: true, sandboxContract: { duration: custom.duration, outAt: custom.outAt } }
+        : studioMeta) as
         | {
             sandboxCode?: string;
             timeDriven?: boolean;

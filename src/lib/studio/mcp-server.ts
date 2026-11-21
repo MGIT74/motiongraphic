@@ -8,11 +8,13 @@ import { customElementKind } from "@/lib/templates/custom-model";
 import { registerCustomStudioTemplates } from "./template-registry";
 import { publishedStudioCustomTemplates } from "@/lib/render/server-projects";
 import { isSafeColor } from "@/lib/animations/config";
+import { contractTimes, CUSTOM_CODE_KEY, customCodeProblems, sanitizeFieldValues, sanitizeFields } from "./custom-animation";
 import { BRAND_FONTS, isBrandFont } from "@/lib/brand/fonts";
 import {
   addMediaAsset,
   applyBrand,
   brandedConfig,
+  makeDefaultConfig,
   ELEMENT_TIMINGS,
   insertMediaElement,
   makeMediaElement,
@@ -610,6 +612,136 @@ export const MCP_PROJECT_TOOLS = [
       };
       await persistProject(requireValid(next), userId, project);
       return JSON.stringify({ ok: true, element_id: element.id, scene_index: sceneIdx, total_elements: next.scenes[sceneIdx].elements.length, studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "add_custom_animation",
+    description:
+      "Crée une animation SUR MESURE (sans template) dans une scène : vous écrivez le code, le client la retouche dans le Studio sans toucher au code. " +
+      "Contrat obligatoire, déterministe : `window.__MGS_TIMELINE__ = { duration, outAt, renderAt(time, params) { … } }` — renderAt dessine l'image à l'instant `time` (s) dans document.body (DOM/SVG/canvas, plein cadre, fond transparent). " +
+      "Interdit : setTimeout, setInterval, requestAnimationFrame, Date, Math.random, animations CSS, réseau, stockage. Le rendu doit être identique pour un même `time`. " +
+      "`fields` déclare les réglages éditables (text / color / number) avec leur valeur ; ils arrivent dans `params.fields.<key>` à chaque image. Déclarez en réglage tout texte, couleur ou chiffre que le client voudra changer. " +
+      "Aussi disponibles dans params : primaryColor, accentColor, fontCss (police choisie), fontSize, lineHeight, letterSpacing, wordSpacing, align. Vérifiez le résultat avec preview_frame.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id", "code"],
+      properties: {
+        project_id: { type: "string" },
+        scene_index: { type: "number" },
+        label: { type: "string", description: "Nom du calque dans le Studio." },
+        code: { type: "string", description: "JavaScript du contrat __MGS_TIMELINE__ (60 000 caractères max)." },
+        fields: {
+          type: "array",
+          description: "Réglages éditables : [{ key, label, type: text|color|number, value, min?, max?, step? }].",
+          items: {
+            type: "object",
+            required: ["key", "type", "value"],
+            properties: {
+              key: { type: "string" },
+              label: { type: "string" },
+              type: { type: "string", enum: ["text", "color", "number"] },
+              value: {},
+              min: { type: "number" },
+              max: { type: "number" },
+              step: { type: "number" },
+            },
+          },
+        },
+        start: { type: "number" },
+        duration: { type: "number", description: "Durée du calque (défaut : durée du contrat)." },
+        timing: { type: "string", enum: ["natural", "fit", "hold"], description: "Défaut fit : la sortie (outAt) se termine pile à la fin du calque." },
+        x: { type: "number" },
+        y: { type: "number" },
+        scale: { type: "number" },
+      },
+    },
+    run: async (input: McpInput) => {
+      const conf = mcpConfigCheck();
+      if (!conf.ok) throw new McpToolError(conf.reason);
+      const projectId = needString(input, "project_id", "project_id");
+      const code = needString(input, "code", "code");
+      const userId = requireMcpPrincipal().userId;
+      const project = await loadProjectRow(projectId, userId);
+      if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
+      const sceneIdx = needIndex(input, project);
+      const problems = customCodeProblems(code);
+      if (problems.length) throw new McpToolError(`Code refusé : ${problems.join(" ")}`);
+      const fields = sanitizeFields(input.fields);
+      const values = sanitizeFieldValues(Object.fromEntries((Array.isArray(input.fields) ? input.fields : []).map((f) => [(f as { key?: string }).key, (f as { value?: unknown }).value])), fields);
+      const times = contractTimes(code);
+      const label = typeof input.label === "string" && input.label.trim() ? input.label.trim().slice(0, 60) : "Animation sur mesure";
+      const base = brandedConfig({ ...makeDefaultConfig(), text: label, duration: times.duration, backgroundColor: "transparent" }, "text", project.brand);
+      const element = {
+        ...makeElement(CUSTOM_CODE_KEY, "text", { ...base, backgroundColor: "transparent", fields: values }, {
+          timing: optTiming(input) ?? "fit",
+          start: optNumber(input, "start") ?? currentSceneEnd(project, sceneIdx),
+          duration: optNumber(input, "duration") ?? times.duration,
+          x: optNumber(input, "x"),
+          y: optNumber(input, "y"),
+          scale: optNumber(input, "scale"),
+          label,
+        }),
+        custom: { code, ...times, fields },
+      };
+      const next = {
+        ...project,
+        scenes: project.scenes.map((scene, i) => (i === sceneIdx ? { ...scene, elements: [...scene.elements, element] } : scene)),
+      };
+      await persistProject(requireValid(next), userId, project);
+      return JSON.stringify({ ok: true, element_id: element.id, scene_index: sceneIdx, contract: times, fields: fields.map((f) => f.key), studio_url: studioUrl(projectId) });
+    },
+  },
+  {
+    name: "update_custom_animation",
+    description:
+      "Modifie une animation sur mesure : nouveau code (même contrat que add_custom_animation), nouvelle liste de réglages, et/ou nouvelles valeurs (`values` : { key: valeur }). Les valeurs déjà choisies par le client sont conservées pour les réglages qui existent encore.",
+    inputSchema: {
+      type: "object",
+      required: ["project_id", "element_id"],
+      properties: {
+        project_id: { type: "string" },
+        element_id: { type: "string" },
+        code: { type: "string" },
+        fields: { type: "array", items: { type: "object" } },
+        values: { type: "object" },
+        label: { type: "string" },
+      },
+    },
+    run: async (input: McpInput) => {
+      const conf = mcpConfigCheck();
+      if (!conf.ok) throw new McpToolError(conf.reason);
+      const projectId = needString(input, "project_id", "project_id");
+      const elementId = needString(input, "element_id", "element_id");
+      const userId = requireMcpPrincipal().userId;
+      const project = await loadProjectRow(projectId, userId);
+      if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
+      const scene = project.scenes.find((sc) => sc.elements.some((el) => el.id === elementId));
+      const element = scene?.elements.find((el) => el.id === elementId);
+      if (!scene || !element?.custom) throw new McpToolError("Élément introuvable ou pas une animation sur mesure.");
+      let custom = element.custom;
+      if (typeof input.code === "string") {
+        const problems = customCodeProblems(input.code);
+        if (problems.length) throw new McpToolError(`Code refusé : ${problems.join(" ")}`);
+        custom = { ...custom, code: input.code, ...contractTimes(input.code) };
+      }
+      let newDefaults: Record<string, unknown> = {};
+      if (Array.isArray(input.fields)) {
+        custom = { ...custom, fields: sanitizeFields(input.fields) };
+        newDefaults = Object.fromEntries(input.fields.map((f) => [(f as { key?: string }).key, (f as { value?: unknown }).value]));
+      }
+      const merged = { ...newDefaults, ...(element.config.fields ?? {}), ...((input.values as Record<string, unknown> | undefined) ?? {}) };
+      const updated = {
+        ...element,
+        custom,
+        ...(typeof input.label === "string" && input.label.trim() ? { label: input.label.trim().slice(0, 60) } : {}),
+        config: { ...element.config, fields: sanitizeFieldValues(merged, custom.fields) },
+      };
+      const next = {
+        ...project,
+        scenes: project.scenes.map((sc) => (sc.id === scene.id ? { ...sc, elements: sc.elements.map((el) => (el.id === elementId ? updated : el)) } : sc)),
+      };
+      await persistProject(requireValid(next), userId, project);
+      return JSON.stringify({ ok: true, element_id: elementId, contract: { duration: custom.duration, outAt: custom.outAt }, fields: updated.config.fields, studio_url: studioUrl(projectId) });
     },
   },
   {

@@ -39,6 +39,8 @@ export interface AnimationConfig {
    * les lettres non listées prennent `primaryColor` et les accents automatiques sont coupés.
    */
   charColors?: Record<string, string>;
+  /** Animation sur mesure : valeurs de ses réglages déclarés (clé → texte, couleur ou nombre). */
+  fields?: Record<string, string | number>;
 }
 
 export interface AnimationComponentProps {
