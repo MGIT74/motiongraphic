@@ -33,7 +33,7 @@ export const pendingCodeWaits = new Set<Promise<void>>();
 export interface DegradedFrameInfo {
   sessionId: string;
   seq: number;
-  reason: "timeout" | "render-at-failed" | "unmount";
+  reason: "timeout" | "render-at-failed" | "unmount" | "load-timeout";
 }
 export const degradedFrames: DegradedFrameInfo[] = [];
 
@@ -367,6 +367,36 @@ export default function SandboxTimelineFrame({
 
   /* Libération des acks au démontage (sans blocage du rendu MP4). */
   const isPreview = Boolean(preview);
+
+  /* Chargement : tant que le document n'a pas rendu sa première image, le rendu
+   * (aperçu MCP, export MP4) attend. Sans cela, un calque qui apparaît dans une
+   * scène plus loin est capturé avant d'avoir dessiné quoi que ce soit. */
+  const loadWaitRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (isPreview || invalidFrame) return;
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const wait = new Promise<void>((resolve) => {
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      loadWaitRef.current = done;
+      timer = setTimeout(() => {
+        // Jamais de blocage : au-delà, l'image est signalée dégradée (le rendu MP4 refuse de l'encoder).
+        degradedFrames.push({ sessionId, seq: 0, reason: "load-timeout" });
+        done();
+      }, 6000);
+    });
+    const wrapped = wait.finally(() => pendingCodeWaits.delete(wrapped));
+    pendingCodeWaits.add(wrapped);
+    return () => {
+      loadWaitRef.current?.();
+      loadWaitRef.current = null;
+    };
+  }, [sessionId, isPreview, invalidFrame, doc, sandboxSrc]);
   useEffect(() => {
     const pendingMap = pendingRef.current;
     return () => {
@@ -486,6 +516,9 @@ export default function SandboxTimelineFrame({
         return;
       }
       if (data.type === "mgsi:frame" && typeof data.seq === "number") {
+        // Première image rendue (après le SEEK du chargement) : le rendu peut capturer.
+        // (Le SEEK qui suit éventuellement s'inscrit dans pendingCodeWaits pendant ce même message.)
+        loadWaitRef.current?.();
         // Boîte du contenu (sélection sur le canvas) : fractions du cadre, validées avant usage.
         const bb = data.bbox as { l?: unknown; t?: unknown; r?: unknown; b?: unknown } | null | undefined;
         const iframeEl = iframeRef.current;
