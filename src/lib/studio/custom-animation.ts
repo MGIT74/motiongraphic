@@ -64,6 +64,8 @@ export function customCodeProblems(code: string): string[] {
   const errors = safety.findings.filter((f) => f.level === "error").map((f) => f.message);
   const caps = computeCodeCapabilities(code);
   if (!caps.studioCompatible) errors.push(...caps.reasons);
+  // Le contrat doit vraiment déclarer renderAt (pas seulement le nom de l'objet).
+  if (!/renderAt\s*[:(]/.test(code)) errors.push("renderAt(time, params) manquant dans le contrat.");
   return errors;
 }
 

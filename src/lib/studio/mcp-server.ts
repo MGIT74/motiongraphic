@@ -659,7 +659,9 @@ export const MCP_PROJECT_TOOLS = [
       const conf = mcpConfigCheck();
       if (!conf.ok) throw new McpToolError(conf.reason);
       const projectId = needString(input, "project_id", "project_id");
-      const code = needString(input, "code", "code");
+      // Pas needString (qui coupe à 120 caractères) : le code est gardé en entier.
+      const code = typeof input.code === "string" ? input.code : "";
+      if (!code.trim()) throw new McpToolError("Paramètre requis : code (chaîne).");
       const userId = requireMcpPrincipal().userId;
       const project = await loadProjectRow(projectId, userId);
       if (!project) throw new McpToolError(`Projet introuvable : ${projectId} (privé ou inexistant).`);
